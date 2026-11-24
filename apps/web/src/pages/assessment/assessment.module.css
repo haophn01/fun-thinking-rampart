@@ -1,0 +1,202 @@
+.page {
+  min-width: 0;
+}
+
+.requestId {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  overflow-wrap: anywhere;
+}
+
+.retry {
+  margin-top: 16px;
+}
+
+/* Score panel on the left, the what-if controls beside it; stacked on a phone. */
+.top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+}
+
+.whatIfControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 300px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  min-width: 0;
+}
+
+.families,
+.requirements,
+.detail {
+  min-width: 0;
+}
+
+.list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  background: var(--rp-sheet);
+  color: var(--rp-ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.item:hover {
+  text-decoration: underline;
+  text-decoration-thickness: var(--rp-rule);
+  text-underline-offset: 3px;
+}
+
+.item:focus-visible {
+  outline: var(--rp-focus-width) solid var(--rp-ink);
+  outline-offset: var(--rp-focus-offset);
+}
+
+/* The open family or requirement fills Ink, as the selected radio does. */
+.item[aria-current='true'] {
+  background: var(--rp-ink);
+  color: var(--rp-sheet);
+}
+
+.item[aria-current='true'] .counts,
+.item[aria-current='true'] .owner {
+  color: var(--rp-sheet);
+}
+
+.itemHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.itemMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.code {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  overflow-wrap: anywhere;
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--rp-graphite);
+  font-size: var(--rp-text-body);
+}
+
+.owner {
+  color: var(--rp-graphite);
+  font-size: var(--rp-text-body);
+}
+
+.tag {
+  padding: 2px 6px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  background: var(--rp-sheet);
+  color: var(--rp-ink);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+.detail {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  background: var(--rp-sheet);
+  overflow-wrap: anywhere;
+}
+
+.detailTitle {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-display-3);
+  font-weight: 700;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  color: var(--rp-graphite);
+}
+
+.objectives {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.objective {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 16px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+}
+
+.objectiveHead {
+  display: grid;
+  gap: 2px;
+}
+
+.block {
+  display: grid;
+  gap: 12px;
+}
+
+/* Hidden on a wide screen, where the lists sit beside the detail. */
+.back {
+  display: none;
+  min-height: var(--rp-control-min);
+  align-items: center;
+  color: var(--rp-ink);
+}
+
+@media (max-width: 1023px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* One column: with a requirement open, only its detail shows, under a Back link. */
+  .workspace[data-detail] .families,
+  .workspace[data-detail] .requirements {
+    display: none;
+  }
+
+  .back {
+    display: inline-flex;
+  }
+}
