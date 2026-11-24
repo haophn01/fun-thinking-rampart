@@ -1,0 +1,20 @@
+# dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# local env files: never commit secrets
+.env*
+
+# local state
+apps/api/data/
+packages/catalog/sources/*.pdf
+
+# agent worktrees
+.claude/worktrees/
+
+# logs and OS files
+*.log
+.DS_Store
+Thumbs.db
