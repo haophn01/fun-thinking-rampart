@@ -6,7 +6,7 @@ import type { DestinationStream } from 'pino';
 import type { AppDb } from '../db/client';
 import type { Config } from './config';
 import { healthResponseSchema } from './contract';
-import { AppError, registerErrorHandling } from './errors';
+import { AppError, registerEarlyNotFound, registerErrorHandling } from './errors';
 import { createLogger } from './logger';
 import { respond } from './respond';
 
@@ -55,7 +55,12 @@ export function buildApp({ config, db, logStream }: BuildAppOptions): FastifyIns
     },
     frameguard: { action: 'deny' },
   });
+  // Unknown routes answer 404 before the body is read (the test checks helmet still runs).
+  registerEarlyNotFound(app);
 
+  // JSON is the only body the api reads: anything else is 415 before a handler runs, so a
+  // cross-site form post (text/plain, urlencoded, multipart) can never reach one.
+  app.removeContentTypeParser('text/plain');
   registerErrorHandling(app);
 
   app.get('/api/health', () => {

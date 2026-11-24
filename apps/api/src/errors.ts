@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ERROR_STATUS, errorEnvelopeSchema, type ErrorCode, type ErrorEnvelope } from './contract';
 import { ResponseContractError } from './respond';
@@ -73,7 +73,14 @@ export function toErrorResponse(error: unknown): ErrorResponse {
     if (error.statusCode === 404) {
       return { statusCode: 404, code: 'not_found', message: error.message };
     }
-    // Malformed JSON (400), a bad content-length (400) or an unsupported media type (415).
+    if (error.statusCode === 415) {
+      return {
+        statusCode: 415,
+        code: 'unsupported_media_type',
+        message: 'The request body must be application/json',
+      };
+    }
+    // Malformed JSON, an empty JSON body or a bad content-length (400).
     return { statusCode: error.statusCode, code: 'validation_failed', message: error.message };
   }
   return { statusCode: 500, code: 'internal_error', message: INTERNAL_ERROR_MESSAGE };
@@ -87,6 +94,25 @@ function envelope(response: ErrorResponse, requestId: string): ErrorEnvelope {
       requestId,
       ...(response.details === undefined ? {} : { details: response.details }),
     },
+  });
+}
+
+function sendNotFound(request: FastifyRequest, reply: FastifyReply): FastifyReply {
+  const response: ErrorResponse = {
+    statusCode: 404,
+    code: 'not_found',
+    message: `No route for ${request.method} ${request.url.split('?')[0] ?? ''}`,
+  };
+  return reply.code(404).send(envelope(response, request.id));
+}
+
+/**
+ * Answers an unknown route with 404 before its body is read, so malformed JSON, an oversize body
+ * or a wrong content type can't turn a missing route into a 400, 413 or 415.
+ */
+export function registerEarlyNotFound(app: FastifyInstance): void {
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.is404) await sendNotFound(request, reply);
   });
 }
 
@@ -106,12 +132,5 @@ export function registerErrorHandling(app: FastifyInstance): void {
     return reply.code(response.statusCode).send(envelope(response, request.id));
   });
 
-  app.setNotFoundHandler((request, reply) => {
-    const response: ErrorResponse = {
-      statusCode: 404,
-      code: 'not_found',
-      message: `No route for ${request.method} ${request.url.split('?')[0] ?? ''}`,
-    };
-    return reply.code(404).send(envelope(response, request.id));
-  });
+  app.setNotFoundHandler(sendNotFound);
 }
