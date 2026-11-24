@@ -28,12 +28,12 @@ const TEXT_CLASS: Record<keyof typeof TEXT_SIZES_PX, string | undefined> = {
   mono: styles.mono,
 };
 
-function pairRow(pair: TextPair) {
-  return (
+function pairRows(pairs: readonly TextPair[], sampleClass?: string) {
+  return pairs.map((pair) => (
     <tr key={`${pair.fg}-${pair.bg}`}>
       <td>
         <span
-          className={styles.pairSample}
+          className={[styles.pairSample, sampleClass].filter(Boolean).join(' ')}
           style={{ color: colorVar(pair.fg), background: colorVar(pair.bg) }}
         >
           {pair.fg} on {pair.bg}
@@ -41,7 +41,7 @@ function pairRow(pair: TextPair) {
       </td>
       <td className={styles.num}>{contrastRatio(COLORS[pair.fg], COLORS[pair.bg]).toFixed(2)}</td>
     </tr>
-  );
+  ));
 }
 
 function Controls() {
@@ -160,13 +160,13 @@ export function Specimen() {
         <h2 className={styles.sectionHead}>
           <SectionLabel number={6}>Text pairs</SectionLabel>
         </h2>
-        <table className={styles.pairs}>
-          <caption className={styles.meta}>Body size, 4.5:1 or better</caption>
-          <tbody>{BODY_TEXT_PAIRS.map(pairRow)}</tbody>
+        <p className={styles.meta}>Body size, 4.5:1 or better</p>
+        <table className={styles.pairs} aria-label="Body text pairs">
+          <tbody>{pairRows(BODY_TEXT_PAIRS)}</tbody>
         </table>
-        <table className={styles.pairs}>
-          <caption className={styles.meta}>Large text only (24 px+), 3:1 or better</caption>
-          <tbody>{LARGE_TEXT_PAIRS.map(pairRow)}</tbody>
+        <p className={styles.meta}>Large text only (24 px+), 3:1 or better</p>
+        <table className={styles.pairs} aria-label="Large text pairs">
+          <tbody>{pairRows(LARGE_TEXT_PAIRS, styles.display3)}</tbody>
         </table>
       </section>
     </main>

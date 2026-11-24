@@ -151,11 +151,6 @@
   justify-self: start;
 }
 
-.pairs caption {
-  text-align: left;
-  padding-bottom: 6px;
-}
-
 .pairs td {
   padding: 4px 12px 4px 0;
 }
