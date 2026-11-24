@@ -13,3 +13,4 @@ export * from './audit';
 export * from './evaluation';
 export * from './assessment';
 export * from './files';
+export * from './poam';

@@ -17,16 +17,24 @@ import {
   assessmentTypeSchema,
   auditQuerySchema,
   calendarDateSchema,
+  closeoutRequestSchema,
+  createPoamItemRequestSchema,
   createUserRequestSchema,
   displayNameSchema,
   emailSchema,
   fileNameSchema,
   implementationLevelSchema,
   implementationStatementSchema,
+  milestoneSchema,
+  milestonesSchema,
   noteSchema,
   objectiveStatusSchema,
   passwordSchema,
+  patchPoamItemRequestSchema,
   patchRequirementRequestSchema,
+  poamItemResponseSchema,
+  poamItemSchema,
+  poamViewSchema,
   putObjectiveResultRequestSchema,
   requirementStatusSchema,
   roleSchema,
@@ -362,13 +370,166 @@ describe('contract schemas', () => {
       ['a.exe', max + 1, 'unsupported_file_type'],
     ];
     for (const [name, size, problem] of cases) {
-      expect(uploadProblem(name, size), `${JSON.stringify(name)} at ${String(size)}`).toBe(
-        problem,
-      );
+      expect(uploadProblem(name, size), `${JSON.stringify(name)} at ${String(size)}`).toBe(problem);
     }
     for (const extension of UPLOAD_EXTENSIONS) {
       expect(uploadProblem(`file${extension}`, 1), extension).toBeNull();
       expect(uploadProblem(`FILE${extension.toUpperCase()}`, 1), extension).toBeNull();
     }
+  });
+
+  it('poam requests', () => {
+    const milestone = { title: 'Buy tokens', due: '2027-01-15', doneOn: null };
+    expect(milestoneSchema.parse({ ...milestone, title: '  Buy tokens ' })).toEqual(milestone);
+    expect(accepts(milestoneSchema, { ...milestone, doneOn: '2026-12-01' })).toBe(true);
+    expect(accepts(milestoneSchema, { title: 'x', due: '2027-01-15' })).toBe(false);
+    expect(accepts(milestoneSchema, { ...milestone, title: '   ' })).toBe(false);
+    expect(accepts(milestoneSchema, { ...milestone, title: 't'.repeat(200) })).toBe(true);
+    expect(accepts(milestoneSchema, { ...milestone, title: 't'.repeat(201) })).toBe(false);
+    expect(accepts(milestoneSchema, { ...milestone, due: '2027-02-29' })).toBe(false);
+    expect(accepts(milestoneSchema, { ...milestone, doneOn: '' })).toBe(false);
+    expect(accepts(milestoneSchema, { ...milestone, extra: 1 })).toBe(false);
+
+    const many = (count: number) => Array.from({ length: count }, () => milestone);
+    expect(accepts(milestonesSchema, [])).toBe(true);
+    expect(accepts(milestonesSchema, many(20))).toBe(true);
+    expect(accepts(milestonesSchema, many(21))).toBe(false);
+
+    const owner = '6f1c2d3e-4b5a-4c7d-8e9f-0a1b2c3d4e5f';
+    const create = { requirementId: 'AC.L2-3.1.1', plan: ' Roll out MFA ', due: '2027-02-01' };
+    expect(createPoamItemRequestSchema.parse(create)).toEqual({
+      requirementId: 'AC.L2-3.1.1',
+      plan: 'Roll out MFA',
+      due: '2027-02-01',
+      milestones: [],
+    });
+    expect(accepts(createPoamItemRequestSchema, { ...create, ownerId: owner })).toBe(true);
+    expect(accepts(createPoamItemRequestSchema, { ...create, ownerId: null })).toBe(true);
+    expect(accepts(createPoamItemRequestSchema, { ...create, ownerId: 'kim' })).toBe(false);
+    expect(accepts(createPoamItemRequestSchema, { ...create, milestones: many(20) })).toBe(true);
+    expect(accepts(createPoamItemRequestSchema, { ...create, milestones: many(21) })).toBe(false);
+    expect(accepts(createPoamItemRequestSchema, { ...create, plan: '  \n ' })).toBe(false);
+    expect(accepts(createPoamItemRequestSchema, { ...create, plan: 'p'.repeat(20000) })).toBe(true);
+    expect(accepts(createPoamItemRequestSchema, { ...create, plan: 'p'.repeat(20001) })).toBe(
+      false,
+    );
+    expect(accepts(createPoamItemRequestSchema, { ...create, due: '2027-13-01' })).toBe(false);
+    expect(accepts(createPoamItemRequestSchema, { ...create, requirementId: '' })).toBe(false);
+    expect(accepts(createPoamItemRequestSchema, { plan: 'p', due: '2027-02-01' })).toBe(false);
+    expect(accepts(createPoamItemRequestSchema, { ...create, status: 'closed' })).toBe(false);
+
+    expect(accepts(patchPoamItemRequestSchema, {})).toBe(false);
+    expect(accepts(patchPoamItemRequestSchema, { plan: '   ' })).toBe(false);
+    expect(patchPoamItemRequestSchema.parse({ plan: ' New plan ' })).toEqual({
+      plan: 'New plan',
+    });
+    expect(accepts(patchPoamItemRequestSchema, { due: '2027-03-01' })).toBe(true);
+    expect(accepts(patchPoamItemRequestSchema, { ownerId: null })).toBe(true);
+    expect(accepts(patchPoamItemRequestSchema, { milestones: [] })).toBe(true);
+    expect(accepts(patchPoamItemRequestSchema, { milestones: many(21) })).toBe(false);
+    expect(accepts(patchPoamItemRequestSchema, { requirementId: 'AC.L2-3.1.2' })).toBe(false);
+    expect(accepts(patchPoamItemRequestSchema, { plan: 'p', extra: 1 })).toBe(false);
+
+    const closeout = { closedOn: '2027-01-20', note: '  Verified MFA on all accounts ' };
+    expect(closeoutRequestSchema.parse(closeout)).toEqual({
+      closedOn: '2027-01-20',
+      note: 'Verified MFA on all accounts',
+    });
+    expect(closeoutRequestSchema.parse({ ...closeout, note: ' ' })).toEqual({
+      closedOn: '2027-01-20',
+      note: null,
+    });
+    expect(accepts(closeoutRequestSchema, { ...closeout, c3paoName: null })).toBe(true);
+    expect(closeoutRequestSchema.parse({ ...closeout, c3paoName: ' Acme C3PAO ' })).toMatchObject({
+      c3paoName: 'Acme C3PAO',
+    });
+    expect(accepts(closeoutRequestSchema, { ...closeout, c3paoName: '   ' })).toBe(false);
+    expect(accepts(closeoutRequestSchema, { ...closeout, c3paoName: 'c'.repeat(200) })).toBe(true);
+    expect(accepts(closeoutRequestSchema, { ...closeout, c3paoName: 'c'.repeat(201) })).toBe(false);
+    expect(accepts(closeoutRequestSchema, { closedOn: '2027-01-20' })).toBe(false);
+    expect(accepts(closeoutRequestSchema, { ...closeout, closedOn: '2027-02-30' })).toBe(false);
+    expect(accepts(closeoutRequestSchema, { ...closeout, confirmedBy: 'c3pao' })).toBe(false);
+  });
+
+  it('poam responses', () => {
+    const ada = { id: 'u-1', displayName: 'Ada' };
+    const open = {
+      id: 'p-1',
+      requirementId: 'AC.L2-3.1.1',
+      status: 'open',
+      plan: 'Roll out MFA',
+      due: '2027-02-01',
+      milestones: [{ title: 'Buy tokens', due: '2027-01-15', doneOn: null }],
+      owner: { id: 'u-2', displayName: 'Kim', active: false },
+      createdAt: '2026-11-24T10:00:00.000Z',
+      createdBy: ada,
+      updatedAt: '2026-11-24T10:00:00.000Z',
+      closeout: null,
+      requirementStatus: 'not_met',
+      eligibility: { eligible: true },
+      daysToDue: 69,
+      overdue: false,
+      dueAfterDeadline: false,
+      readyToClose: false,
+    };
+    const closed = {
+      ...open,
+      status: 'closed',
+      owner: null,
+      closeout: {
+        closedOn: '2027-01-20',
+        note: null,
+        confirmedBy: 'c3pao',
+        c3paoName: 'Acme C3PAO',
+        recordedBy: ada,
+        late: true,
+      },
+      requirementStatus: 'met',
+      eligibility: {
+        eligible: false,
+        reasons: [{ code: 'not_not_met', citation: '32 CFR 170.24(c)(2)(i)(B)(6)' }],
+      },
+      daysToDue: -3,
+    };
+    expect(poamItemSchema.parse(open)).toEqual(open);
+    expect(poamItemSchema.parse(closed)).toEqual(closed);
+    expect(poamItemResponseSchema.parse({ item: open })).toEqual({ item: open });
+
+    // Status and closeout agree: closed exactly when a closeout is recorded.
+    expect(accepts(poamItemSchema, { ...open, status: 'closed' })).toBe(false);
+    expect(accepts(poamItemSchema, { ...closed, status: 'open' })).toBe(false);
+    expect(accepts(poamItemSchema, { ...open, status: 'done' })).toBe(false);
+    expect(accepts(poamItemSchema, { ...open, daysToDue: 1.5 })).toBe(false);
+    expect(accepts(poamItemSchema, { ...open, eligibility: { eligible: false } })).toBe(false);
+    expect(
+      accepts(poamItemSchema, {
+        ...closed,
+        closeout: { ...closed.closeout, confirmedBy: 'dibcac' },
+      }),
+    ).toBe(false);
+
+    const view = {
+      items: [open, closed],
+      candidates: [
+        {
+          requirementId: 'AC.L2-3.1.20',
+          eligibility: {
+            eligible: false,
+            reasons: [{ code: 'barred', citation: '32 CFR 170.21(a)(2)(iii)' }],
+          },
+        },
+      ],
+      closeout: {
+        conditionalStatusDate: '2026-11-01',
+        deadline: '2027-04-30',
+        daysRemaining: 157,
+        expired: false,
+      },
+      confirmer: 'organization',
+    };
+    expect(poamViewSchema.parse(view)).toEqual(view);
+    expect(poamViewSchema.parse({ ...view, closeout: null }).closeout).toBeNull();
+    expect(accepts(poamViewSchema, { ...view, confirmer: 'dibcac' })).toBe(false);
+    expect(accepts(poamViewSchema, { items: [], closeout: null, confirmer: 'c3pao' })).toBe(false);
   });
 });
