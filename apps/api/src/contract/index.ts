@@ -6,3 +6,9 @@ export const PRODUCT_NAME = 'Rampart';
 
 export * from './error';
 export * from './health';
+export * from './common';
+export * from './auth';
+export * from './users';
+export * from './audit';
+export * from './evaluation';
+export * from './assessment';

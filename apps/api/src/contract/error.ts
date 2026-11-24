@@ -7,6 +7,15 @@ export const ERROR_CODES = [
   'payload_too_large',
   'db_unavailable',
   'internal_error',
+  'unauthenticated',
+  'invalid_credentials',
+  'forbidden',
+  'csrf_failed',
+  'setup_complete',
+  'email_taken',
+  'last_admin',
+  'unsupported_media_type',
+  'too_many_attempts',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -17,6 +26,24 @@ export const ERROR_STATUS = {
   payload_too_large: 413,
   db_unavailable: 503,
   internal_error: 500,
+  /** No valid session on a protected route. */
+  unauthenticated: 401,
+  /** Wrong password, unknown email or inactive user: one message for all. */
+  invalid_credentials: 401,
+  /** The role is not allowed. */
+  forbidden: 403,
+  /** The CSRF header is missing or wrong. */
+  csrf_failed: 403,
+  /** Setup was called after a user exists. */
+  setup_complete: 409,
+  /** The email is already used (case-insensitive). */
+  email_taken: 409,
+  /** The change would leave no active admin. */
+  last_admin: 409,
+  /** The body is not `application/json`. */
+  unsupported_media_type: 415,
+  /** The account is locked; `details.retryAfterSeconds` and a `Retry-After` header say how long. */
+  too_many_attempts: 429,
 } as const satisfies Record<ErrorCode, number>;
 
 /**
