@@ -99,6 +99,31 @@ admins add people under Settings.
 - **Audit log:** every change is written to an append-only `audit_event` table in the same
   transaction; `GET /api/audit` pages through it newest first.
 
+## API endpoints
+
+Every route below needs a signed-in user, and every write needs the `x-csrf-token` header and a
+JSON body. Request bodies are strict: an unknown key gives 400.
+
+| Route                                               | Who      | What it does                                                                                                                                        |
+| --------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/assessment`                               | any user | The assessment, its stored objective results and requirement state (catalog order), the evaluation, and the POA&M closeout clock (or `null`)        |
+| `PATCH /api/assessment`                             | admin    | `{ type?, conditionalStatusDate? }`; a `null` date clears it. Answers with the whole view                                                           |
+| `PUT /api/assessment/objectives/:objectiveId`       | any user | `{ status, note }`, with `status` exactly `met`, `not_met`, `na` or `not_assessed`. URL-encode the ID (`3.1.1%5Ba%5D`). Answers with the evaluation |
+| `PATCH /api/assessment/requirements/:requirementId` | any user | `{ implementationStatement?, implementationLevel?, ownerId? }`; `null` unsets. Answers with the evaluation                                          |
+
+- **One evaluation:** every response's `evaluation` is `evaluateAssessment` from `@rampart/rules`
+  over the stored rows, the same function the web app runs for its live and what-if scores. A
+  missing objective result means not assessed.
+- **Implementation level** is only for the partial-credit requirements (3.5.3 and 3.13.11); on
+  any other requirement it gives 400. `null` means the worst case.
+- **Owner:** `ownerId` must be an active user (400 otherwise). An owner deactivated later stays
+  assigned and shows `active: false`.
+- **Closeout clock:** "today" is the UTC date of the api's clock.
+- **Audit:** each write and its audit event commit in one transaction; only changed fields are
+  recorded, and a write that changes nothing answers 200 and records nothing.
+- Unknown objectives and requirements give 404; with no assessment row (before setup) every
+  assessment route gives 404.
+
 ## Parts
 
 | Package            | Folder             | What it does                                                                                            |

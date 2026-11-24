@@ -1,6 +1,7 @@
 import cookie from '@fastify/cookie';
 import type { FastifyInstance } from 'fastify';
 import type { AppDb } from '../../db/client';
+import { registerAssessmentRoutes } from '../assessment/routes';
 import { registerAuditRoutes } from '../audit/list';
 import { registerGuard } from '../auth/guard';
 import { registerAuthRoutes } from '../auth/routes';
@@ -26,5 +27,6 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiDeps): void {
     registerAuthRoutes(api, deps);
     registerUserRoutes(api, deps);
     registerAuditRoutes(api, deps);
+    registerAssessmentRoutes(api, deps);
   });
 }
