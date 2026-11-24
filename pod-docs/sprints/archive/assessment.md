@@ -1,8 +1,7 @@
 # Sprint: Assessment
 
-_From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: assessment · Status: active · Generated: 2026-11-23_
+_From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: assessment · Status: archived · Generated: 2026-11-23_
 
-<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=1 waves=6 -->
 
 ## Status board
 
@@ -15,9 +14,9 @@ _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: assessment · Status: active 
 | 2 | A2 | Auth API: setup, sign-in, sessions, CSRF, roles, users, audit read | assessment-a2 | merged | done | medium | D1, K1 |
 | 2 | W1 | Web auth: session gate, setup, sign-in, user slot, users panel | assessment-w1-auth | merged | done | medium | K1, L2 |
 | 2 | S2 | Web score panel and what-if state | assessment-s2 | merged | done | medium | K1, R4, L2 |
-| 3 | A3 | Assessment API: view, objective results, requirement state, settings | assessment-a3 | — | pending | — | D1, K1, R4, A2 |
-| 3 | W2 | Assessment workspace UI with live and what-if score | assessment-w2 | — | pending | — | K1, R4, L2, W1, S2 |
-| 3 | W3 | Settings UI: assessment type, Conditional Status Date, audit log | assessment-w3 | — | pending | — | K1, L2, W1 |
+| 3 | A3 | Assessment API: view, objective results, requirement state, settings | assessment-a3 | merged | done | high | D1, K1, R4, A2 |
+| 3 | W2 | Assessment workspace UI with live and what-if score | assessment-w2-workspace | merged | done | medium | K1, R4, L2, W1, S2 |
+| 3 | W3 | Settings UI: assessment type, Conditional Status Date, audit log | assessment-w3-settings | merged | done | medium | K1, L2, W1 |
 
 Plan branch `cmmc-l2-grc`; wave heads `assessment-w1`, `assessment-w2`, `assessment-w3`. Merge target `main`.
 
@@ -411,3 +410,41 @@ export function compareEvaluations(saved: Evaluation, next: Evaluation): Evaluat
 - **Depends on:** K1, L2, W1
 - **One-way door:** none
 - **Model:** sonnet
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date (`main` has no new commits).
+- **Slices shipped:** D1, K1, R4, L2, A2, W1, S2, A3, W2, W3 (PRs #4, #5 and #6 into `cmmc-l2-grc`).
+- **Queue entries:** resolved 6, deferred 7.
+  - Resolved:
+    - three A2 auth defaults (accepted by the human)
+    - the A2 one-way door (the human approved the merge; PR #5)
+    - R1 status validation (A3)
+    - A1 client-error mapping (K1)
+  - Deferred, PENDING → human:
+    - C1 `[a]` objective IDs
+    - C1 3.3.2 wording
+    - L2 Not met radio fill
+    - W1 self-reset warning
+  - Deferred, PENDING → sprint-planner: R2 `poamNotMetOnly` on `Regulation` (belongs to poam-evidence).
+- **Slice log:**
+  - D1: opus · medium · test-first yes (two reds were no-such-table errors) · runtime: a foundation DB migrated, the built server reported health ok, the append-only trigger refused a delete · 5 NOTEs · time lost: none
+  - K1: opus · medium · test-first yes · runtime: 404 before body over real HTTP · BLOCKED on the unowned `contract.test.ts`, resolved under the gate 1 test-fixture exception · 5 NOTEs · time lost: none
+  - R4: opus · high · test-first yes · runtime: real catalog through the package entry · 3 NOTEs · time lost: none
+  - L2: opus · medium · test-first yes · runtime: `/look.html` at 1280 and 375 px, with 3 defects fixed by hand · 5 NOTEs · time lost: about 5 min on encoding
+  - A2: opus · medium · test-first yes · runtime: setup, sign-in, CSRF and cookie flags in a browser; persisted across a restart · one-way door, merged with the human's approval · 4 NOTEs · time lost: none
+  - W1: opus · medium · test-first yes · runtime: the full sign-in and users flow against A2's real API in a scratch merge · 8 NOTEs · time lost: none · it used `--force` once on its own scratch copy
+  - S2: sonnet · medium · test-first yes · runtime: `/score.html` at 1280 and 375 px · BLOCKED on Windows-reserved ports 3057–3156; the port base moved to 3200 · 4 NOTEs · time lost: about 5 min
+  - A3: opus · high · test-first yes · runtime: the browser plus a restart; the real closeout clock · 4 NOTEs · time lost: none
+  - W2: sonnet · medium · test-first yes · runtime: real A3 in a scratch merge · gave the unowned `Shell.test.tsx` under the gate 1 exception · used `branch -D` once on its own pushed copy · 6 NOTEs · time lost: none
+  - W3: sonnet · medium · test-first yes · runtime: admin and contributor at 1280 and 375 px (assessment API mocked; the orchestrator re-checked it against the real API) · stray edit to `UsersPanel.test.tsx` · 3 NOTEs · time lost: none
+  - Wave fixes: none
+  - Stalls: none
+- **Agent context at hand-back:** about 1,590,000 tokens. That's the sum of each agent's reported `subagent_tokens`, meaning each agent's final context size, not tokens billed.
+- **For the next sprint:**
+  - Auth is on: every API route except health, session, setup and sign-in needs a session, and every write needs `x-csrf-token`. Tests use `createHarness()`.
+  - Add routes inside `registerApiRoutes`.
+  - `recordAudit(tx, …)` must share the change's transaction.
+  - The workspace is in `apps/web/src/pages/assessment/`. The score panel, `useWhatIf` and `input.ts` are in `apps/web/src/score/`. The ruler, the feature control frame and the HOLD/ACCEPT stamp are still to build, in ssp-dashboard.
+  - `SettingsPage` sections are numbered in order.
+  - Windows reserves ports 3057–3156, and the port base is now 3200.
