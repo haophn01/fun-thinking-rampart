@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "db/**/*.ts", "*.config.ts"]
+  "include": ["src/**/*.ts", "db/**/*.ts", "storage/**/*.ts", "*.config.ts"]
 }

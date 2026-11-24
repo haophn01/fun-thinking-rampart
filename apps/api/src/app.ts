@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import type { DestinationStream } from 'pino';
 import type { AppDb } from '../db/client';
+import { createLocalStore, type FileStore } from '../storage';
 import type { Config } from './config';
 import { healthResponseSchema } from './contract';
 import { AppError, registerEarlyNotFound, registerErrorHandling } from './errors';
@@ -23,6 +24,8 @@ export interface BuildAppOptions {
   logStream?: DestinationStream;
   /** The app clock; the real one when omitted. Tests pass a clock they can move. */
   now?: () => Date;
+  /** Where uploaded files live; a local store at `config.storagePath` when omitted. */
+  store?: FileStore;
 }
 
 /** Reuses a well-formed incoming `x-request-id`; anything else gets a fresh UUID. */
@@ -36,6 +39,7 @@ export function buildApp({
   db,
   logStream,
   now = () => new Date(),
+  store = createLocalStore(config.storagePath),
 }: BuildAppOptions): FastifyInstance {
   const app = Fastify({
     loggerInstance: createLogger(config.logLevel, logStream),
@@ -81,7 +85,7 @@ export function buildApp({
   });
 
   // Everything else under /api needs a session unless the route says it is public.
-  registerApiRoutes(app, { db, now });
+  registerApiRoutes(app, { db, now, store });
 
   return app;
 }

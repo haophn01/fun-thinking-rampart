@@ -59,15 +59,22 @@ committed.
 The api reads these environment variables and refuses to start (exit code 1) if any is invalid,
 naming every bad one:
 
-| Variable        | Default               | Rules                                                                                |
-| --------------- | --------------------- | ------------------------------------------------------------------------------------ |
-| `API_PORT`      | `3001`                | An integer from 1 to 65535                                                           |
-| `DATABASE_PATH` | `data/rampart.sqlite` | Relative paths are resolved from `apps/api`; the folder is created; `:memory:` works |
-| `LOG_LEVEL`     | `info`                | A pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`         |
+| Variable        | Default               | Rules                                                                                                                                                  |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `API_PORT`      | `3001`                | An integer from 1 to 65535                                                                                                                             |
+| `DATABASE_PATH` | `data/rampart.sqlite` | Relative paths are resolved from `apps/api`; the folder is created; `:memory:` works                                                                   |
+| `LOG_LEVEL`     | `info`                | A pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                           |
+| `STORAGE_PATH`  | `data/files`          | The evidence and policy file store. Relative paths are resolved from `apps/api`; the folder is created on the first upload; whitespace only is refused |
 
 An empty value counts as unset. The host is always `127.0.0.1`. On start the api opens the SQLite
 database (WAL, foreign keys on), applies pending migrations, then listens. There is no seed data
 yet.
+
+Uploaded files are content-addressed: each is stored once under its SHA-256 at
+`<STORAGE_PATH>/<first two hex characters>/<sha256>`, and its bytes are hashed again on every
+download, so a missing or altered file is reported instead of served. Writes go through
+`<STORAGE_PATH>/tmp/` and are renamed into place. Files are not encrypted at rest yet, and the
+api never deletes them. Back up the `STORAGE_PATH` folder together with the database.
 
 The api logs JSON lines (pino) with the request's id on every line; cookies, `authorization` and
 `set-cookie` are redacted. Every error response has the same shape,
