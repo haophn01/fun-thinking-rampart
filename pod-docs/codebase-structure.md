@@ -57,5 +57,5 @@ Rampart (a placeholder name) is a self-hosted CMMC Level 2 readiness platform: o
 - **Start commands:** `API_PORT=<api> WEB_PORT=<web> pnpm dev` (bash), or `$env:API_PORT=<api>; $env:WEB_PORT=<web>; pnpm dev` (PowerShell). One command runs both servers; stop it with Ctrl+C.
 - **DB setup:** migrations run when the api starts, or run `pnpm db:migrate`. The database is `apps/api/data/rampart.sqlite` unless `DATABASE_PATH` says otherwise (use a scratch path to keep runs apart). No seed yet.
 - **Login credentials:** none yet.
-- **Key URLs:** web `http://127.0.0.1:<web>/`; api `http://127.0.0.1:<api>/api/health`. The api is also reachable through the web origin at `http://127.0.0.1:<web>/api/health` (Vite proxy).
+- **Key URLs:** web routes `http://127.0.0.1:<web>/` (Dashboard), `/assessment`, `/poam`, `/evidence`, `/policies`, `/ssp` and `/settings` (each an empty-state page for now; any other path shows "Page not found"); the shell calls health on load and shows a "Can't reach the API" alert with Retry when the api is down; api `http://127.0.0.1:<api>/api/health`. The api is also reachable through the web origin at `http://127.0.0.1:<web>/api/health` (Vite proxy).
 - **Verification:** `pnpm verify`
