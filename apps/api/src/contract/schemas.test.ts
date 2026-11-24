@@ -14,15 +14,32 @@ import {
   SESSION_COOKIE,
   UPLOAD_EXTENSIONS,
   UPLOAD_MAX_BYTES,
+  addReferenceRequestSchema,
   assessmentTypeSchema,
   auditQuerySchema,
   calendarDateSchema,
   closeoutRequestSchema,
+  createEvidenceRequestSchema,
   createPoamItemRequestSchema,
+  createPolicyRequestSchema,
   createUserRequestSchema,
   displayNameSchema,
   emailSchema,
+  evidenceItemResponseSchema,
+  evidenceItemSchema,
+  evidenceListSchema,
+  evidenceQuerySchema,
+  evidenceVersionSchema,
   fileNameSchema,
+  patchEvidenceRequestSchema,
+  patchPolicyRequestSchema,
+  policyListSchema,
+  policyQuerySchema,
+  policyResponseSchema,
+  policySchema,
+  policyVersionSchema,
+  putEvidenceObjectivesRequestSchema,
+  putPolicyRequirementsRequestSchema,
   implementationLevelSchema,
   implementationStatementSchema,
   milestoneSchema,
@@ -531,5 +548,172 @@ describe('contract schemas', () => {
     expect(poamViewSchema.parse({ ...view, closeout: null }).closeout).toBeNull();
     expect(accepts(poamViewSchema, { ...view, confirmer: 'dibcac' })).toBe(false);
     expect(accepts(poamViewSchema, { items: [], closeout: null, confirmer: 'c3pao' })).toBe(false);
+  });
+
+  it('evidence and policy requests', () => {
+    const ids = (count: number) => Array.from({ length: count }, (_, i) => `3.1.${String(i)}[a]`);
+
+    const create = { title: ' MFA screenshots ', description: '  ', containsCui: false };
+    expect(createEvidenceRequestSchema.parse(create)).toEqual({
+      title: 'MFA screenshots',
+      description: null,
+      containsCui: false,
+      objectiveIds: [],
+    });
+    expect(
+      createEvidenceRequestSchema.parse({ ...create, objectiveIds: ['3.1.1[a]'] }).objectiveIds,
+    ).toEqual(['3.1.1[a]']);
+    expect(accepts(createEvidenceRequestSchema, { ...create, title: 't'.repeat(200) })).toBe(true);
+    expect(accepts(createEvidenceRequestSchema, { ...create, title: 't'.repeat(201) })).toBe(false);
+    expect(accepts(createEvidenceRequestSchema, { ...create, title: '   ' })).toBe(false);
+    expect(accepts(createEvidenceRequestSchema, { ...create, description: 'd'.repeat(4001) })).toBe(
+      false,
+    );
+    expect(accepts(createEvidenceRequestSchema, { ...create, containsCui: 'yes' })).toBe(false);
+    expect(accepts(createEvidenceRequestSchema, { title: 'x', description: null })).toBe(false);
+    expect(accepts(createEvidenceRequestSchema, { ...create, objectiveIds: ids(320) })).toBe(true);
+    expect(accepts(createEvidenceRequestSchema, { ...create, objectiveIds: ids(321) })).toBe(false);
+    expect(accepts(createEvidenceRequestSchema, { ...create, objectiveIds: [''] })).toBe(false);
+    expect(accepts(createEvidenceRequestSchema, { ...create, extra: 1 })).toBe(false);
+
+    expect(accepts(patchEvidenceRequestSchema, {})).toBe(false);
+    expect(patchEvidenceRequestSchema.parse({ title: ' New ' })).toEqual({ title: 'New' });
+    expect(patchEvidenceRequestSchema.parse({ description: ' ' })).toEqual({ description: null });
+    expect(accepts(patchEvidenceRequestSchema, { containsCui: true })).toBe(false);
+    expect(accepts(patchEvidenceRequestSchema, { title: 'x', containsCui: false })).toBe(false);
+    expect(accepts(patchEvidenceRequestSchema, { title: 't'.repeat(201) })).toBe(false);
+    expect(accepts(patchEvidenceRequestSchema, { objectiveIds: [] })).toBe(false);
+
+    expect(accepts(putEvidenceObjectivesRequestSchema, { objectiveIds: [] })).toBe(true);
+    expect(accepts(putEvidenceObjectivesRequestSchema, { objectiveIds: ids(320) })).toBe(true);
+    expect(accepts(putEvidenceObjectivesRequestSchema, { objectiveIds: ids(321) })).toBe(false);
+    expect(accepts(putEvidenceObjectivesRequestSchema, {})).toBe(false);
+    expect(accepts(putEvidenceObjectivesRequestSchema, { objectiveIds: [], x: 1 })).toBe(false);
+
+    expect(addReferenceRequestSchema.parse({ location: ' SharePoint/CUI/MFA ', note: '' })).toEqual(
+      { location: 'SharePoint/CUI/MFA', note: null },
+    );
+    expect(accepts(addReferenceRequestSchema, { location: '  ', note: null })).toBe(false);
+    expect(accepts(addReferenceRequestSchema, { location: 'l'.repeat(1000), note: null })).toBe(
+      true,
+    );
+    expect(accepts(addReferenceRequestSchema, { location: 'l'.repeat(1001), note: null })).toBe(
+      false,
+    );
+    expect(accepts(addReferenceRequestSchema, { location: 'x' })).toBe(false);
+
+    expect(evidenceQuerySchema.parse({})).toEqual({});
+    expect(evidenceQuerySchema.parse({ objectiveId: '3.1.1[a]' })).toEqual({
+      objectiveId: '3.1.1[a]',
+    });
+    expect(accepts(evidenceQuerySchema, { objectiveId: '' })).toBe(false);
+    expect(accepts(evidenceQuerySchema, { requirementId: 'AC.L2-3.1.1' })).toBe(false);
+
+    // Policies: the same shapes, with requirement links (at most 110) and no CUI flag.
+    const reqs = (count: number) =>
+      Array.from({ length: count }, (_, i) => `AC.L2-3.1.${String(i)}`);
+    const policy = { title: ' Access Control Policy ', description: null };
+    expect(createPolicyRequestSchema.parse(policy)).toEqual({
+      title: 'Access Control Policy',
+      description: null,
+      requirementIds: [],
+    });
+    expect(accepts(createPolicyRequestSchema, { ...policy, requirementIds: reqs(110) })).toBe(true);
+    expect(accepts(createPolicyRequestSchema, { ...policy, requirementIds: reqs(111) })).toBe(
+      false,
+    );
+    expect(accepts(createPolicyRequestSchema, { ...policy, title: 't'.repeat(201) })).toBe(false);
+    expect(accepts(createPolicyRequestSchema, { ...policy, containsCui: false })).toBe(false);
+    expect(accepts(patchPolicyRequestSchema, {})).toBe(false);
+    expect(accepts(patchPolicyRequestSchema, { title: 'New' })).toBe(true);
+    expect(accepts(patchPolicyRequestSchema, { containsCui: true })).toBe(false);
+    expect(accepts(putPolicyRequirementsRequestSchema, { requirementIds: reqs(110) })).toBe(true);
+    expect(accepts(putPolicyRequirementsRequestSchema, { requirementIds: reqs(111) })).toBe(false);
+    expect(accepts(putPolicyRequirementsRequestSchema, { objectiveIds: [] })).toBe(false);
+    expect(policyQuerySchema.parse({ requirementId: 'AC.L2-3.1.1' })).toEqual({
+      requirementId: 'AC.L2-3.1.1',
+    });
+    expect(accepts(policyQuerySchema, { objectiveId: '3.1.1[a]' })).toBe(false);
+  });
+
+  it('evidence and policy responses', () => {
+    const ada = { id: 'u-1', displayName: 'Ada' };
+    const sha = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+    const fileVersion = {
+      kind: 'file',
+      version: 2,
+      fileName: 'mfa.pdf',
+      size: 3,
+      sha256: sha,
+      createdAt: '2026-11-24T10:00:00.000Z',
+      createdBy: ada,
+    };
+    const referenceVersion = {
+      kind: 'reference',
+      version: 1,
+      location: 'SharePoint/CUI/MFA',
+      note: null,
+      createdAt: '2026-11-24T09:00:00.000Z',
+      createdBy: ada,
+    };
+    expect(evidenceVersionSchema.parse(fileVersion)).toEqual(fileVersion);
+    expect(evidenceVersionSchema.parse(referenceVersion)).toEqual(referenceVersion);
+    // The version kind is a closed union, and each kind has its own fields.
+    expect(accepts(evidenceVersionSchema, { ...fileVersion, kind: 'link' })).toBe(false);
+    expect(accepts(evidenceVersionSchema, { ...referenceVersion, kind: 'file' })).toBe(false);
+    expect(accepts(evidenceVersionSchema, { ...fileVersion, kind: undefined })).toBe(false);
+    expect(accepts(evidenceVersionSchema, { ...fileVersion, size: 0 })).toBe(false);
+    expect(accepts(evidenceVersionSchema, { ...fileVersion, version: 0 })).toBe(false);
+    expect(accepts(evidenceVersionSchema, { ...fileVersion, sha256: sha.toUpperCase() })).toBe(
+      false,
+    );
+
+    const item = {
+      id: 'e-1',
+      title: 'MFA screenshots',
+      description: null,
+      containsCui: false,
+      objectiveIds: ['3.5.3[a]', '3.5.3[b]'],
+      versions: [fileVersion],
+      createdAt: '2026-11-24T09:00:00.000Z',
+      createdBy: ada,
+      updatedAt: '2026-11-24T10:00:00.000Z',
+    };
+    expect(evidenceItemSchema.parse(item)).toEqual(item);
+    expect(evidenceItemResponseSchema.parse({ item })).toEqual({ item });
+    expect(evidenceListSchema.parse({ items: [item] })).toEqual({ items: [item] });
+    expect(
+      accepts(evidenceItemSchema, {
+        ...item,
+        versions: [{ ...referenceVersion, kind: 'note' }],
+      }),
+    ).toBe(false);
+    expect(accepts(evidenceItemSchema, { ...item, containsCui: undefined })).toBe(false);
+
+    const policyVersion = {
+      version: 2,
+      fileName: 'mfa.pdf',
+      size: 3,
+      sha256: sha,
+      createdAt: '2026-11-24T10:00:00.000Z',
+      createdBy: ada,
+    };
+    const policy = {
+      id: 'p-1',
+      title: 'Access Control Policy',
+      description: 'Who gets in',
+      requirementIds: ['AC.L2-3.1.1'],
+      versions: [policyVersion],
+      createdAt: '2026-11-24T09:00:00.000Z',
+      createdBy: ada,
+      updatedAt: '2026-11-24T10:00:00.000Z',
+    };
+    expect(policyVersionSchema.parse(policyVersion)).toEqual(policyVersion);
+    expect(accepts(policyVersionSchema, referenceVersion)).toBe(false);
+    expect(accepts(policyVersionSchema, { ...policyVersion, size: 0 })).toBe(false);
+    expect(policySchema.parse(policy)).toEqual(policy);
+    expect(policyResponseSchema.parse({ item: policy })).toEqual({ item: policy });
+    expect(policyListSchema.parse({ items: [policy] })).toEqual({ items: [policy] });
+    expect(accepts(policySchema, { ...policy, requirementIds: undefined })).toBe(false);
   });
 });

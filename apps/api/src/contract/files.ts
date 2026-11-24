@@ -1,6 +1,7 @@
 // The upload protocol shared by the api and the web app. An upload is a raw
 // `application/octet-stream` body; the file's name travels in `FILE_NAME_HEADER`.
 import { z } from 'zod';
+import { userRefSchema } from './common';
 
 /** Carries the uploaded file's name as `encodeURIComponent(fileName)`. */
 export const FILE_NAME_HEADER = 'x-file-name';
@@ -55,6 +56,17 @@ export const fileNameSchema = z
 
 /** A SHA-256 digest as lowercase hex. */
 export const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
+
+/** One stored file version of an evidence item or policy, as the api shows it. Never the bytes. */
+export const fileVersionSchema = z.object({
+  version: z.number().int().min(1),
+  fileName: z.string(),
+  size: z.number().int().min(1),
+  sha256: sha256Schema,
+  createdAt: z.iso.datetime(),
+  createdBy: userRefSchema,
+});
+export type FileVersion = z.infer<typeof fileVersionSchema>;
 
 /**
  * The name's last extension, lowercased, or null when it has none. A name that only starts with a
