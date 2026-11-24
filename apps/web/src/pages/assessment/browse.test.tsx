@@ -6,8 +6,13 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthedApp } from '../../App';
 
-// The first render of the whole app is slow on a loaded machine.
+// Each wait for the app may take up to 5 s, for a full-app render on a loaded CI runner. The
+// test timeout sits above that (the 5 s default would equal it), so a wait that never succeeds
+// fails with its own message and the DOM instead of a bare "Test timed out", and a test whose
+// few waits are each slow still finishes. It only bounds a failing test; a passing one takes
+// well under a second.
 configure({ asyncUtilTimeout: 5000 });
+vi.setConfig({ testTimeout: 15_000 });
 
 const catalog = loadCatalog();
 const ADMIN = { id: 'u-1', email: 'ada@example.com', displayName: 'Ada Admin', role: 'admin' };
