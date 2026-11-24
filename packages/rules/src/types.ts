@@ -26,7 +26,7 @@ export interface ConditionalResult { status: 'final' | 'conditional' | 'not_elig
 export interface CloseoutClock { conditionalStatusDate: string; deadline: string; daysRemaining: number; expired: boolean }
 export interface Cited<T> { value: T; citation: string }
 export interface Regulation { id: 'cmmc-32-cfr-170'; version: string; sources: { title: string; url: string }[];
-  conditionalMinScore: Cited<number>; poamMaxItemPoints: Cited<number>;
+  conditionalMinScore: Cited<number>; poamNotMetOnly: Cited<boolean>; poamMaxItemPoints: Cited<number>;
   poamPointExceptions: { requirementId: RequirementId; implementationLevel: ImplementationLevel; maxPoints: number; citation: string }[];
   poamBarred: Cited<RequirementId[]>; closeoutWindowDays: Cited<number>;
   closeoutConfirmedBy: Cited<Record<AssessmentType, 'organization' | 'c3pao'>> }

@@ -1,15 +1,17 @@
 import { openDb, runMigrations } from '../db/client';
+import { createLocalStore } from '../storage';
 import { buildApp } from './app';
 import { loadConfig } from './config';
 import { createLogger } from './logger';
 
-// Start-up order: config, open the DB, migrate, listen. Any failure logs and exits 1.
+// Start-up order: config, open the DB, migrate, listen. The file store creates its folder on
+// the first upload, so start-up never writes to STORAGE_PATH. Any failure logs and exits 1.
 try {
   const config = loadConfig(process.env);
   const handle = openDb(config.databasePath);
   runMigrations(handle.db);
 
-  const app = buildApp({ config, db: handle.db });
+  const app = buildApp({ config, db: handle.db, store: createLocalStore(config.storagePath) });
   app.addHook('onClose', () => {
     handle.sqlite.close();
   });

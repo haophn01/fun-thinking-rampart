@@ -7,7 +7,7 @@ import type {
   Regulation,
   RequirementStatus,
 } from '../types';
-import { POAM_NOT_MET_CITATION, REGULATION } from './regulation';
+import { REGULATION } from './regulation';
 
 export interface PoamCandidate {
   requirementId: RequirementId;
@@ -47,7 +47,8 @@ function effectivePoints(
 
 /**
  * Whether a requirement may go on a POA&M (32 CFR 170.21(a)(2)). Every failing reason
- * is returned, in the order not_not_met, barred, exceeds_point_limit.
+ * is returned, in the order not_not_met, barred, exceeds_point_limit. not_not_met applies
+ * only while `regulation.poamNotMetOnly.value` is true, and cites that rule.
  */
 export function checkPoamEligibility(
   catalog: Catalog,
@@ -59,8 +60,8 @@ export function checkPoamEligibility(
   const points = effectivePoints(requirement, level);
   const reasons: { code: IneligibleCode; citation: string }[] = [];
 
-  if (candidate.status !== 'not_met') {
-    reasons.push({ code: 'not_not_met', citation: POAM_NOT_MET_CITATION });
+  if (regulation.poamNotMetOnly.value && candidate.status !== 'not_met') {
+    reasons.push({ code: 'not_not_met', citation: regulation.poamNotMetOnly.citation });
   }
   if (regulation.poamBarred.value.includes(requirement.id)) {
     reasons.push({ code: 'barred', citation: regulation.poamBarred.citation });

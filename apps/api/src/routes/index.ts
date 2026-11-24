@@ -1,10 +1,14 @@
 import cookie from '@fastify/cookie';
 import type { FastifyInstance } from 'fastify';
 import type { AppDb } from '../../db/client';
+import type { FileStore } from '../../storage';
 import { registerAssessmentRoutes } from '../assessment/routes';
 import { registerAuditRoutes } from '../audit/list';
 import { registerGuard } from '../auth/guard';
 import { registerAuthRoutes } from '../auth/routes';
+import { registerEvidenceRoutes } from '../evidence/routes';
+import { registerPoamRoutes } from '../poam/routes';
+import { registerPolicyRoutes } from '../policies/routes';
 import { registerUserRoutes } from '../users/routes';
 
 /** What every api route needs. */
@@ -12,6 +16,8 @@ export interface ApiDeps {
   db: AppDb;
   /** The app clock: every expiry, lockout, audit `at` and "today" comes from it. */
   now: () => Date;
+  /** Evidence and policy files, content-addressed by SHA-256. */
+  store: FileStore;
 }
 
 /**
@@ -28,5 +34,8 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiDeps): void {
     registerUserRoutes(api, deps);
     registerAuditRoutes(api, deps);
     registerAssessmentRoutes(api, deps);
+    registerPoamRoutes(api, deps);
+    registerEvidenceRoutes(api, deps);
+    registerPolicyRoutes(api, deps);
   });
 }

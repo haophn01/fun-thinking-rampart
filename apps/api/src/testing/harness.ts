@@ -1,5 +1,6 @@
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { openDb, runMigrations, type AppDb, type DbHandle } from '../../db/client';
+import { createMemoryStore, type MemoryFileStore } from '../../storage';
 import { buildApp } from '../app';
 import { loadConfig, type LogLevel } from '../config';
 import { CSRF_HEADER, SESSION_COOKIE, sessionResponseSchema, type SessionUser } from '../contract';
@@ -17,7 +18,13 @@ export const START = new Date('2026-11-23T09:00:00.000Z');
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface RequestOptions {
+  /** Sent as JSON with `content-type: application/json`. */
   body?: unknown;
+  /**
+   * Sent exactly as given, with no content type of its own: set one in `headers`. Wins over
+   * `body`, for sending any bytes with any content type.
+   */
+  rawBody?: string | Uint8Array;
   /** Extra headers; `null` removes one the client would send (e.g. the CSRF header). */
   headers?: Record<string, string | null>;
 }
@@ -33,6 +40,17 @@ export interface Client {
   put(url: string, body?: unknown, options?: RequestOptions): Promise<LightMyRequestResponse>;
   patch(url: string, body?: unknown, options?: RequestOptions): Promise<LightMyRequestResponse>;
   delete(url: string, options?: RequestOptions): Promise<LightMyRequestResponse>;
+  /**
+   * POSTs `bytes` as `application/octet-stream`, with the name in `x-file-name` as
+   * `encodeURIComponent(fileName)`; `null` omits the header. Cookie and CSRF go as usual, and
+   * `options.headers` can still override or drop any header.
+   */
+  upload(
+    url: string,
+    bytes: Uint8Array,
+    fileName: string | null,
+    options?: Omit<RequestOptions, 'body' | 'rawBody'>,
+  ): Promise<LightMyRequestResponse>;
   /** The session cookie's value, or null when the api cleared it or never set one. */
   cookie: string | null;
   csrfToken: string | null;
@@ -48,6 +66,8 @@ export interface Clock {
 
 export interface Harness {
   app: FastifyInstance;
+  /** The app's file store: a fresh memory store unless one was passed in. */
+  store: MemoryFileStore;
   db: AppDb;
   handle: DbHandle;
   clock: Clock;
@@ -66,7 +86,11 @@ export interface HarnessOptions {
   /** Defaults to `info`, captured in `logs`. */
   logLevel?: LogLevel;
   start?: Date;
+  store?: MemoryFileStore;
 }
+
+/** The name header the upload protocol uses (K2's `FILE_NAME_HEADER`). */
+const FILE_NAME_HEADER = 'x-file-name';
 
 const COOKIE_VALUE = /^[^=]+=([^;]*)/;
 
@@ -86,6 +110,7 @@ function cookieFrom(response: LightMyRequestResponse, current: string | null): s
 
 /** A fresh app on a migrated in-memory DB with a clock the test sets. */
 export function createHarness(options: HarnessOptions = {}): Harness {
+  const store = options.store ?? createMemoryStore();
   const handle = openDb(':memory:');
   runMigrations(handle.db);
   let current = new Date((options.start ?? START).getTime());
@@ -104,6 +129,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     config,
     db: handle.db,
     now: () => clock.now(),
+    store,
     logStream: {
       write(line: string) {
         logs.push(JSON.parse(line) as Record<string, unknown>);
@@ -116,11 +142,12 @@ export function createHarness(options: HarnessOptions = {}): Harness {
       cookie: null,
       csrfToken: null,
       user: null,
-      async request(method, url, { body, headers = {} } = {}) {
+      async request(method, url, { body, rawBody, headers = {} } = {}) {
         const sent: Record<string, string> = {};
         if (self.cookie !== null) sent.cookie = `${SESSION_COOKIE}=${self.cookie}`;
         if (self.csrfToken !== null) sent[CSRF_HEADER] = self.csrfToken;
-        if (body !== undefined) sent['content-type'] = 'application/json';
+        const payload = payloadOf(body, rawBody);
+        if (rawBody === undefined && body !== undefined) sent['content-type'] = 'application/json';
         for (const [name, value] of Object.entries(headers)) {
           if (value === null) Reflect.deleteProperty(sent, name);
           else sent[name] = value;
@@ -129,7 +156,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
           method,
           url,
           headers: sent,
-          ...(body === undefined ? {} : { payload: JSON.stringify(body) }),
+          ...(payload === undefined ? {} : { payload }),
         });
         self.cookie = cookieFrom(response, self.cookie);
         if (self.cookie === null) {
@@ -148,6 +175,16 @@ export function createHarness(options: HarnessOptions = {}): Harness {
       put: (url, body, opts) => self.request('PUT', url, { ...opts, body }),
       patch: (url, body, opts) => self.request('PATCH', url, { ...opts, body }),
       delete: (url, opts) => self.request('DELETE', url, opts),
+      upload: (url, bytes, fileName, opts = {}) =>
+        self.request('POST', url, {
+          ...opts,
+          rawBody: bytes,
+          headers: {
+            'content-type': 'application/octet-stream',
+            ...(fileName === null ? {} : { [FILE_NAME_HEADER]: encodeURIComponent(fileName) }),
+            ...opts.headers,
+          },
+        }),
     };
     return self;
   }
@@ -174,6 +211,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
 
   return {
     app,
+    store,
     db: handle.db,
     handle,
     clock,
@@ -186,6 +224,15 @@ export function createHarness(options: HarnessOptions = {}): Harness {
       if (handle.sqlite.open) handle.sqlite.close();
     },
   };
+}
+
+/** What `inject` sends: raw bytes as they are (only the view's own bytes), JSON as text. */
+function payloadOf(body: unknown, rawBody: string | Uint8Array | undefined) {
+  if (typeof rawBody === 'string') return rawBody;
+  if (rawBody !== undefined) {
+    return Buffer.from(rawBody.buffer, rawBody.byteOffset, rawBody.byteLength);
+  }
+  return body === undefined ? undefined : JSON.stringify(body);
 }
 
 function safeJson(text: string): unknown {

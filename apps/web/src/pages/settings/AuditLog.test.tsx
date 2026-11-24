@@ -207,11 +207,36 @@ describe('AuditLog', () => {
     expect(screen.queryByText(/Couldn.t load the audit log/)).not.toBeInTheDocument();
   });
 
-  it('labels and section order', async () => {
-    for (const action of AUDIT_ACTIONS) expect(ACTION_LABELS[action].trim()).not.toBe('');
-    for (const type of AUDIT_ENTITY_TYPES) expect(ENTITY_LABELS[type].trim()).not.toBe('');
+  it('labels cover the contract', async () => {
+    const labelled = (label: string | undefined) =>
+      typeof label === 'string' && label.trim() !== '';
+    const actions: Record<string, string | undefined> = ACTION_LABELS;
+    const entities: Record<string, string | undefined> = ENTITY_LABELS;
+    for (const action of AUDIT_ACTIONS) expect(labelled(actions[action]), action).toBe(true);
+    for (const type of AUDIT_ENTITY_TYPES) expect(labelled(entities[type]), type).toBe(true);
     expect(Object.keys(ACTION_LABELS).sort()).toEqual([...AUDIT_ACTIONS].sort());
+    expect(Object.keys(ENTITY_LABELS).sort()).toEqual([...AUDIT_ENTITY_TYPES].sort());
+    // This sprint's actions and entities are among them.
+    expect(AUDIT_ACTIONS).toEqual(
+      expect.arrayContaining([
+        'poam_item.closed',
+        'evidence.version_added',
+        'policy.links_updated',
+      ]),
+    );
 
+    // The entity filter offers every type by its label.
+    fakeApi({ ...BASE, 'GET /api/audit': () => json(200, { events: [], nextBefore: null }) });
+    await renderSettings();
+    await screen.findByText('No audit events yet.');
+    const options = within(screen.getByLabelText('Entity type')).getAllByRole('option');
+    expect(options.map((option) => option.textContent)).toEqual([
+      'All',
+      ...AUDIT_ENTITY_TYPES.map((type) => entities[type]),
+    ]);
+  });
+
+  it('section order', async () => {
     fakeApi({ ...BASE, 'GET /api/audit': () => json(200, { events: [], nextBefore: null }) });
     await renderSettings();
     await screen.findByText('No audit events yet.');

@@ -9,17 +9,22 @@ import {
   type Blocker,
   type CloseoutClock,
   type ConditionalResult,
+  type EligibilityResult,
+  type IneligibleCode,
   type RequirementOutcome,
+  type RequirementStatus,
   type ScoreResult,
 } from '@rampart/rules';
-import { checkConditional, closeoutClock } from '@rampart/rules/poam';
+import { checkConditional, checkPoamEligibility, closeoutClock } from '@rampart/rules/poam';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { z } from 'zod';
 import {
   blockerSchema,
   closeoutClockSchema,
   conditionalResultSchema,
+  eligibilityResultSchema,
   evaluationSchema,
+  ineligibleCodeSchema,
   requirementOutcomeSchema,
   scoreResultSchema,
 } from './contract';
@@ -82,5 +87,34 @@ describe('contract evaluation mirrors', () => {
     // The mirrors are not loose: an off-contract shape fails.
     expect(scoreResultSchema.safeParse({ kind: 'scored', score: 110 }).success).toBe(false);
     expect(blockerSchema.safeParse({ code: 'below_threshold', score: 1 }).success).toBe(false);
+  });
+
+  it('eligibility mirror', () => {
+    expectTypeOf<z.infer<typeof eligibilityResultSchema>>().toEqualTypeOf<EligibilityResult>();
+    expectTypeOf<z.infer<typeof ineligibleCodeSchema>>().toEqualTypeOf<IneligibleCode>();
+
+    // Real rules output, eligible and not, with one and two reasons, parses unchanged.
+    const catalog = loadCatalog();
+    const statuses: RequirementStatus[] = ['met', 'not_met', 'not_assessed'];
+    const seen = new Set<string>();
+    for (const requirement of catalog.requirements) {
+      for (const status of statuses) {
+        const result = checkPoamEligibility(catalog, { requirementId: requirement.id, status });
+        seen.add(result.eligible ? 'eligible' : String(result.reasons.length));
+        expect(eligibilityResultSchema.parse(result)).toEqual(result);
+      }
+    }
+    expect([...seen].sort()).toEqual(['1', '2', 'eligible']);
+
+    // Not loose: each branch needs its own shape, and the codes are exact.
+    for (const bad of [
+      { eligible: false },
+      { eligible: false, reasons: [{ code: 'barred' }] },
+      { eligible: false, reasons: [{ code: 'unknown', citation: 'x' }] },
+      { eligible: 'yes' },
+      {},
+    ]) {
+      expect(eligibilityResultSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
   });
 });
