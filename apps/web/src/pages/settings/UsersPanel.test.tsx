@@ -66,6 +66,31 @@ function session(user: User) {
   return { setupRequired: false, user: { id, email, displayName, role }, csrfToken: 'csrf-1' };
 }
 
+const ASSESSMENT_VIEW = {
+  assessment: {
+    id: 'a-1',
+    type: 'self',
+    conditionalStatusDate: null,
+    catalogVersion: 'v1',
+    updatedAt: CREATED,
+  },
+  objectiveResults: [],
+  requirementStates: [],
+  evaluation: {
+    outcomes: [],
+    score: {
+      kind: 'incomplete',
+      reason: 'prerequisite_not_met',
+      prerequisites: [],
+      max: 110,
+      floor: -203,
+      notAssessed: [],
+    },
+    conditional: { status: 'incomplete', blockers: [] },
+  },
+  closeout: null,
+};
+
 /** A small users api: the list, create and patch, over an in-memory table. */
 function usersApi(signedInAs: User = ADA, extra: Record<string, Handler> = {}) {
   let users: User[] = [ADA, KIM];
@@ -93,6 +118,8 @@ function usersApi(signedInAs: User = ADA, extra: Record<string, Handler> = {}) {
       users = [...users, user];
       return json(201, { user });
     },
+    'GET /api/audit?limit=50': () => json(200, { events: [], nextBefore: null }),
+    'GET /api/assessment': () => json(200, ASSESSMENT_VIEW),
     'PATCH /api/users/u-1': patch,
     'PATCH /api/users/u-2': patch,
     ...extra,
