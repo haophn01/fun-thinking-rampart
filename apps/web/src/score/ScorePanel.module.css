@@ -1,0 +1,102 @@
+.panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  background: var(--rp-sheet);
+  color: var(--rp-ink);
+}
+
+.reading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.value {
+  font-family: var(--rp-font-display);
+  font-size: var(--rp-text-display-1);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.max {
+  font-family: var(--rp-font-display);
+  font-size: var(--rp-text-display-3);
+  color: var(--rp-graphite);
+}
+
+.status {
+  font-family: var(--rp-font-display);
+  font-size: var(--rp-text-body-lg);
+  font-weight: 600;
+}
+
+.message {
+  font-size: var(--rp-text-body);
+  overflow-wrap: anywhere;
+}
+
+.blockers {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.blocker {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+  font-size: var(--rp-text-body);
+  overflow-wrap: anywhere;
+}
+
+.cite {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  color: var(--rp-graphite);
+}
+
+/* Layout for the dev-only specimen page (ScoreSpecimen.tsx). */
+.specPage {
+  display: grid;
+  gap: 24px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.specTitle {
+  font-family: var(--rp-font-display);
+  font-size: var(--rp-text-display-2);
+}
+
+.specSection {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.specHead {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.specStack {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.specRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}

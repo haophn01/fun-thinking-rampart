@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Dev-only specimen of the score panel (pnpm dev, then /score.html). Not a build input. -->
+    <title>Score specimen</title>
+  </head>
+  <body>
+    <div id="specimen"></div>
+    <script type="module">
+      import '/src/look/fonts.ts';
+      import '/src/look/base.css';
+      import { createElement } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import { ScoreSpecimen } from '/src/score/ScoreSpecimen.tsx';
+
+      createRoot(document.getElementById('specimen')).render(createElement(ScoreSpecimen));
+    </script>
+  </body>
+</html>
