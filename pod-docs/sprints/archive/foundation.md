@@ -1,8 +1,7 @@
 # Sprint: Foundation
 
-_From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: foundation · Status: active · Generated: 2026-11-23_
+_From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: foundation · Status: archived · Generated: 2026-11-23_
 
-<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=0 waves=3 -->
 
 ## Status board
 
@@ -14,8 +13,8 @@ _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: foundation · Status: active 
 | 2 | R2 | Rules: POA&M eligibility, Conditional check, 180-day clock | foundation-r2 | merged | done | medium | B1 |
 | 2 | A1 | API and DB skeleton: config, errors, logging, headers, migrations | foundation-a1 | merged | done | medium | B1 |
 | 2 | L1 | Look: tokens, self-hosted fonts, base controls | foundation-l1 | merged | done | medium | B1 |
-| 3 | S1 | Web shell: masthead, nav, routes, API client | foundation-s1 | — | pending | — | L1, A1 |
-| 3 | R3 | Rules against the real catalog: the plan's verification table | foundation-r3 | — | pending | — | C1, R1, R2 |
+| 3 | S1 | Web shell: masthead, nav, routes, API client | foundation-s1 | merged | done | medium | L1, A1 |
+| 3 | R3 | Rules against the real catalog: the plan's verification table | foundation-r3 | merged | done | high | C1, R1, R2 |
 
 Plan branch `cmmc-l2-grc`; wave heads `foundation-w1`, `foundation-w2`, `foundation-w3`. Merge target is `main` (decisions.md 2026-11-23).
 
@@ -399,3 +398,28 @@ export class RulesInputError extends Error { constructor(
 - **Depends on:** C1, R1, R2
 - **One-way door:** none
 - **Model:** sonnet
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date. The plan branch was cut from `main` this sprint, and `main` has had no new commits.
+- **Slices shipped:** B1, C1, R1, R2, A1, L1, S1, R3 (PRs #1, #2 and #3 into `cmmc-l2-grc`)
+- **Queue entries:** resolved 0, deferred 5. Two are PENDING for the human (C1 `[a]` objective IDs; C1 3.3.2 wording), and three are PENDING for the sprint-planner (R1 runtime status validation in the API; R2 `Regulation` lacks a not-met-only citation field; A1 client-error code mapping). All are in `pod-docs/handoff-queue.md`.
+- **Slice log:**
+  - B1: opus · medium · test-first yes · runtime both URLs on 127.0.0.1 via the Vite proxy, plus a fresh-clone verify · 7 NOTEs · time lost: corepack EPERM, and the better-sqlite3 13 node-gyp failure (pinned to ^12)
+  - W1 wave fix: opus · medium · test-first yes · CI run 45344030186 failed because setup-node v5 called pnpm before corepack. Fixed with `package-manager-cache: false` and proven by CI run 45344487007 going green · time lost: none
+  - C1: opus · medium · test-first yes (one red came from ENOENT) · runtime: converter on the real PDFs twice with identical sha256, a tampered PDF refused, a consumer import · 4 NOTEs · time lost: none
+  - R1: opus · medium · test-first yes (two guard tests were green on the stub) · runtime: tsx through the package entry · 3 NOTEs · time lost: none
+  - R2: opus · medium · test-first yes (some accept rows were green on the stub) · runtime: tsx through `@rampart/rules/poam`, plus dev servers · 4 NOTEs · time lost: none
+  - A1: opus · medium · test-first yes · runtime: built server with curl, the Vite proxy, and a browser · 6 NOTEs · time lost: none
+  - L1: opus · medium · test-first yes · runtime: `/look.html` at 1280 and 375 px in a browser, with same-origin woff2 fonts · 6 NOTEs · time lost: none
+  - S1: sonnet · medium · test-first partly (red came from import failures, not assertions) · runtime: shell at 1280 and 375 px, plus the api stopped and started · 7 NOTEs · time lost: none
+  - R3: sonnet · high · test-first n/a (it checks existing code; each test was proven red by breaking one expectation) · runtime: the real catalog through `@rampart/rules` · 0 NOTEs · time lost: none
+  - Stalls: none
+- **Agent context at hand-back:** about 1,133,000 tokens. That's the sum of each engineer's and planner's reported `subagent_tokens`, which is each agent's final context size, not tokens billed.
+- **For the next sprint:**
+  - The rules are pure functions keyed by the catalog, and the catalog is `nist-800-171-r2@1.0.0`.
+  - The API error envelope, request ID, `respond()` schema helper and the `assessment` table exist.
+  - `apps/web/src/shell/routes.tsx` (`APP_ROUTES`) is the single nav list, and `usePageTitle` sets page titles.
+  - L1's `Button` does not forward refs.
+  - `ApiStatus` treats every health failure the same.
+  - The local pnpm needs the corepack workaround (`pod-docs/known-issues/corepack-enable-eperm.md`).
