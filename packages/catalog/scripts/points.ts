@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { normalizePracticeId } from '../src/load';
+import { normalizePracticeId } from '../src/schema';
 import type { RequirementId, Scoring } from '../src/types';
 
 const requirementType = z.enum(['basic', 'derived']);

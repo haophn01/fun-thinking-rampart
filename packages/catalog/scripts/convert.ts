@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { parseCatalog } from '../src/load';
+import { parseCatalog } from '../src/schema';
 import type { Catalog, CatalogSource, Family, Requirement } from '../src/types';
 import { applyOverrides, parseOverridesFile, type OverridesFile } from './overrides';
 import { mergeSources, parseAssessmentText, parseRequirementText } from './parse';

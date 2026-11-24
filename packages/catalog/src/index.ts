@@ -1,2 +1,2 @@
 export type * from './types';
-export { normalizePracticeId, parseCatalog } from './load';
+export { normalizePracticeId, parseCatalog } from './schema';
