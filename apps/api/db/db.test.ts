@@ -31,6 +31,27 @@ function tempDir(): string {
   return dir;
 }
 
+interface Journal {
+  entries: { tag: string }[];
+}
+
+function readJournal(): Journal {
+  return JSON.parse(readFileSync(join(MIGRATIONS, 'meta', '_journal.json'), 'utf8')) as Journal;
+}
+
+/** A copy of the migrations folder holding only its first `count` migrations. */
+function migrationsUpTo(count: number): string {
+  const journal = readJournal();
+  const folder = join(tempDir(), 'migrations');
+  mkdirSync(join(folder, 'meta'), { recursive: true });
+  const entries = journal.entries.slice(0, count);
+  for (const entry of entries) {
+    copyFileSync(join(MIGRATIONS, `${entry.tag}.sql`), join(folder, `${entry.tag}.sql`));
+  }
+  writeFileSync(join(folder, 'meta', '_journal.json'), JSON.stringify({ ...journal, entries }));
+  return folder;
+}
+
 afterEach(() => {
   for (const handle of open.splice(0)) if (handle.sqlite.open) handle.sqlite.close();
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -214,18 +235,10 @@ describe('database', () => {
 
   it('upgrades a foundation database', () => {
     // A copy of the migrations folder holding only 0000, as the foundation sprint shipped it.
-    const folder = join(tempDir(), 'migrations');
-    mkdirSync(join(folder, 'meta'), { recursive: true });
-    copyFileSync(join(MIGRATIONS, '0000_init.sql'), join(folder, '0000_init.sql'));
-    const journal = JSON.parse(readFileSync(join(MIGRATIONS, 'meta', '_journal.json'), 'utf8')) as {
-      entries: { tag: string }[];
-    };
+    const journal = readJournal();
     expect(journal.entries[0]?.tag).toBe('0000_init');
     expect(journal.entries.length).toBeGreaterThan(1);
-    writeFileSync(
-      join(folder, 'meta', '_journal.json'),
-      JSON.stringify({ ...journal, entries: journal.entries.slice(0, 1) }),
-    );
+    const folder = migrationsUpTo(1);
 
     const path = join(tempDir(), 'foundation.sqlite');
     const old = track(openDb(path));
