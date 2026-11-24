@@ -62,6 +62,25 @@ describe('pod-ci workflow', () => {
     expect(String(setupNode?.with?.['node-version'])).toBe('24');
   });
 
+  it('pnpm is available before setup-node caches', () => {
+    // setup-node v5 caches by packageManager by default and runs pnpm to find
+    // the store, before `corepack enable` has put pnpm on PATH. Either corepack
+    // runs first, or setup-node's package-manager cache is off.
+    const steps = job('verify').steps ?? [];
+    const setupNodeIndex = steps.findIndex((step) => step.uses?.startsWith('actions/setup-node@'));
+    const corepackIndex = steps.findIndex((step) => step.run?.trim() === 'corepack enable');
+    expect(setupNodeIndex, 'setup-node step').toBeGreaterThanOrEqual(0);
+    expect(corepackIndex, 'corepack enable step').toBeGreaterThanOrEqual(0);
+    const setupNode = steps[setupNodeIndex];
+    const cacheOff =
+      setupNode?.with?.['package-manager-cache'] === false && setupNode.with.cache === undefined;
+    const corepackFirst = corepackIndex < setupNodeIndex;
+    expect(
+      cacheOff || corepackFirst,
+      'corepack before setup-node, or package-manager-cache: false',
+    ).toBe(true);
+  });
+
   it('secrets job runs gitleaks v2 with fetch-depth 0', () => {
     const secrets = job('secrets');
     expect(secrets['runs-on']).toBe('ubuntu-latest');
