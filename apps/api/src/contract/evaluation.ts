@@ -38,7 +38,23 @@ export const scoreResultSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
-const ineligibleCodeSchema = z.enum(['not_not_met', 'barred', 'exceeds_point_limit']);
+export const ineligibleCodeSchema = z.enum(['not_not_met', 'barred', 'exceeds_point_limit']);
+
+/** What `checkPoamEligibility` returns: eligible, or every failing reason with its citation. */
+export const eligibilityResultSchema = z.discriminatedUnion('eligible', [
+  z.object({ eligible: z.literal(true) }),
+  z.object({
+    eligible: z.literal(false),
+    reasons: z.array(z.object({ code: ineligibleCodeSchema, citation: z.string() })),
+  }),
+]);
+
+/** What each ineligible reason reads as in the app. */
+export const INELIGIBLE_REASON_LABELS = {
+  not_not_met: 'Only Not Met requirements go on a POA&M',
+  barred: 'This requirement can never go on a POA&M',
+  exceeds_point_limit: "Worth more than 1 point, so it can't go on a POA&M",
+} as const satisfies Record<z.infer<typeof ineligibleCodeSchema>, string>;
 
 export const blockerSchema = z.discriminatedUnion('code', [
   z.object({

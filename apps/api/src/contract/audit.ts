@@ -12,6 +12,17 @@ export const AUDIT_ACTIONS = [
   'assessment.updated',
   'objective_result.updated',
   'requirement_state.updated',
+  'poam_item.created',
+  'poam_item.updated',
+  'poam_item.closed',
+  'evidence.created',
+  'evidence.updated',
+  'evidence.links_updated',
+  'evidence.version_added',
+  'policy.created',
+  'policy.updated',
+  'policy.links_updated',
+  'policy.version_added',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -20,6 +31,10 @@ export const AUDIT_ENTITY_TYPES = [
   'assessment',
   'objective_result',
   'requirement_state',
+  /** The entity ID is the row's UUID for these three. */
+  'poam_item',
+  'evidence_item',
+  'policy',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

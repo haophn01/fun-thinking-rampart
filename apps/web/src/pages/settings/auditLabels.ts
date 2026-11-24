@@ -12,6 +12,17 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'assessment.updated': 'Assessment settings changed',
   'objective_result.updated': 'Objective result updated',
   'requirement_state.updated': 'Requirement updated',
+  'poam_item.created': 'POA&M item created',
+  'poam_item.updated': 'POA&M item changed',
+  'poam_item.closed': 'POA&M item closed out',
+  'evidence.created': 'Evidence created',
+  'evidence.updated': 'Evidence changed',
+  'evidence.links_updated': 'Evidence objective links changed',
+  'evidence.version_added': 'Evidence version added',
+  'policy.created': 'Policy created',
+  'policy.updated': 'Policy changed',
+  'policy.links_updated': 'Policy requirement links changed',
+  'policy.version_added': 'Policy version added',
 };
 
 export const ENTITY_LABELS: Record<AuditEntityType, string> = {
@@ -19,4 +30,7 @@ export const ENTITY_LABELS: Record<AuditEntityType, string> = {
   assessment: 'Assessment',
   objective_result: 'Objective',
   requirement_state: 'Requirement',
+  poam_item: 'POA&M item',
+  evidence_item: 'Evidence',
+  policy: 'Policy',
 };

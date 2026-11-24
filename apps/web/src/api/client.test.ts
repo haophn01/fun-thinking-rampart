@@ -1,11 +1,16 @@
-import { healthResponseSchema, userResponseSchema } from '@rampart/api/contract';
+import {
+  UPLOAD_EXTENSIONS,
+  evidenceItemResponseSchema,
+  healthResponseSchema,
+  userResponseSchema,
+} from '@rampart/api/contract';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthedApp } from '../App';
-import { ApiError, apiGet, apiSend, setApiSessionHooks } from './client';
+import { ApiError, apiGet, apiSend, apiUpload, setApiSessionHooks } from './client';
 
 function respond(body: BodyInit | null, status = 200) {
   return new Response(body, { status });
@@ -194,6 +199,148 @@ describe('apiSend', () => {
     expect((await failure(apiSend('POST', '/api/users', {}, userResponseSchema))).code).toBe(
       'invalid_response',
     );
+  });
+});
+
+const MAX_UPLOAD = 26_214_400;
+const UPLOAD_PATH = '/api/evidence/e-1/versions';
+const EVIDENCE = {
+  id: 'e-1',
+  title: 'MFA screenshots',
+  description: null,
+  containsCui: false,
+  objectiveIds: ['3.5.3[a]'],
+  versions: [
+    {
+      kind: 'file',
+      version: 1,
+      fileName: 'Política 1.pdf',
+      size: 3,
+      sha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+      createdAt: '2026-11-24T10:00:00.000Z',
+      createdBy: { id: 'u-1', displayName: 'Ada' },
+    },
+  ],
+  createdAt: '2026-11-24T09:00:00.000Z',
+  createdBy: { id: 'u-1', displayName: 'Ada' },
+  updatedAt: '2026-11-24T10:00:00.000Z',
+};
+
+describe('apiUpload', () => {
+  it('sends octet-stream, the encoded name and CSRF, and parses the response', async () => {
+    hooks('csrf-1');
+    const fetchMock = stubFetch(() =>
+      Promise.resolve(respond(JSON.stringify({ item: EVIDENCE }), 201)),
+    );
+    const file = new Blob(['abc']);
+    await expect(
+      apiUpload(UPLOAD_PATH, file, 'Política 1.pdf', evidenceItemResponseSchema),
+    ).resolves.toEqual({ item: EVIDENCE });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [path, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe(UPLOAD_PATH);
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(file);
+    const headers = new Headers(init.headers);
+    expect(headers.get('content-type')).toBe('application/octet-stream');
+    expect(headers.get('x-file-name')).toBe('Pol%C3%ADtica%201.pdf');
+    expect(headers.get('x-csrf-token')).toBe('csrf-1');
+    expect(headers.get('accept')).toBe('application/json');
+  });
+
+  it('maps the error envelope, a network failure and a contract mismatch', async () => {
+    hooks();
+    stubFetch(() =>
+      Promise.resolve(respond(envelope('cui_file_refused', 'This item contains CUI'), 409)),
+    );
+    const refused = await failure(
+      apiUpload(UPLOAD_PATH, new Blob(['abc']), 'a.pdf', evidenceItemResponseSchema),
+    );
+    expect(refused.status).toBe(409);
+    expect(refused.code).toBe('cui_file_refused');
+    expect(refused.message).toBe('This item contains CUI');
+    expect(refused.requestId).toBe('req-9');
+
+    stubFetch(() =>
+      Promise.resolve(respond(envelope('unsupported_file_type', 'No', { allowed: ['.pdf'] }), 415)),
+    );
+    const type = await failure(
+      apiUpload(UPLOAD_PATH, new Blob(['abc']), 'a.pdf', evidenceItemResponseSchema),
+    );
+    expect(type.details).toEqual({ allowed: ['.pdf'] });
+
+    stubFetch(() => Promise.reject(new TypeError('Failed to fetch')));
+    expect(
+      (await failure(apiUpload(UPLOAD_PATH, new Blob(['a']), 'a.pdf', evidenceItemResponseSchema)))
+        .code,
+    ).toBe('network_error');
+    stubFetch(() => Promise.resolve(respond(JSON.stringify({ item: { id: 1 } }), 201)));
+    expect(
+      (await failure(apiUpload(UPLOAD_PATH, new Blob(['a']), 'a.pdf', evidenceItemResponseSchema)))
+        .code,
+    ).toBe('invalid_response');
+  });
+
+  it('calls onUnauthenticated on 401 and sends no CSRF header without a session', async () => {
+    const onUnauthenticated = hooks(null);
+    const fetchMock = stubFetch(() =>
+      Promise.resolve(respond(envelope('unauthenticated', 'Sign in'), 401)),
+    );
+    const error = await failure(
+      apiUpload(UPLOAD_PATH, new Blob(['abc']), 'a.pdf', evidenceItemResponseSchema),
+    );
+    expect(error.code).toBe('unauthenticated');
+    expect(onUnauthenticated).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(new Headers(init.headers).has('x-csrf-token')).toBe(false);
+  });
+});
+
+describe('apiUpload pre-checks', () => {
+  it('refuses a too-large, empty or .exe file without calling fetch', async () => {
+    hooks();
+    const fetchMock = stubFetch(() =>
+      Promise.resolve(respond(JSON.stringify({ item: EVIDENCE }), 201)),
+    );
+    const cases: [Blob, string, string][] = [
+      [new Blob([new Uint8Array(MAX_UPLOAD + 1)]), 'big.pdf', 'payload_too_large'],
+      [new Blob([]), 'empty.pdf', 'validation_failed'],
+      [new Blob(['MZ']), 'setup.exe', 'unsupported_file_type'],
+      [new Blob(['abc']), 'a.pdf.exe', 'unsupported_file_type'],
+      [new Blob(['abc']), 'a/b.pdf', 'validation_failed'],
+      [new Blob(['abc']), '..', 'validation_failed'],
+      // The name is checked before the size, as on the server.
+      [new Blob([new Uint8Array(MAX_UPLOAD + 1)]), 'big.exe', 'unsupported_file_type'],
+    ];
+    for (const [file, name, code] of cases) {
+      const error = await failure(apiUpload(UPLOAD_PATH, file, name, evidenceItemResponseSchema));
+      expect(error.code, name).toBe(code);
+      expect(error.status, name).toBe(0);
+      expect(error.message.trim(), name).not.toBe('');
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const type = await failure(
+      apiUpload(UPLOAD_PATH, new Blob(['MZ']), 'setup.exe', evidenceItemResponseSchema),
+    );
+    expect(type.details).toEqual({
+      problem: 'unsupported_file_type',
+      allowed: [...UPLOAD_EXTENSIONS],
+    });
+    const empty = await failure(
+      apiUpload(UPLOAD_PATH, new Blob([]), 'a.pdf', evidenceItemResponseSchema),
+    );
+    expect(empty.details).toEqual({ problem: 'empty' });
+
+    // Exactly the limit, and an upper-case allowed type, are sent.
+    await apiUpload(
+      UPLOAD_PATH,
+      new Blob([new Uint8Array(MAX_UPLOAD)]),
+      'REPORT.PDF',
+      evidenceItemResponseSchema,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

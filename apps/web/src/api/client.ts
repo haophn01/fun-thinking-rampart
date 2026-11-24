@@ -1,4 +1,11 @@
-import { CSRF_HEADER, errorEnvelopeSchema } from '@rampart/api/contract';
+import {
+  CSRF_HEADER,
+  FILE_NAME_HEADER,
+  UPLOAD_EXTENSIONS,
+  errorEnvelopeSchema,
+  uploadProblem,
+  type UploadProblem,
+} from '@rampart/api/contract';
 
 /** `network_error` and `invalid_response` come from the client; every other code is the api's. */
 export class ApiError extends Error {
@@ -131,4 +138,54 @@ export async function apiSend<T>(
     init.body = JSON.stringify(body);
   }
   return request(method, path, init, schema);
+}
+
+const UPLOAD_PROBLEMS: Record<UploadProblem, { code: string; message: string }> = {
+  invalid_file_name: {
+    code: 'validation_failed',
+    message: "The file name isn't valid. Rename the file and try again.",
+  },
+  unsupported_file_type: {
+    code: 'unsupported_file_type',
+    message: `This file type can't be uploaded. Allowed: ${UPLOAD_EXTENSIONS.join(' ')}`,
+  },
+  empty: { code: 'validation_failed', message: 'The file is empty.' },
+  too_large: { code: 'payload_too_large', message: 'The file is larger than 25 MiB.' },
+};
+
+/**
+ * Upload a file to the api: POSTs its bytes as `application/octet-stream`, with its name in
+ * `FILE_NAME_HEADER` and the session's CSRF token, and parses the answer like `apiSend`. A file
+ * `uploadProblem` refuses is never sent: it throws `ApiError` with status 0 and the code the api
+ * would give (`payload_too_large`, `unsupported_file_type` or `validation_failed`), with
+ * `details.problem`.
+ */
+export async function apiUpload<T>(
+  path: string,
+  file: Blob,
+  fileName: string,
+  schema: ResponseSchema<T>,
+): Promise<T> {
+  const problem = uploadProblem(fileName, file.size);
+  if (problem !== null) {
+    const { code, message } = UPLOAD_PROBLEMS[problem];
+    throw new ApiError({
+      status: 0,
+      code,
+      message,
+      details:
+        problem === 'unsupported_file_type'
+          ? { problem, allowed: [...UPLOAD_EXTENSIONS] }
+          : { problem },
+    });
+  }
+
+  const headers = new Headers({
+    accept: 'application/json',
+    'content-type': 'application/octet-stream',
+    [FILE_NAME_HEADER]: encodeURIComponent(fileName),
+  });
+  const token = sessionHooks?.csrfToken() ?? null;
+  if (token !== null) headers.set(CSRF_HEADER, token);
+  return (await request('POST', path, { method: 'POST', headers, body: file }, schema)) as T;
 }

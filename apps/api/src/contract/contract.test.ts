@@ -81,6 +81,14 @@ describe('api contract', () => {
       'last_admin',
       'unsupported_media_type',
       'too_many_attempts',
+      'poam_ineligible',
+      'poam_item_exists',
+      'poam_item_closed',
+      'closeout_not_ready',
+      'cui_file_refused',
+      'evidence_not_cui',
+      'unsupported_file_type',
+      'file_integrity_failed',
     ]);
 
     const envelope = { error: { code: 'not_found', message: 'No route', requestId: 'abc' } };
