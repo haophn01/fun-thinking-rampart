@@ -3,6 +3,8 @@ import { useSession } from '../../auth/session';
 import { SectionLabel } from '../../look';
 import { usePageTitle } from '../usePageTitle';
 import styles from './settings.module.css';
+import { AssessmentSettings } from './AssessmentSettings';
+import { AuditLog } from './AuditLog';
 import { UsersPanel } from './UsersPanel';
 
 interface SettingsSection {
@@ -39,13 +41,14 @@ export function SettingsPage() {
   usePageTitle('Settings');
   const { user } = useSession();
   const sections: SettingsSection[] = [
+    { key: 'assessment', title: 'Assessment', body: <AssessmentSettings /> },
     ...(user?.role === 'admin' ? [{ key: 'users', title: 'Users', body: <UsersPanel /> }] : []),
+    { key: 'audit', title: 'Audit log', body: <AuditLog /> },
   ];
 
   return (
     <section className={styles.page}>
       <h1>Settings</h1>
-      {sections.length === 0 && <p>This section isn&apos;t built yet.</p>}
       {sections.map((section, index) => (
         <Section key={section.key} number={index + 1} title={section.title}>
           {section.body}
