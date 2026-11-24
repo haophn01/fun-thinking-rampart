@@ -2,7 +2,7 @@
 
 _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: assessment · Status: active · Generated: 2026-11-23_
 
-<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=1 waves=5 -->
+<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=1 waves=6 -->
 
 ## Status board
 
@@ -12,9 +12,9 @@ _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: assessment · Status: active 
 | 1 | K1 | API contract for this sprint, plus client-error mapping | assessment-k1 | merged | done | medium | — |
 | 1 | R4 | Rules: evaluateAssessment and what-if helpers | assessment-r4 | merged | done | high | — |
 | 1 | L2 | Look: TextArea, Select, RadioGroup, Alert | assessment-l2 | merged | done | medium | — |
-| 2 | A2 | Auth API: setup, sign-in, sessions, CSRF, roles, users, audit read | assessment-a2 | — | pending | — | D1, K1 |
-| 2 | W1 | Web auth: session gate, setup, sign-in, user slot, users panel | assessment-w1 | — | pending | — | K1, L2 |
-| 2 | S2 | Web score panel and what-if state | assessment-s2 | — | pending | — | K1, R4, L2 |
+| 2 | A2 | Auth API: setup, sign-in, sessions, CSRF, roles, users, audit read | assessment-a2 | merged | done | medium | D1, K1 |
+| 2 | W1 | Web auth: session gate, setup, sign-in, user slot, users panel | assessment-w1-auth | merged | done | medium | K1, L2 |
+| 2 | S2 | Web score panel and what-if state | assessment-s2 | merged | done | medium | K1, R4, L2 |
 | 3 | A3 | Assessment API: view, objective results, requirement state, settings | assessment-a3 | — | pending | — | D1, K1, R4, A2 |
 | 3 | W2 | Assessment workspace UI with live and what-if score | assessment-w2 | — | pending | — | K1, R4, L2, W1, S2 |
 | 3 | W3 | Settings UI: assessment type, Conditional Status Date, audit log | assessment-w3 | — | pending | — | K1, L2, W1 |
