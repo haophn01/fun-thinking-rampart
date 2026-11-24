@@ -36,6 +36,11 @@
   display: none;
 }
 
+.user {
+  margin-left: auto;
+  min-width: 0;
+}
+
 @media (max-width: 767px) {
   .masthead {
     display: block;
@@ -49,5 +54,15 @@
 
   .menu {
     display: inline-flex;
+  }
+
+  .user {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: var(--rp-rule) solid var(--rp-ink);
+  }
+
+  .user[data-open='false'] {
+    display: none;
   }
 }

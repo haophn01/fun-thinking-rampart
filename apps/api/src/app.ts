@@ -9,6 +9,7 @@ import { healthResponseSchema } from './contract';
 import { AppError, registerEarlyNotFound, registerErrorHandling } from './errors';
 import { createLogger } from './logger';
 import { respond } from './respond';
+import { registerApiRoutes } from './routes';
 
 /** JSON bodies over 1 MiB are refused with 413. */
 export const BODY_LIMIT_BYTES = 1024 * 1024;
@@ -20,6 +21,8 @@ export interface BuildAppOptions {
   db: AppDb;
   /** Where log lines go; stdout when omitted. */
   logStream?: DestinationStream;
+  /** The app clock; the real one when omitted. Tests pass a clock they can move. */
+  now?: () => Date;
 }
 
 /** Reuses a well-formed incoming `x-request-id`; anything else gets a fresh UUID. */
@@ -28,7 +31,12 @@ export function resolveRequestId(header: string | string[] | undefined): string 
 }
 
 /** Builds the API without listening, so tests can drive it with `inject`. */
-export function buildApp({ config, db, logStream }: BuildAppOptions): FastifyInstance {
+export function buildApp({
+  config,
+  db,
+  logStream,
+  now = () => new Date(),
+}: BuildAppOptions): FastifyInstance {
   const app = Fastify({
     loggerInstance: createLogger(config.logLevel, logStream),
     logController: new LogController({ requestIdLogLabel: 'requestId' }),
@@ -71,6 +79,9 @@ export function buildApp({ config, db, logStream }: BuildAppOptions): FastifyIns
     }
     return respond(healthResponseSchema, { status: 'ok', db: 'ok' });
   });
+
+  // Everything else under /api needs a session unless the route says it is public.
+  registerApiRoutes(app, { db, now });
 
   return app;
 }

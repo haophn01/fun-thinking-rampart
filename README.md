@@ -74,6 +74,31 @@ The api logs JSON lines (pino) with the request's id on every line; cookies, `au
 `{ "error": { "code", "message", "requestId", "details"? } }`, and the `x-request-id` header
 carries the same id.
 
+## Sign-in and security defaults
+
+The first run has no users: open the web app and **Setup** creates the first admin (any email, a
+password of 12 to 128 characters) and the self-assessment. After that, setup answers 409 and
+admins add people under Settings.
+
+- **Every api route needs a signed-in user** except `GET /api/health`, `GET /api/session`,
+  `POST /api/setup`, `POST /api/session` (sign in) and `DELETE /api/session` (sign out).
+- **Passwords** are hashed with Argon2id (`@node-rs/argon2` defaults). Passwords, hashes and
+  session tokens never appear in a response, a log line or the audit log.
+- **Sessions** live in the database; the browser holds a random token in the `rampart_session`
+  cookie (`HttpOnly; SameSite=Strict; Path=/; Max-Age=43200`), and the database stores only its
+  SHA-256. A session ends after 2 hours idle or 12 hours in all. Sign-in always starts a new
+  session. Deactivating a user or resetting their password ends all their sessions. There is no
+  `Secure` flag yet because V1 serves plain http on `127.0.0.1`.
+- **CSRF:** every `POST`, `PUT`, `PATCH` and `DELETE` made with a session must send the
+  session's token (from `GET /api/session`) in the `x-csrf-token` header. Bodies must be
+  `application/json`, so a cross-site form can't post.
+- **Lockout:** the 5th wrong password in a row locks the account for 15 minutes (429 with
+  `Retry-After`). Unknown emails, wrong passwords and inactive users all get the same 401.
+- **Roles:** `admin` manages users and assessment settings; `contributor` records results. The
+  last active admin can't be demoted or deactivated. Users are never deleted.
+- **Audit log:** every change is written to an append-only `audit_event` table in the same
+  transaction; `GET /api/audit` pages through it newest first.
+
 ## Parts
 
 | Package            | Folder             | What it does                                                                                            |
