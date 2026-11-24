@@ -104,8 +104,8 @@ describe('Shell', () => {
     for (const [label, path] of TABS) {
       const { unmount } = await renderAt(path);
       expect(screen.getByRole('heading', { level: 1, name: label })).toBeInTheDocument();
-      // /assessment and /settings have real pages; the rest show the empty-state page.
-      if (path !== '/settings' && path !== '/assessment') {
+      // Only / and /ssp still lack a page module; every other route mounts its own page.
+      if (path === '/' || path === '/ssp') {
         expect(screen.getByText("This section isn't built yet.")).toBeInTheDocument();
       }
       expect(document.title).toBe(`${label} · ${PRODUCT_NAME}`);

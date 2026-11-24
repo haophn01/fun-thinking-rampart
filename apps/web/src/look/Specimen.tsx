@@ -2,7 +2,9 @@ import type { ObjectiveStatus } from '@rampart/rules';
 import { useState } from 'react';
 import { Alert } from './Alert';
 import { Button } from './Button';
+import { Checkbox } from './Checkbox';
 import { BODY_TEXT_PAIRS, contrastRatio, LARGE_TEXT_PAIRS, type TextPair } from './contrast';
+import { FileField } from './FileField';
 import { GraduatedBar } from './GraduatedBar';
 import { RadioGroup, type RadioOption } from './RadioGroup';
 import { SectionLabel } from './SectionLabel';
@@ -88,6 +90,60 @@ function TypeRadio() {
   );
 }
 
+/** A FileField that shows what onFileChange last received, with a Reset that bumps `reset`. */
+function LiveFileField() {
+  const [last, setLast] = useState('nothing yet');
+  const [reset, setReset] = useState(0);
+  return (
+    <div className={styles.stack}>
+      <FileField
+        label="Evidence file"
+        accept=".pdf,.docx,.png,.txt"
+        reset={reset}
+        onFileChange={(file) => {
+          setLast(file ? `${file.name} (${String(file.size)} bytes)` : 'null');
+        }}
+      />
+      <p className={styles.meta}>onFileChange: {last}</p>
+      <Button
+        onClick={() => {
+          setReset((n) => n + 1);
+          setLast('reset');
+        }}
+      >
+        Reset
+      </Button>
+    </div>
+  );
+}
+
+function FileControls() {
+  return (
+    <div className={styles.stack}>
+      <div className={styles.stack}>
+        <Checkbox label="Contains CUI" />
+        <Checkbox label="Contains CUI" defaultChecked />
+        <Checkbox
+          label="Contains CUI"
+          description="Files are refused; store a reference to where it lives instead."
+        />
+        <Checkbox label="Locked, unchecked" disabled />
+        <Checkbox label="Locked, checked" defaultChecked disabled />
+      </div>
+      <div className={styles.fields}>
+        <LiveFileField />
+        <FileField label="Policy file" accept=".pdf,.docx" onFileChange={() => undefined} />
+        <FileField
+          label="Policy file"
+          error="report.exe isn't an allowed file type."
+          onFileChange={() => undefined}
+        />
+        <FileField label="Locked file" disabled onFileChange={() => undefined} />
+      </div>
+    </div>
+  );
+}
+
 function FormControls() {
   return (
     <div className={styles.stack}>
@@ -136,6 +192,7 @@ function FormControls() {
         <StatusRadio legend="AC.L2-3.1.3[a] · disabled" initial="na" disabled />
         <TypeRadio />
       </div>
+      <FileControls />
       <div className={styles.fields}>
         <Alert tone="error" title="Conditional status not possible">
           Score 72 is below 88.
