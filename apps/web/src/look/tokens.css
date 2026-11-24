@@ -1,0 +1,27 @@
+/* Mirrors tokens.ts exactly (tokens.test.ts). The only place a colour literal may appear in CSS. */
+:root {
+  --rp-vellum: #f2f1ec;
+  --rp-sheet: #ffffff;
+  --rp-ink: #111111;
+  --rp-graphite: #6b6b66;
+  --rp-red: #e10600;
+  --rp-blue: #1f4bff;
+
+  --rp-font-display: 'Space Grotesk', ui-sans-serif, system-ui, 'Segoe UI', Arial, sans-serif;
+  --rp-font-body: 'Inter', ui-sans-serif, system-ui, 'Segoe UI', Arial, sans-serif;
+  --rp-font-mono: 'Space Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --rp-text-display-1: 4rem;
+  --rp-text-display-2: 2.5rem;
+  --rp-text-display-3: 1.75rem;
+  --rp-text-body-lg: 1.125rem;
+  --rp-text-body: 1rem;
+  --rp-text-label: 1rem;
+  --rp-text-mono: 1rem;
+
+  /* Rules and borders are 1.5 px Ink; focus is a 2 px Ink outline, offset 2 px. */
+  --rp-rule: 1.5px;
+  --rp-focus-width: 2px;
+  --rp-focus-offset: 2px;
+  --rp-control-min: 44px;
+}
