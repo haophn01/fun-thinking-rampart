@@ -8,13 +8,18 @@ import {
   CSRF_HEADER,
   ERROR_CODES,
   ERROR_STATUS,
+  FILE_INTEGRITY_MESSAGE,
+  FILE_NAME_HEADER,
   SESSION_COOKIE,
+  UPLOAD_EXTENSIONS,
+  UPLOAD_MAX_BYTES,
   assessmentTypeSchema,
   auditQuerySchema,
   calendarDateSchema,
   createUserRequestSchema,
   displayNameSchema,
   emailSchema,
+  fileNameSchema,
   implementationLevelSchema,
   implementationStatementSchema,
   noteSchema,
@@ -25,9 +30,11 @@ import {
   requirementStatusSchema,
   roleSchema,
   setupRequestSchema,
+  sha256Schema,
   signInRequestSchema,
   updateAssessmentRequestSchema,
   updateUserRequestSchema,
+  uploadProblem,
 } from './index';
 
 const accepts = (schema: z.ZodType, value: unknown) => schema.safeParse(value).success;
@@ -260,5 +267,102 @@ describe('contract schemas', () => {
     expect(accepts(auditQuerySchema, { entityId: '' })).toBe(false);
     expect(accepts(auditQuerySchema, { entityId: 'i'.repeat(64) })).toBe(true);
     expect(accepts(auditQuerySchema, { entityId: 'i'.repeat(65) })).toBe(false);
+  });
+
+  it('upload protocol constants', () => {
+    expect(FILE_NAME_HEADER).toBe('x-file-name');
+    expect(UPLOAD_MAX_BYTES).toBe(26_214_400);
+    expect(UPLOAD_EXTENSIONS).toEqual([
+      '.csv',
+      '.doc',
+      '.docx',
+      '.gif',
+      '.jpeg',
+      '.jpg',
+      '.json',
+      '.log',
+      '.md',
+      '.pdf',
+      '.png',
+      '.ppt',
+      '.pptx',
+      '.txt',
+      '.xls',
+      '.xlsx',
+      '.xml',
+      '.zip',
+    ]);
+    expect(FILE_INTEGRITY_MESSAGE).toBe(
+      "The stored file is missing or doesn't match its recorded SHA-256.",
+    );
+
+    const hash = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+    expect(sha256Schema.parse(hash)).toBe(hash);
+    for (const bad of [hash.toUpperCase(), hash.slice(1), `${hash}0`, `${hash.slice(1)}g`, '']) {
+      expect(accepts(sha256Schema, bad), bad).toBe(false);
+    }
+
+    expect(fileNameSchema.parse('  Política 1.pdf  ')).toBe('Política 1.pdf');
+    expect(accepts(fileNameSchema, 'n'.repeat(255))).toBe(true);
+    expect(fileNameSchema.parse(` ${'n'.repeat(255)} `)).toBe('n'.repeat(255));
+    expect(accepts(fileNameSchema, '...')).toBe(true);
+    const badNames = [
+      '',
+      '   ',
+      'n'.repeat(256),
+      'a/b.pdf',
+      'a\b.pdf',
+      '.',
+      '..',
+      ' .. ',
+      'a\u0000.pdf',
+      'a\u0007.pdf',
+      'a\u001f.pdf',
+      'a\u007f.pdf',
+      'a\nb.pdf',
+      null,
+    ];
+    for (const bad of badNames) {
+      expect(accepts(fileNameSchema, bad), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('uploadProblem edges', () => {
+    const max = 26_214_400;
+    const cases: [string, number, ReturnType<typeof uploadProblem>][] = [
+      ['report.pdf', 10, null],
+      ['a/b.pdf', 10, 'invalid_file_name'],
+      ['a\b.pdf', 10, 'invalid_file_name'],
+      ['.', 10, 'invalid_file_name'],
+      ['..', 10, 'invalid_file_name'],
+      ['', 10, 'invalid_file_name'],
+      ['bell\u0007.pdf', 10, 'invalid_file_name'],
+      [`${'x'.repeat(252)}.pdf`, 10, 'invalid_file_name'],
+      [`${'x'.repeat(251)}.pdf`, 10, null],
+      ['a.pdf.exe', 10, 'unsupported_file_type'],
+      ['a.exe.pdf', 10, null],
+      ['REPORT.PDF', 10, null],
+      ['Notes.Md', 10, null],
+      ['README', 10, 'unsupported_file_type'],
+      ['.pdf', 10, 'unsupported_file_type'],
+      ['a.pdf.', 10, 'unsupported_file_type'],
+      ['a.pdf', 0, 'empty'],
+      ['a.pdf', 1, null],
+      ['a.pdf', max, null],
+      ['a.pdf', max + 1, 'too_large'],
+      // Checked in order: name, then type, then empty, then size.
+      ['a/b.exe', 0, 'invalid_file_name'],
+      ['a.exe', 0, 'unsupported_file_type'],
+      ['a.exe', max + 1, 'unsupported_file_type'],
+    ];
+    for (const [name, size, problem] of cases) {
+      expect(uploadProblem(name, size), `${JSON.stringify(name)} at ${String(size)}`).toBe(
+        problem,
+      );
+    }
+    for (const extension of UPLOAD_EXTENSIONS) {
+      expect(uploadProblem(`file${extension}`, 1), extension).toBeNull();
+      expect(uploadProblem(`FILE${extension.toUpperCase()}`, 1), extension).toBeNull();
+    }
   });
 });
