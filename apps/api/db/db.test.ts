@@ -63,7 +63,9 @@ describe('database', () => {
     const applied = appliedMigrations(handle);
     expect(applied).toBeGreaterThan(0);
     handle.sqlite
-      .prepare("insert into assessment (id, catalog_version) values ('a1', 'nist-800-171-r2@1.0.0')")
+      .prepare(
+        "insert into assessment (id, catalog_version) values ('a1', 'nist-800-171-r2@1.0.0')",
+      )
       .run();
     runMigrations(handle.db);
     expect(appliedMigrations(handle)).toBe(applied);
@@ -91,9 +93,9 @@ describe('database', () => {
         .prepare("insert into assessment (id, type, catalog_version) values ('a3', 'c3pao', 'v')")
         .run(),
     ).not.toThrow();
-    expect(() =>
-      handle.sqlite.prepare("insert into assessment (id) values ('a4')").run(),
-    ).toThrow(/NOT NULL constraint failed: assessment.catalog_version/);
+    expect(() => handle.sqlite.prepare("insert into assessment (id) values ('a4')").run()).toThrow(
+      /NOT NULL constraint failed: assessment.catalog_version/,
+    );
   });
 
   it('a file database gets its folder, WAL, and keeps data across a reopen', () => {

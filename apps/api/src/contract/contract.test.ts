@@ -20,7 +20,9 @@ function importSpecifiers(source: string): string[] {
     /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
     /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
   ];
-  return patterns.flatMap((pattern) => [...source.matchAll(pattern)].map((match) => match[1] ?? ''));
+  return patterns.flatMap((pattern) =>
+    [...source.matchAll(pattern)].map((match) => match[1] ?? ''),
+  );
 }
 
 describe('api contract', () => {

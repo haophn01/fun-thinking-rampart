@@ -42,7 +42,9 @@ const envSchema = z.object({
       // Digits only: rejects signs, decimals, exponents, hex and surrounding spaces.
       .regex(/^\d+$/, 'must be an integer from 1 to 65535')
       .transform(Number)
-      .pipe(z.number().int().min(1, 'must be from 1 to 65535').max(65535, 'must be from 1 to 65535'))
+      .pipe(
+        z.number().int().min(1, 'must be from 1 to 65535').max(65535, 'must be from 1 to 65535'),
+      )
       .default(3001),
   ),
   DATABASE_PATH: z.preprocess(
