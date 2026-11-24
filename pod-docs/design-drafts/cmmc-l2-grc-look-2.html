@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CMMC L2 GRC — Look C, Shop Floor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&family=Big+Shoulders+Stencil+Display:wght@700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#18181a;color:#d8d8d8;font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:24px}
+.pagehead{max-width:1100px;margin:0 0 28px}
+.pagehead h1{font-size:28px;color:#fff;margin-bottom:6px}
+.pagehead p{color:#a8a8a8}
+.row{margin:0 0 44px}
+.rowhead{display:flex;align-items:center;gap:16px;margin:0 0 10px}
+.rowlabel{font:600 16px system-ui;color:#9a9a9a;letter-spacing:.05em;text-transform:uppercase}
+.rowhead button{font:16px system-ui;background:#2a2a2d;color:#ddd;border:1px solid #444;padding:4px 12px;border-radius:4px;cursor:pointer}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(420px,1fr));gap:16px;overflow-x:auto}
+.row.expanded .cols{grid-template-columns:1fr}
+.cell{border-radius:6px;overflow:hidden;padding:20px;background:var(--bg);color:var(--text);font-family:var(--body)}
+
+/* ───────── Direction tokens ───────── */
+.dir-a{--bg:#0A0A0A;--surface:#141414;--line:#2A2A2A;--text:#EDEDE8;--muted:#8A8A85;--accent:#FF5A1F;--alert:#FF3B3B;--ok:#EDEDE8;--on-accent:#0A0A0A;
+  --display:'Archivo',sans-serif;--body:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;--r:0px;--pill:0px;--case:uppercase;--track:.08em;--dispw:800;--dispstretch:125%}
+.dir-b{--bg:#0B1220;--surface:#111B2E;--line:#23324D;--text:#E6EEF8;--muted:#8291AD;--accent:#4FD1E8;--alert:#FFB547;--ok:#4FD1E8;--on-accent:#0B1220;
+  --display:'Barlow Condensed',sans-serif;--body:'Barlow',sans-serif;--mono:'JetBrains Mono',monospace;--r:2px;--pill:2px;--case:uppercase;--track:.12em;--dispw:600;--dispstretch:100%}
+.dir-c{--bg:#F2F1EC;--surface:#FFFFFF;--line:#1A1A1A;--text:#111111;--muted:#6B6B66;--accent:#E10600;--alert:#E10600;--ok:#1F4BFF;--on-accent:#FFFFFF;
+  --display:'Space Grotesk',sans-serif;--body:'Inter',sans-serif;--mono:'Space Mono',monospace;--r:0px;--pill:12px;--case:none;--track:0;--dispw:700;--dispstretch:100%}
+
+/* ───────── Shared primitives ───────── */
+.disp{font-family:var(--display);font-weight:var(--dispw);font-stretch:var(--dispstretch);line-height:1}
+.lbl{font:500 16px/1.3 var(--body);text-transform:var(--case);letter-spacing:var(--track);color:var(--muted)}
+.dir-c .lbl{font-family:var(--mono);font-size:16px}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+.dirtitle{display:flex;align-items:baseline;gap:12px;margin-bottom:8px}
+.dirtitle .letter{font-size:44px}
+.dirtitle .name{font-size:26px}
+.thesis{font-size:18px;margin-bottom:6px}
+.sigline{color:var(--muted);margin-bottom:16px}
+.sigline b{color:var(--accent);font-weight:600}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 18px;font:600 16px var(--body);text-transform:var(--case);letter-spacing:var(--track);border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--text);cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.primary.hover{filter:brightness(1.15)}
+.btn.secondary.hover{border-color:var(--text)}
+.btn.ghost{border-color:transparent}
+.btn.ghost.hover{background:var(--surface)}
+.btn.focus{outline:2px solid var(--accent);outline-offset:3px}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.dir-a .btn.primary::after{content:'→';font-weight:400}
+.dir-a .btn.secondary{border-color:var(--text)}
+.dir-a .btn.secondary.hover{background:var(--text);color:var(--bg)}
+.dir-b .btn{clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);border-color:var(--accent);color:var(--accent)}
+.dir-b .btn.primary{color:var(--on-accent)}
+.dir-b .btn.secondary.hover{background:rgba(79,209,232,.12)}
+.dir-b .btn.ghost{color:var(--text)}
+.dir-b .btn.focus{outline:none;box-shadow:inset 0 0 0 3px var(--text)}
+.dir-c .btn{border:1.5px solid var(--line)}
+.dir-c .btn.secondary.hover{background:var(--text);color:var(--bg)}
+.dir-c .btn.ghost{text-decoration:underline;text-underline-offset:4px}
+
+/* Inputs */
+.field{display:grid;gap:6px}
+.input{min-height:44px;padding:10px 12px;font:16px var(--body);color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);width:100%}
+.input.focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 1px var(--accent)}
+.input.error{border-color:var(--alert)}
+.input[disabled]{opacity:.45}
+.err{color:var(--alert);font-size:16px}
+.select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 12px) 50%;background-size:6px 6px;background-repeat:no-repeat}
+.dir-c .input{background:transparent;border:none;border-bottom:1.5px solid var(--line);padding-left:0}
+.dir-c .input.focus{box-shadow:0 1.5px 0 0 var(--accent);border-color:var(--accent)}
+.dir-b .input{font-family:var(--mono)}
+
+/* Chips */
+.chip{display:inline-flex;align-items:center;gap:7px;padding:2px 10px;font:500 16px/1.6 var(--mono);text-transform:var(--case);border-radius:var(--r);border:1px solid currentColor;white-space:nowrap}
+.chip::before{content:'';width:8px;height:8px;background:currentColor;border-radius:var(--dotr,0)}
+.chip.met{color:var(--ok)}
+.chip.notmet{color:var(--alert)}
+.chip.na{color:var(--muted);border-style:dashed}
+.chip.na::before{background:transparent;border:1px solid currentColor}
+.chip.unassessed{color:var(--muted)}
+.chip.unassessed::before{background:transparent}
+.dir-a .chip.met{background:var(--text);color:var(--bg);border-color:var(--text)}
+.dir-c .chip{--dotr:50%;border:none;padding:0}
+
+/* Segmented, checkbox, toggle, tabs */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg span{padding:8px 12px;font:500 16px var(--body);text-transform:var(--case);letter-spacing:var(--track);color:var(--muted);border-left:1px solid var(--line)}
+.seg span:first-child{border-left:none}
+.seg span.on{background:var(--text);color:var(--bg)}
+.seg span.on.bad{background:var(--alert);color:var(--on-accent)}
+.dir-b .seg span.on{background:var(--accent);color:var(--on-accent)}
+.dir-b .seg span.on.bad{background:var(--alert);color:var(--bg)}
+.check{display:inline-flex;align-items:center;gap:10px}
+.box{width:22px;height:22px;border:1.5px solid var(--muted);border-radius:var(--r);display:grid;place-items:center;font-size:15px;color:var(--on-accent)}
+.box.on{background:var(--accent);border-color:var(--accent)}
+.check.off{opacity:.4}
+.tog{width:46px;height:26px;border-radius:var(--pill);background:var(--line);position:relative;display:inline-block}
+.tog::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:var(--pill);background:var(--muted);transition:left .2s}
+.tog.on{background:var(--accent)}
+.tog.on::after{left:23px;background:var(--on-accent)}
+.dir-c .tog{border:1.5px solid var(--line);background:transparent}
+.dir-c .tog::after{top:2px;left:2px;background:var(--line)}
+.dir-c .tog.on{background:var(--accent);border-color:var(--accent)}
+.dir-c .tog.on::after{left:21px;background:#fff}
+.tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{padding:10px 14px;font:500 16px var(--body);text-transform:var(--case);letter-spacing:var(--track);color:var(--muted);white-space:nowrap}
+.tab.on{color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.tab.hover{color:var(--text)}
+
+/* Alerts, bars */
+.alert{border-left:3px solid var(--alert);background:var(--surface);padding:12px 14px}
+.alert.info{border-left-color:var(--ok)}
+.alert b{display:block}
+.dir-c .alert{background:transparent;border:1.5px solid var(--alert)}
+.dir-c .alert.info{border-color:var(--ok)}
+.bar{height:8px;background:var(--line);border-radius:var(--r);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.dir-a .bar i{background:var(--text)}
+.dir-c .bar{height:6px;background:#dcdbd5}
+.dir-c .bar i{background:var(--text)}
+
+/* Component blocks */
+.cgroup{margin-bottom:22px}
+.cgroup>.lbl{margin-bottom:10px}
+.wrap{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.stack{display:grid;gap:12px}
+.objrow{display:grid;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+.objrow .id{font-family:var(--mono);color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:grid;gap:8px}
+.dir-c .card{background:transparent;border:1.5px solid var(--line)}
+.card .top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}
+.hash{font-family:var(--mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.countdown{font-family:var(--mono);color:var(--accent)}
+.dir-c .countdown{color:var(--ok)}
+.flag{display:inline-flex;gap:8px;align-items:center;color:var(--alert)}
+
+/* Palette & type */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+.sw{border:1px solid rgba(128,128,128,.35)}
+.sw div{height:64px}
+.sw p{padding:6px 8px;font:16px/1.3 var(--mono);background:var(--bg);color:var(--text)}
+.sw p span{display:block;color:var(--muted)}
+.types>div{padding:10px 0;border-bottom:1px solid var(--line)}
+.types .meta{display:block;font:16px var(--mono);color:var(--muted);margin-top:4px}
+
+/* ───────── App screen ───────── */
+.frame{container-type:inline-size;width:100%}
+.frame.m{width:375px;max-width:100%;margin:0 auto;outline:1px solid rgba(128,128,128,.35)}
+.dwrap{overflow:hidden}
+.frame.d{width:1280px}
+.app{display:grid;gap:16px;padding:16px;background:var(--bg);color:var(--text);font-family:var(--body)}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--display);font-weight:var(--dispw);font-stretch:var(--dispstretch);font-size:22px;letter-spacing:var(--track);text-transform:uppercase}
+.dir-c .brand{text-transform:none;letter-spacing:-.01em}
+.brand small{font:500 16px var(--mono);color:var(--muted);margin-left:8px;letter-spacing:0;text-transform:none}
+.nav{display:none}
+.nav span{padding:8px 12px;color:var(--muted);text-transform:var(--case);letter-spacing:var(--track);font-weight:500}
+.nav span.on{color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.menu{font-size:22px}
+.user{display:none;color:var(--muted)}
+.rail{display:none}
+.main{display:grid;gap:16px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:12px;align-content:start;min-width:0}
+.dir-a .panel{background:transparent;border:none;border-top:1px solid var(--line);padding:16px 0}
+.dir-b .panel{position:relative}
+.dir-b .panel::before,.dir-b .panel::after{content:'';position:absolute;width:14px;height:14px;border:2px solid var(--accent)}
+.dir-b .panel::before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.dir-b .panel::after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+.dir-b .app{background-image:linear-gradient(rgba(79,209,232,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(79,209,232,.05) 1px,transparent 1px);background-size:24px 24px}
+.dir-c .app{counter-reset:sec}
+.dir-c .panel{background:transparent;border:none;border-top:1.5px solid var(--line);padding:12px 0 4px}
+.dir-c .panel>.lbl::before{counter-increment:sec;content:counter(sec,decimal-leading-zero) '  ';color:var(--accent);white-space:pre}
+
+.numwrap{display:flex;align-items:baseline;gap:10px}
+.num{font-size:104px;letter-spacing:-.02em}
+.dir-b .num{font-family:var(--mono);font-weight:500;font-size:88px;color:var(--accent)}
+.of{font:500 20px var(--mono);color:var(--muted)}
+.sub b{color:var(--accent)}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.sig{display:none;width:100%}
+.dir-a .sig-dial,.dir-b .sig-matrix,.dir-c .sig-ruler{display:block}
+.sig text{font-family:var(--mono);fill:var(--muted)}
+.tk{stroke:var(--muted);stroke-width:1}
+.tk.mj{stroke:var(--text);stroke-width:1.5}
+.th{stroke:var(--accent);stroke-width:3}
+.nd{stroke:var(--text);stroke-width:2.5}
+.hub{fill:var(--text)}
+.arcbg{fill:none;stroke:var(--line);stroke-width:6}
+.arcv{fill:none;stroke:var(--text);stroke-width:6}
+.rl{stroke:var(--line);stroke-width:1.5}
+.rth{stroke:var(--accent);stroke-width:2}
+.rth-t{fill:var(--accent)!important;font-weight:700}
+.rme{fill:var(--ok)}
+.rme-t{fill:var(--ok)!important;font-weight:700}
+.dim{stroke:var(--ok);stroke-width:1;stroke-dasharray:3 3}
+
+.stackbar{display:flex;height:14px;gap:2px}
+.stackbar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:12px;height:12px;display:inline-block}
+.s-m{background:var(--ok)}
+.s-n{background:var(--alert)}
+.s-a{background:transparent;outline:1px dashed var(--muted);outline-offset:-1px}
+.s-u{background:var(--line)}
+.dir-a .s-m{background:var(--text)}
+.matrix{display:grid;grid-template-columns:repeat(20,1fr);gap:3px}
+.matrix i{aspect-ratio:1;display:block}
+.matrix i.s-m{background:var(--accent);opacity:.9}
+.matrix i.s-n{background:var(--alert)}
+
+.checks{list-style:none;display:grid;gap:10px}
+.checks li{display:grid;grid-template-columns:24px 1fr;gap:8px}
+.checks li::before{font:700 16px var(--mono)}
+.checks .bad::before{content:'✕';color:var(--alert)}
+.checks .warn::before{content:'!';color:var(--alert)}
+.checks .good::before{content:'✓';color:var(--ok)}
+.poam{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--line)}
+
+.fams{display:grid;gap:8px}
+.fam{display:grid;grid-template-columns:40px 1fr 48px;gap:10px;align-items:center}
+.fam .nm{display:none}
+.fam .code{font-family:var(--mono)}
+.fam .pc{font-family:var(--mono);text-align:right;color:var(--muted)}
+
+.trows{display:grid}
+.trow{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.trow .id{font-family:var(--mono)}
+.trow .tt{grid-column:1/-1}
+.trow .pt,.trow .ow{display:none}
+.trow.head{display:none}
+
+@container (min-width:900px){
+  .nav{display:flex;gap:4px}
+  .menu{display:none}
+  .user{display:block}
+  .app{padding:24px 32px;gap:24px}
+  .main{gap:24px}
+  .score{grid-area:score}.blockers{grid-area:blockers}.objectives{grid-area:objectives}.attention{grid-area:attention}.families{grid-area:families}
+  .fam{grid-template-columns:40px 190px 1fr 48px}
+  .fam .nm{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .trow,.trow.head{display:grid;grid-template-columns:190px 1fr 150px 50px 110px;align-items:center}
+  .trow .tt{grid-column:auto}
+  .trow .pt,.trow .ow{display:block}
+  .trow .pt{font-family:var(--mono);text-align:right}
+  .trow .ow{color:var(--muted)}
+  .trow.head{color:var(--muted)}
+
+  .dir-a .main{grid-template-columns:1.35fr 1fr;grid-template-areas:"score blockers" "score objectives" "attention families"}
+  .dir-a .num{font-size:220px}
+  .dir-a .sig-dial{max-width:560px}
+
+  .dir-b .app{grid-template-columns:76px 1fr;grid-template-areas:"rail top" "rail main"}
+  .dir-b .topbar{grid-area:top}
+  .dir-b .main{grid-area:main;grid-template-columns:1fr 1fr 380px;grid-template-areas:"objectives objectives score" "objectives objectives blockers" "attention attention families"}
+  .dir-b .nav{display:none}
+  .dir-b .rail{grid-area:rail;display:flex;flex-direction:column;gap:6px;align-items:center;border-right:1px solid var(--line);padding-right:16px;margin:-24px 0 -24px -32px;padding-top:24px;background:rgba(17,27,46,.85)}
+  .dir-b .rail span{width:48px;height:48px;display:grid;place-items:center;font:600 16px var(--mono);color:var(--muted);border:1px solid transparent}
+  .dir-b .rail span.on{color:var(--accent);border-color:var(--accent)}
+  .dir-b .matrix{gap:5px}
+
+  .dir-c .main{grid-template-columns:1fr 1fr 1fr;column-gap:40px;grid-template-areas:"score score blockers" "objectives objectives blockers" "families attention attention"}
+  .dir-c .num{font-size:160px}
+  .dir-c .fam{grid-template-columns:40px 1fr 48px}
+  .dir-c .fam .nm{display:none}
+  .dir-d .titleblock{grid-template-columns:repeat(6,auto);justify-self:end;min-width:760px}
+  .dir-d .stamp{top:18px;right:8px;font-size:44px}
+}
+
+/* ───────── C · Shop Floor (manufacturing culture over C) ───────── */
+.cols{grid-template-columns:repeat(2,minmax(420px,1fr))}
+.row.expanded .cols{grid-template-columns:1fr}
+.cell.dir-a,.cell.dir-b{display:none}
+.dir-d{--bg:#EEEBE3;--surface:#FFFFFF;--line:#111111;--text:#111111;--muted:#5F5E58;--accent:#FFC400;--alert:#D7261E;--ok:#00843D;--on-accent:#111111;
+  --display:'Big Shoulders Stencil Display',sans-serif;--dispw:800;--hazard:repeating-linear-gradient(-45deg,#FFC400 0 10px,#111 10px 20px)}
+.dir-d .brand{text-transform:uppercase;letter-spacing:.04em;font-size:28px}
+.dir-d .dirtitle .name{text-transform:uppercase}
+/* drafting frame: scale ticks along the top edge */
+.dir-d .app{border:1.5px solid var(--line);background-image:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 24px),repeating-linear-gradient(90deg,var(--line) 0 1.5px,transparent 1.5px 120px);background-size:100% 6px,100% 11px;background-repeat:no-repeat;padding-top:24px}
+/* routing-traveler operation numbers */
+.dir-d .app{counter-reset:sec}
+.dir-d .panel>.lbl::before{counter-increment:sec 10;content:'OP 0' counter(sec) '   ';color:var(--alert);font-weight:700}
+.dir-d .panel{border-top:3px solid var(--line)}
+/* safety colors: yellow is a fill, never text on paper */
+.dir-d .sub b{background:var(--accent);color:var(--text);padding:0 5px}
+.dir-d .btn.primary{border:1.5px solid var(--line);font-weight:700}
+.dir-d .btn.focus{outline:3px solid var(--text);outline-offset:3px}
+.dir-d .input.focus{box-shadow:0 3px 0 0 var(--text);border-color:var(--text)}
+.dir-d .tab.on,.dir-d .nav span.on{box-shadow:inset 0 -5px 0 var(--accent)}
+.dir-d .rth{stroke:var(--alert)} .dir-d .rth-t{fill:var(--alert)!important}
+.dir-d .countdown{color:var(--text);background:var(--accent);padding:0 6px;font-weight:700}
+.dir-d .bar{background:#d9d5ca;height:8px}
+.dir-d .bar i{background:repeating-linear-gradient(90deg,var(--text) 0 6px,transparent 6px 8px)}
+.dir-d .s-m{background:var(--ok)} .dir-d .seg span.on{background:var(--ok);color:#fff} .dir-d .seg span.on.bad{background:var(--alert);color:#fff}
+.dir-d .tog.on{background:var(--accent);border-color:var(--line)} .dir-d .tog.on::after{background:var(--line)}
+/* shop tags for status: notched tag with a punched hole */
+.dir-d .chip{border:1.5px solid currentColor;padding:1px 12px 1px 26px;position:relative;clip-path:polygon(10px 0,100% 0,100% 100%,10px 100%,0 50%);border-radius:0;font-weight:700;text-transform:uppercase}
+.dir-d .chip::before{position:absolute;left:11px;top:50%;margin-top:-4px;width:8px;height:8px;border-radius:50%;background:var(--bg);border:1.5px solid currentColor}
+.dir-d .chip.notmet{background:var(--alert);color:#fff;border-color:var(--alert)}
+.dir-d .chip.notmet::before{background:#fff;border-color:#fff}
+.dir-d .chip.met{background:#fff}
+.dir-d .chip.na{background:transparent}
+/* hazard stripe on blockers, and on never-POA&M items */
+.dir-d .blockers::before{content:'';display:block;height:12px;background:var(--hazard);margin:-12px 0 4px}
+.dir-d .blockers{border-top:none;padding-top:12px}
+.dir-d .card.barred{border-left:12px solid transparent;border-image:var(--hazard) 1;border-image-width:0 0 0 12px}
+.dir-d .card{background:#fff}
+.dir-d .alert{background:#fff;border-left:12px solid var(--alert)}
+.dir-d .alert.info{border-left-color:var(--ok)}
+/* QC stamp */
+.stamp,.titleblock{display:none}
+.dir-d .score{position:relative}
+.dir-d .stamp{display:block;position:absolute;top:30px;right:4px;transform:rotate(-8deg);border:3px solid var(--alert);color:var(--alert);padding:4px 12px;font:800 32px/1 var(--display);letter-spacing:.06em;text-align:center;border-radius:4px;box-shadow:inset 0 0 0 2px var(--surface),inset 0 0 0 4px var(--alert);opacity:.92}
+.dir-d .stamp small{display:block;font:700 16px/1.3 var(--mono);letter-spacing:0}
+.dir-d .stamp.ok{border-color:var(--ok);color:var(--ok);box-shadow:inset 0 0 0 2px var(--surface),inset 0 0 0 4px var(--ok)}
+/* engineering drawing title block */
+.dir-d .titleblock{display:grid;grid-template-columns:repeat(3,1fr);border:1.5px solid var(--line);background:#fff}
+.dir-d .titleblock div{padding:6px 10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);display:grid}
+.dir-d .titleblock .lbl{font-size:16px}
+.dir-d .titleblock b{font:700 16px var(--mono)}
+.dir-d .titleblock .rev b{background:var(--accent);padding:0 6px;justify-self:start}
+</style>
+</head>
+<body>
+
+<header class="pagehead">
+  <h1>Look C, refined: Shop Floor</h1>
+  <p>Left: C as you picked it. Right: C with manufacturing culture added. Drafting paper and an engineering title block. Panels numbered as routing operations (OP 010, OP 020…). OSHA/ANSI safety colors: yellow is a fill only, red tag means not met or hold, green means met or released. Shop-tag status chips, hazard stripes on blockers, stencil type, and a QC stamp: <b>HOLD</b> under 88, <b>RELEASED</b> at 88 or above. The A and B pages are kept in cmmc-l2-grc-look.html.</p>
+</header>
+
+<!-- ROW 1: whole direction -->
+<section class="row">
+  <div class="rowhead"><h2 class="rowlabel">1 · Each direction whole: thesis and main screen at 375 px</h2></div>
+  <div class="cols">
+    <div class="cell dir-a">
+      <div class="dirtitle"><span class="disp letter">A</span><span class="disp name">BLACK OPS</span></div>
+      <p class="thesis">Pitch-black, Anduril-stark. Huge expanded type, almost no chrome, one hot accent that means "act here".</p>
+      <p class="sigline">Signature: <b>the SPRS instrument dial</b>, a −203 → 110 gauge with an orange notch at 88.</p>
+      <div class="frame m" data-tpl="screen"></div>
+    </div>
+    <div class="cell dir-b">
+      <div class="dirtitle"><span class="disp letter">B</span><span class="disp name">FLIGHT LINE</span></div>
+      <p class="thesis">Cockpit HUD on a blueprint grid. Condensed type, cyan instruments, chamfered controls and reticle-bracket panels.</p>
+      <p class="sigline">Signature: <b>the 320-cell objective matrix</b>, every assessment objective as one lit cell.</p>
+      <div class="frame m" data-tpl="screen"></div>
+    </div>
+    <div class="cell dir-c">
+      <div class="dirtitle"><span class="disp letter">C</span><span class="disp name">Spec Sheet</span></div>
+      <p class="thesis">Light, precise and technical: an engineering drawing with hairline rules, numbered sections and signal-red callouts.</p>
+      <p class="sigline">Signature: <b>the dimension-line score ruler</b>, which shows how far you are from 88 like a drawing measurement.</p>
+      <div class="frame m" data-tpl="screen"></div>
+    </div>
+    <div class="cell dir-c dir-d">
+      <div class="dirtitle"><span class="disp letter">C</span><span class="disp name">Shop Floor</span></div>
+      <p class="thesis">The Spec Sheet made by a machine shop: drafting paper, a title block, routing operations, safety-color tags and an inspector's stamp. Precise like an engineering drawing, and familiar to anyone who has worked a shop floor.</p>
+      <p class="sigline">Signature: <b>the QC stamp</b>. HOLD in red until the score reaches 88, then RELEASED in green, with the drawing title block underneath.</p>
+      <div class="frame m" data-tpl="screen"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ROW 2: palette -->
+<section class="row">
+  <div class="rowhead"><h2 class="rowlabel">2 · Palette</h2></div>
+  <div class="cols">
+    <div class="cell dir-a"><div class="swatches" data-pal="a"></div></div>
+    <div class="cell dir-b"><div class="swatches" data-pal="b"></div></div>
+    <div class="cell dir-c"><div class="swatches" data-pal="c"></div></div>
+    <div class="cell dir-c dir-d"><div class="swatches" data-pal="d"></div></div>
+  </div>
+</section>
+
+<!-- ROW 3: type -->
+<section class="row">
+  <div class="rowhead"><h2 class="rowlabel">3 · Type scale (smallest text 16 px)</h2></div>
+  <div class="cols">
+    <div class="cell dir-a" data-tpl="type" data-fonts="Archivo Expanded 800 · IBM Plex Sans · IBM Plex Mono"></div>
+    <div class="cell dir-b" data-tpl="type" data-fonts="Barlow Condensed 600 · Barlow · JetBrains Mono"></div>
+    <div class="cell dir-c" data-tpl="type" data-fonts="Space Grotesk 700 · Inter · Space Mono"></div>
+    <div class="cell dir-c dir-d" data-tpl="type" data-fonts="Big Shoulders Stencil Display 800 · Inter · Space Mono"></div>
+  </div>
+</section>
+
+<!-- ROW 4: controls -->
+<section class="row">
+  <div class="rowhead"><h2 class="rowlabel">4 · Controls in every state</h2></div>
+  <div class="cols">
+    <div class="cell dir-a" data-tpl="controls"></div>
+    <div class="cell dir-b" data-tpl="controls"></div>
+    <div class="cell dir-c" data-tpl="controls"></div>
+    <div class="cell dir-c dir-d" data-tpl="controls"></div>
+  </div>
+</section>
+
+<!-- ROW 5: app components -->
+<section class="row">
+  <div class="rowhead"><h2 class="rowlabel">5 · App components</h2></div>
+  <div class="cols">
+    <div class="cell dir-a" data-tpl="components"></div>
+    <div class="cell dir-b" data-tpl="components"></div>
+    <div class="cell dir-c" data-tpl="components"></div>
+    <div class="cell dir-c dir-d" data-tpl="components"></div>
+  </div>
+</section>
+
+<!-- ROW 6: desktop -->
+<section class="row" id="desk">
+  <div class="rowhead"><h2 class="rowlabel">6 · Main screen at desktop (1280 px, scaled)</h2><button id="expand">View full size</button></div>
+  <div class="cols">
+    <div class="cell dir-a"><div class="dwrap"><div class="frame d" data-tpl="screen"></div></div></div>
+    <div class="cell dir-b"><div class="dwrap"><div class="frame d" data-tpl="screen"></div></div></div>
+    <div class="cell dir-c"><div class="dwrap"><div class="frame d" data-tpl="screen"></div></div></div>
+    <div class="cell dir-c dir-d"><div class="dwrap"><div class="frame d" data-tpl="screen"></div></div></div>
+  </div>
+</section>
+
+<!-- ───────── Templates ───────── -->
+<template id="t-screen">
+  <div class="app">
+    <aside class="rail"><span>◆</span><span class="on">DB</span><span>AS</span><span>PM</span><span>EV</span><span>PO</span><span>SSP</span></aside>
+    <header class="topbar">
+      <div class="brand">Rampart<small>CMMC L2</small></div>
+      <nav class="nav"><span class="on">Dashboard</span><span>Assessment</span><span>POA&amp;M</span><span>Evidence</span><span>Policies</span><span>SSP</span></nav>
+      <div class="user">J. Ortiz · Admin</div>
+      <div class="menu" aria-label="Menu">☰</div>
+    </header>
+    <main class="main">
+      <section class="panel score">
+        <div class="lbl">SPRS score</div>
+        <div class="stamp">HOLD<small>72 &lt; 88 · QA</small></div>
+        <div class="numwrap"><span class="num disp">72</span><span class="of">/ 110</span></div>
+        <svg class="sig sig-dial" viewBox="0 0 200 116"></svg>
+        <svg class="sig sig-ruler" viewBox="0 0 400 92"></svg>
+        <p class="sub">Conditional status needs <b>88</b>. You are 16 points short.</p>
+        <div class="actions"><button class="btn primary">Continue assessment</button><button class="btn secondary">What-if</button></div>
+      </section>
+      <section class="panel blockers">
+        <div class="lbl">Conditional status check</div>
+        <ul class="checks">
+          <li class="bad">Score 72 is below the 88 needed for Conditional status</li>
+          <li class="bad"><span><span class="mono">AC.L2-3.1.20</span> is Not Met and can never go on a POA&amp;M</span></li>
+          <li class="warn"><span><span class="mono">SC.L2-3.13.11</span> is Not Met (−5). It can go on a POA&amp;M only at −3 (encrypted, not FIPS-validated)</span></li>
+          <li class="good"><span>SSP present (<span class="mono">CA.L2-3.12.4</span>)</span></li>
+        </ul>
+        <div class="poam"><span>POA&amp;M · 9 open</span><span class="muted">180-day clock: not started</span></div>
+      </section>
+      <section class="panel objectives">
+        <div class="lbl">Assessment objectives · 320</div>
+        <div class="stackbar"><i class="s-m" style="flex:214"></i><i class="s-n" style="flex:38"></i><i class="s-a" style="flex:21"></i><i class="s-u" style="flex:47"></i></div>
+        <div class="legend"><span><i class="s-m"></i>214 Met</span><span><i class="s-n"></i>38 Not met</span><span><i class="s-a"></i>21 N/A</span><span><i class="s-u"></i>47 Not assessed</span></div>
+        <div class="sig sig-matrix"><div class="matrix"></div></div>
+      </section>
+      <section class="panel attention">
+        <div class="lbl">Needs attention</div>
+        <div class="trows">
+          <div class="trow head"><span>Requirement</span><span>Title</span><span>Status</span><span>Pts</span><span>Owner</span></div>
+          <div class="trow"><span class="id">SC.L2-3.13.11</span><span class="chip notmet">Not met</span><span class="tt">Employ FIPS-validated cryptography to protect CUI</span><span class="pt">5</span><span class="ow">D. Kim</span></div>
+          <div class="trow"><span class="id">AC.L2-3.1.20</span><span class="chip notmet">Not met</span><span class="tt">Verify and control connections to external systems</span><span class="pt">1</span><span class="ow">J. Ortiz</span></div>
+          <div class="trow"><span class="id">IA.L2-3.5.3</span><span class="chip notmet">Not met</span><span class="tt">Use multifactor authentication for privileged and network access</span><span class="pt">3</span><span class="ow">D. Kim</span></div>
+          <div class="trow"><span class="id">AU.L2-3.3.5</span><span class="chip unassessed">Not assessed</span><span class="tt">Correlate audit record review and reporting</span><span class="pt">5</span><span class="ow">—</span></div>
+          <div class="trow"><span class="id">MP.L2-3.8.9</span><span class="chip na">N/A</span><span class="tt">Protect the confidentiality of backup CUI</span><span class="pt">1</span><span class="ow">R. Patel</span></div>
+        </div>
+      </section>
+      <section class="panel families">
+        <div class="lbl">Families · 14</div>
+        <div class="fams"></div>
+      </section>
+    </main>
+    <footer class="titleblock">
+      <div><span class="lbl">Drawing</span><b>RMP-L2-DASH</b></div>
+      <div class="rev"><span class="lbl">Rev</span><b>C</b></div>
+      <div><span class="lbl">Baseline</span><b>800-171 r2</b></div>
+      <div><span class="lbl">Assessed by</span><b>J. Ortiz</b></div>
+      <div><span class="lbl">Date</span><b>2026-11-23</b></div>
+      <div><span class="lbl">Sheet</span><b>1 of 1</b></div>
+    </footer>
+  </div>
+</template>
+
+<template id="t-type">
+  <div class="types">
+    <div><span class="disp" style="font-size:64px">72 / 110</span><span class="meta">Display XL · 64 px: the score</span></div>
+    <div><span class="disp" style="font-size:40px">Assessment</span><span class="meta">Display L · 40 px: page titles</span></div>
+    <div><span class="disp" style="font-size:28px">Access Control</span><span class="meta">Display M · 28 px: section titles</span></div>
+    <div><span style="font-size:18px">The organization limits system access to authorized users.</span><span class="meta">Body L · 18 px</span></div>
+    <div><span style="font-size:16px">Each NOT MET requirement subtracts its point value from 110.</span><span class="meta">Body · 16 px</span></div>
+    <div><span class="lbl">Implementation status</span><span class="meta">Label · 16 px</span></div>
+    <div><span class="mono" style="font-size:16px">AC.L2-3.1.1[a]  sha256:9f2c…e41a</span><span class="meta">Mono · 16 px: IDs, hashes, numbers</span></div>
+    <div><span class="meta fontnames"></span></div>
+  </div>
+</template>
+
+<template id="t-controls">
+  <div class="cgroup"><div class="lbl">Primary · default / hover / focus / disabled</div>
+    <div class="wrap"><button class="btn primary">Save</button><button class="btn primary hover">Save</button><button class="btn primary focus">Save</button><button class="btn primary" disabled>Save</button></div></div>
+  <div class="cgroup"><div class="lbl">Secondary</div>
+    <div class="wrap"><button class="btn secondary">Export SSP</button><button class="btn secondary hover">Export SSP</button><button class="btn secondary focus">Export SSP</button><button class="btn secondary" disabled>Export SSP</button></div></div>
+  <div class="cgroup"><div class="lbl">Ghost</div>
+    <div class="wrap"><button class="btn ghost">Cancel</button><button class="btn ghost hover">Cancel</button><button class="btn ghost focus">Cancel</button><button class="btn ghost" disabled>Cancel</button></div></div>
+  <div class="cgroup"><div class="lbl">Text input · default / focus / error / disabled</div>
+    <div class="stack">
+      <div class="field"><input class="input" placeholder="Search requirements"></div>
+      <div class="field"><input class="input focus" value="3.13.11"></div>
+      <div class="field"><input class="input error" value=""><span class="err">Owner is required</span></div>
+      <div class="field"><input class="input" value="Locked by assessor" disabled></div>
+    </div></div>
+  <div class="cgroup"><div class="lbl">Select</div>
+    <select class="input select"><option>Assessment type: C3PAO certification</option><option>Self-assessment</option></select></div>
+  <div class="cgroup"><div class="lbl">Objective status (segmented)</div>
+    <div class="stack"><div class="seg"><span class="on">Met</span><span>Not met</span><span>N/A</span></div>
+    <div class="seg"><span>Met</span><span class="on bad">Not met</span><span>N/A</span></div></div></div>
+  <div class="cgroup"><div class="lbl">Checkbox · toggle</div>
+    <div class="wrap"><span class="check"><span class="box"></span>Off</span><span class="check"><span class="box on">✓</span>On</span><span class="check off"><span class="box"></span>Disabled</span>
+    <span class="tog"></span><span class="tog on"></span></div></div>
+  <div class="cgroup"><div class="lbl">Tabs · active / hover / rest</div>
+    <div class="tabs"><span class="tab on">Objectives</span><span class="tab hover">Evidence</span><span class="tab">History</span></div></div>
+</template>
+
+<template id="t-components">
+  <div class="cgroup"><div class="lbl">Status chips</div>
+    <div class="wrap"><span class="chip met">Met</span><span class="chip notmet">Not met</span><span class="chip na">N/A</span><span class="chip unassessed">Not assessed</span></div></div>
+  <div class="cgroup"><div class="lbl">Objective row (assessment screen)</div>
+    <div class="objrow"><span class="id">AC.L2-3.1.1[a]</span><span>Authorized users are identified.</span><div class="seg"><span class="on">Met</span><span>Not met</span><span>N/A</span></div></div>
+    <div class="objrow"><span class="id">AC.L2-3.1.1[b]</span><span>Processes acting on behalf of authorized users are identified.</span><div class="seg"><span>Met</span><span class="on bad">Not met</span><span>N/A</span></div></div></div>
+  <div class="cgroup"><div class="lbl">POA&amp;M item</div>
+    <div class="card"><div class="top"><span class="mono">SC.L2-3.13.11</span><span class="chip met">Eligible at −3</span></div>
+      <span>Replace non-FIPS VPN with a FIPS 140-validated module</span>
+      <div class="top"><span class="muted">Owner D. Kim</span><span class="countdown">142 days left</span></div></div>
+    <div class="card barred" style="margin-top:10px"><div class="top"><span class="mono">AC.L2-3.1.20</span><span class="chip notmet">Never POA&amp;M-able</span></div>
+      <span>Must be Met before the assessment. 32 CFR 170.21(a)(2)</span></div></div>
+  <div class="cgroup"><div class="lbl">Evidence item</div>
+    <div class="card"><div class="top"><span>Firewall-config-2026-11.pdf</span><span class="muted">v3</span></div>
+      <span class="hash">sha256:9f2c41d0b7e3a5c8f61e0d2b94a7c3e41a</span>
+      <div class="wrap"><span class="chip met">3.1.20[a]</span><span class="chip met">3.13.1[b]</span></div>
+      <span class="flag">⚠ Contains CUI: upload blocked, store a reference instead</span></div></div>
+  <div class="cgroup"><div class="lbl">Alerts</div>
+    <div class="stack"><div class="alert"><b>Conditional status not possible</b>Score 72 is below 88.</div>
+    <div class="alert info"><b>SSP exported</b>Rampart-SSP-2026-11-23.docx</div></div></div>
+  <div class="cgroup"><div class="lbl">Progress</div>
+    <div class="fam" style="display:grid;grid-template-columns:40px 1fr 48px;gap:10px;align-items:center"><span class="mono">AC</span><div class="bar"><i style="width:68%"></i></div><span class="mono muted" style="text-align:right">68%</span></div></div>
+</template>
+
+<script>
+const FAM=[["AC","Access Control",22,68],["AT","Awareness & Training",3,100],["AU","Audit & Accountability",9,56],["CM","Configuration Management",9,78],["IA","Identification & Authentication",11,64],["IR","Incident Response",3,67],["MA","Maintenance",6,83],["MP","Media Protection",9,89],["PS","Personnel Security",2,100],["PE","Physical Protection",6,50],["RA","Risk Assessment",3,67],["CA","Security Assessment",4,75],["SC","System & Comms Protection",16,44],["SI","System & Info Integrity",7,71]];
+const PAL={
+ a:[["Void","#0A0A0A","bg"],["Carbon","#141414","surface"],["Seam","#2A2A2A","lines"],["Bone","#EDEDE8","text"],["Ash","#8A8A85","muted"],["Ignition","#FF5A1F","accent"],["Breach","#FF3B3B","not met"]],
+ b:[["Night","#0B1220","bg"],["Hull","#111B2E","surface"],["Grid","#23324D","lines"],["Glass","#E6EEF8","text"],["Haze","#8291AD","muted"],["HUD Cyan","#4FD1E8","accent · met"],["Caution","#FFB547","not met"]],
+ c:[["Vellum","#F2F1EC","bg"],["Sheet","#FFFFFF","surface"],["Ink","#111111","text · rules"],["Graphite","#6B6B66","muted"],["Signal Red","#E10600","accent · not met"],["Draft Blue","#1F4BFF","met · you"]],
+ d:[["Drafting Paper","#EEEBE3","bg"],["Sheet","#FFFFFF","surface"],["Ink","#111111","text · rules"],["Graphite","#5F5E58","muted"],["Safety Yellow","#FFC400","accent (fills only)"],["Red Tag","#D7261E","not met · hold"],["Safety Green","#00843D","met · released"]]
+};
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const ang=v=>Math.PI*(1-(v+203)/313);
+function dial(svg){
+  const cx=100,cy=104,R=86,pt=(v,r)=>[cx+r*Math.cos(ang(v)),cy-r*Math.sin(ang(v))];
+  const arc=(a,b)=>{const[x1,y1]=pt(a,R+8),[x2,y2]=pt(b,R+8);return`M${x1} ${y1} A${R+8} ${R+8} 0 0 1 ${x2} ${y2}`};
+  let s=`<path class="arcbg" d="${arc(-203,110)}"/><path class="arcv" d="${arc(-203,72)}"/>`;
+  for(let v=-200;v<=110;v+=10){const mj=v%50===0;const[a,b]=pt(v,R),[c,d]=pt(v,R-(mj?12:6));s+=`<line class="tk${mj?' mj':''}" x1="${a}" y1="${b}" x2="${c}" y2="${d}"/>`}
+  const[t1,t2]=pt(88,R+14),[t3,t4]=pt(88,R-20);s+=`<line class="th" x1="${t1}" y1="${t2}" x2="${t3}" y2="${t4}"/>`;
+  const[n1,n2]=pt(72,R-26);s+=`<line class="nd" x1="${cx}" y1="${cy}" x2="${n1}" y2="${n2}"/><circle class="hub" cx="${cx}" cy="${cy}" r="4"/>`;
+  s+=`<text x="4" y="114" font-size="10">−203</text><text x="178" y="114" font-size="10">110</text><text x="${t3-22}" y="${t4+4}" font-size="10" class="rth-t">88</text><text x="88" y="72" font-size="10">0</text>`;
+  svg.innerHTML=s;
+}
+function ruler(svg){
+  const X=v=>12+(v+203)/313*376;let s=`<line class="rl" x1="12" y1="40" x2="388" y2="40"/>`;
+  for(let v=-200;v<=110;v+=25){const mj=v%100===0;s+=`<line class="rl" x1="${X(v)}" y1="40" x2="${X(v)}" y2="${mj?28:34}"/>`}
+  [[-203,"−203"],[-100,"−100"],[0,"0"]].forEach(([v,t])=>s+=`<text x="${X(v)}" y="22" font-size="12" text-anchor="middle">${t}</text>`);
+  s+=`<line class="rth" x1="${X(88)}" y1="14" x2="${X(88)}" y2="58"/><text class="rth-t" x="${X(88)+4}" y="12" font-size="12">88 CONDITIONAL</text>`;
+  s+=`<path class="rme" d="M${X(72)} 46 l-6 10 h12z"/><text class="rme-t" x="${X(72)}" y="72" font-size="12" text-anchor="end">YOU 72</text>`;
+  s+=`<line class="dim" x1="${X(72)}" y1="84" x2="${X(88)}" y2="84"/><text class="rme-t" x="${X(88)+6}" y="88" font-size="12">+16</text>`;
+  s+=`<text x="${X(110)}" y="22" font-size="12" text-anchor="end">110</text>`;
+  svg.innerHTML=s;
+}
+function hydrate(root){
+  root.querySelectorAll('.fams').forEach(f=>f.innerHTML=FAM.map(([c,n,r,p])=>`<div class="fam"><span class="code">${c}</span><span class="nm">${n}</span><div class="bar"><i style="width:${p}%"></i></div><span class="pc">${p}%</span></div>`).join(''));
+  root.querySelectorAll('.matrix').forEach(m=>{const a=[].concat(Array(214).fill('m'),Array(38).fill('n'),Array(21).fill('a'),Array(47).fill('u'));const r=rng(7);for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}m.innerHTML=a.map(s=>`<i class="s-${s}"></i>`).join('')});
+  root.querySelectorAll('.sig-dial').forEach(dial);
+  root.querySelectorAll('.sig-ruler').forEach(ruler);
+}
+document.querySelectorAll('[data-tpl]').forEach(el=>{el.appendChild(document.getElementById('t-'+el.dataset.tpl).content.cloneNode(true));if(el.dataset.fonts){el.querySelector('.fontnames').textContent='Fonts: '+el.dataset.fonts}hydrate(el)});
+document.querySelectorAll('[data-pal]').forEach(el=>el.innerHTML=PAL[el.dataset.pal].map(([n,h,r])=>`<div class="sw"><div style="background:${h}"></div><p>${n}<span>${h} · ${r}</span></p></div>`).join(''));
+function fit(){document.querySelectorAll('.dwrap').forEach(w=>{const f=w.firstElementChild;f.style.zoom=Math.min(1,w.clientWidth/1280)})}
+addEventListener('resize',fit);fit();
+document.getElementById('expand').onclick=e=>{const r=document.getElementById('desk');r.classList.toggle('expanded');e.target.textContent=r.classList.contains('expanded')?'Side by side':'View full size';fit()};
+</script>
+</body>
+</html>

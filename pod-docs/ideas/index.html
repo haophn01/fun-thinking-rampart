@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parked Ideas</title>
+<style>
+:root{--bg:#F2F1EC;--card:#FFFFFF;--ink:#111111;--muted:#6B6B66;--accent:#E10600;--blue:#1F4BFF}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--card:#1E1E1C;--ink:#EDEDE8;--muted:#A3A39C;--accent:#FF4A3D;--blue:#7C9BFF}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;padding:32px 16px}
+main{max-width:1100px;margin:0 auto}
+h1{font-size:32px;margin-bottom:4px}
+.sub{color:var(--muted);margin-bottom:24px}
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.col h2{font:700 16px ui-monospace,Consolas,monospace;text-transform:uppercase;letter-spacing:.06em;border-top:2px solid var(--ink);padding-top:8px;margin-bottom:12px;display:flex;justify-content:space-between}
+.col h2 span{color:var(--accent)}
+.card{background:var(--card);border:1.5px solid var(--ink);padding:14px;margin-bottom:12px;display:block;color:inherit;text-decoration:none}
+.card:hover{border-color:var(--blue)}
+.card h3{font-size:18px;margin-bottom:6px}
+.card dt{font:700 16px ui-monospace,Consolas,monospace;color:var(--muted);margin-top:8px}
+.empty{color:var(--muted);border:1.5px dashed var(--muted);padding:14px}
+</style>
+</head>
+<body>
+<main>
+<h1>Parked ideas</h1>
+<p class="sub">pod brings these back when a plan or task touches them.</p>
+<div class="board">
+  <section class="col"><h2>Parked <span>4</span></h2>
+    <a class="card" href="nist-800-171-rev3.md"><h3>NIST SP 800-171 Rev 3 catalog</h3>
+      <p>Add the Rev 3 catalog (97 requirements, official OSCAL) and a Rev 2 → Rev 3 crosswalk view.</p>
+      <dl><dt>Why it waits</dt><dd>CMMC L2 is scored against Rev 2; DoD has no Rev 3 scoring yet.</dd>
+      <dt>Worth building when</dt><dd>DoD moves CMMC / DFARS 7012 to Rev 3, or a prime asks for it.</dd></dl></a>
+    <a class="card" href="oscal-export.md"><h3>OSCAL export of the SSP and POA&amp;M</h3>
+      <p>Export the SSP and POA&amp;M as OSCAL JSON, validated with compliance-trestle.</p>
+      <dl><dt>Why it waits</dt><dd>Out of V1 scope; Word comes first, and the data model stays OSCAL-compatible.</dd>
+      <dt>Worth building when</dt><dd>The V1 data is stable and someone asks for OSCAL.</dd></dl></a>
+    <a class="card" href="evidence-integrations-sso.md"><h3>Evidence integrations and SSO</h3>
+      <p>Auto-pull evidence from M365 GCC High / Entra, Intune, AWS GovCloud, Azure Government and endpoint tools; Entra SSO.</p>
+      <dl><dt>Why it waits</dt><dd>V1 is workflow first; integrations need hosting and secrets.</dd>
+      <dt>Worth building when</dt><dd>Manual evidence is the biggest time sink and hosting is decided.</dd></dl></a>
+    <a class="card" href="cui-storage-hosting.md"><h3>Encrypted CUI evidence storage and hosting</h3>
+      <p>Encryption at rest, GovCloud or Azure Gov storage, backups, and a host that meets DFARS 7012, so CUI evidence can live in the tool.</p>
+      <dl><dt>Why it waits</dt><dd>V1 is local and stores no real CUI.</dd>
+      <dt>Worth building when</dt><dd>Hosting is decided and CUI evidence needs to sit beside the assessment.</dd></dl></a>
+  </section>
+  <section class="col"><h2>Planned <span>0</span></h2><p class="empty">None yet</p></section>
+  <section class="col"><h2>Built <span>0</span></h2><p class="empty">None yet</p></section>
+  <section class="col"><h2>Dropped <span>0</span></h2><p class="empty">None yet</p></section>
+</div>
+</main>
+</body>
+</html>
