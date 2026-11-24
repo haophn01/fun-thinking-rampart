@@ -2,7 +2,7 @@
 
 _Generated: 2026-11-23 · Status: active · Grilled-with: pod_
 
-Port base: 3000
+Port base: 3200
 
 ## Goal
 Build "Rampart" (a placeholder name), a self-hosted CMMC Level 2 readiness platform that one defense contractor runs locally to prepare for a self-assessment or a C3PAO assessment. You assess each of the 320 NIST SP 800-171A (Rev 2) objectives. The platform derives requirement status from them, a live SPRS score, a Conditional-status check and a rules-checked POA&M, and it manages evidence and policies and generates the SSP as a Word document.
