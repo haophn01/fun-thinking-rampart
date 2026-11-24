@@ -1,0 +1,115 @@
+.group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.legend {
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+/*
+ * One square, Ink-ruled strip that wraps on narrow screens. Each option draws its own top and
+ * left rule and the strip draws the right and bottom, so every line is drawn once; options grow
+ * to fill a wrapped row, so the strip's right edge always closes it.
+ */
+.options {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  border-right: var(--rp-rule) solid var(--rp-ink);
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+  border-radius: 0;
+  background: var(--rp-sheet);
+}
+
+.option {
+  position: relative;
+  display: flex;
+  flex: 1 0 auto;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+  border-left: var(--rp-rule) solid var(--rp-ink);
+  cursor: pointer;
+}
+
+/* Visually hidden, still focusable and announced. */
+.radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.face {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--rp-control-min);
+  padding: 8px 14px;
+  color: var(--rp-ink);
+  font-family: var(--rp-font-body);
+  font-size: var(--rp-text-body);
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.option:hover .face {
+  text-decoration: underline;
+  text-decoration-thickness: var(--rp-rule);
+  text-underline-offset: 3px;
+}
+
+.radio:checked + .face {
+  background: var(--rp-ink);
+  color: var(--rp-sheet);
+}
+
+.radio:focus-visible + .face {
+  position: relative;
+  z-index: 1;
+  outline: var(--rp-focus-width) solid var(--rp-ink);
+  outline-offset: var(--rp-focus-offset);
+}
+
+/* Disabled: dashed Graphite, never opacity. Only the sides each box draws: a bare
+   `border-style` would switch on the unset sides at the 3 px medium width. */
+.group:disabled .options {
+  border-right-style: dashed;
+  border-bottom-style: dashed;
+  border-right-color: var(--rp-graphite);
+  border-bottom-color: var(--rp-graphite);
+}
+
+.group:disabled .option {
+  border-top-style: dashed;
+  border-left-style: dashed;
+  border-top-color: var(--rp-graphite);
+  border-left-color: var(--rp-graphite);
+  cursor: not-allowed;
+}
+
+.group:disabled .option:hover .face {
+  text-decoration: none;
+}
+
+.group:disabled .face {
+  color: var(--rp-graphite);
+}
+
+.group:disabled .radio:checked + .face {
+  background: var(--rp-graphite);
+  color: var(--rp-sheet);
+}

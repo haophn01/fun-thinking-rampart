@@ -1,0 +1,29 @@
+.alert {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  border-radius: 0;
+  background: var(--rp-sheet);
+  color: var(--rp-ink);
+  font-size: var(--rp-text-body);
+  overflow-wrap: break-word;
+}
+
+/* Red is the border only (a non-text mark); the text stays Ink on Sheet. */
+.error {
+  border-color: var(--rp-red);
+}
+
+.info {
+  border-color: var(--rp-ink);
+}
+
+.title {
+  font-weight: 600;
+}
+
+.body {
+  min-width: 0;
+}

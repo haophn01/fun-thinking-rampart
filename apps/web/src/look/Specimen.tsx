@@ -1,10 +1,15 @@
 import type { ObjectiveStatus } from '@rampart/rules';
+import { useState } from 'react';
+import { Alert } from './Alert';
 import { Button } from './Button';
 import { BODY_TEXT_PAIRS, contrastRatio, LARGE_TEXT_PAIRS, type TextPair } from './contrast';
 import { GraduatedBar } from './GraduatedBar';
+import { RadioGroup, type RadioOption } from './RadioGroup';
 import { SectionLabel } from './SectionLabel';
+import { Select } from './Select';
 import { StatusChip } from './StatusChip';
 import styles from './Specimen.module.css';
+import { TextArea } from './TextArea';
 import { TextField } from './TextField';
 import { COLORS, colorVar, FONT_FAMILIES, TEXT_SIZES_PX, type ColorToken } from './tokens';
 
@@ -16,6 +21,17 @@ const BARS = [
   { value: 100, label: '100' },
   { value: 150, label: '150 (clamped)' },
   { value: Number.NaN, label: 'NaN (shown as 0)' },
+];
+
+const STATUS_OPTIONS: readonly RadioOption<ObjectiveStatus>[] = [
+  { value: 'met', label: 'Met', status: 'met' },
+  { value: 'not_met', label: 'Not Met', status: 'not_met' },
+  { value: 'na', label: 'N/A', status: 'na' },
+  { value: 'not_assessed', label: 'Not Assessed', status: 'not_assessed' },
+];
+const TYPE_OPTIONS: readonly RadioOption[] = [
+  { value: 'self', label: 'Self-assessment' },
+  { value: 'c3pao', label: 'C3PAO certification' },
 ];
 
 const TEXT_CLASS: Record<keyof typeof TEXT_SIZES_PX, string | undefined> = {
@@ -44,6 +60,95 @@ function pairRows(pairs: readonly TextPair[], sampleClass?: string) {
   ));
 }
 
+function StatusRadio({
+  legend,
+  initial,
+  disabled,
+}: {
+  legend: string;
+  initial?: ObjectiveStatus;
+  disabled?: boolean;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <RadioGroup
+      legend={legend}
+      options={STATUS_OPTIONS}
+      value={value}
+      onChange={setValue}
+      disabled={disabled}
+    />
+  );
+}
+
+function TypeRadio() {
+  const [value, setValue] = useState('self');
+  return (
+    <RadioGroup legend="Assessment type" options={TYPE_OPTIONS} value={value} onChange={setValue} />
+  );
+}
+
+function FormControls() {
+  return (
+    <div className={styles.stack}>
+      <div className={styles.fields}>
+        <TextArea label="Note" placeholder="What you checked, and where." />
+        <TextArea
+          label="Implementation statement"
+          maxLength={120}
+          defaultValue="MFA is enforced for all privileged accounts through the IdP."
+        />
+        <TextArea
+          label="Note at its limit"
+          maxLength={24}
+          defaultValue="Exactly at the limit now"
+        />
+        <TextArea
+          label="Implementation statement"
+          maxLength={120}
+          defaultValue=""
+          error="Enter an implementation statement."
+        />
+        <TextArea label="Locked note" defaultValue="Read-only while exported." disabled />
+      </div>
+      <div className={styles.fields}>
+        <Select label="Owner" defaultValue="ada">
+          <option value="">Unassigned</option>
+          <option value="ada">Ada Lovelace</option>
+          <option value="grace">Grace Hopper (inactive)</option>
+        </Select>
+        <Select label="Assessment type" defaultValue="c3pao">
+          <option value="self">Self-assessment</option>
+          <option value="c3pao">C3PAO certification, with a long label to show truncation</option>
+        </Select>
+        <Select label="Level" defaultValue="" error="Choose a level for 3.13.11.">
+          <option value="">Not set (worst case)</option>
+          <option value="none">Not implemented</option>
+        </Select>
+        <Select label="Family" defaultValue="AC" disabled>
+          <option value="AC">AC · Access Control</option>
+        </Select>
+      </div>
+      <div className={styles.stack}>
+        <StatusRadio legend="AC.L2-3.1.1[a] · none selected" />
+        <StatusRadio legend="AC.L2-3.1.1[b] · Met" initial="met" />
+        <StatusRadio legend="AC.L2-3.1.2[a] · Not Met" initial="not_met" />
+        <StatusRadio legend="AC.L2-3.1.3[a] · disabled" initial="na" disabled />
+        <TypeRadio />
+      </div>
+      <div className={styles.fields}>
+        <Alert tone="error" title="Conditional status not possible">
+          Score 72 is below 88.
+        </Alert>
+        <Alert tone="info" title="SSP exported">
+          <span className={styles.mono}>Rampart-SSP-2026-11-23.docx</span>
+        </Alert>
+        <Alert tone="info">What-if — not saved</Alert>
+      </div>
+    </div>
+  );
+}
+
 function Controls() {
   return (
     <div className={styles.stack}>
@@ -65,6 +170,7 @@ function Controls() {
         />
         <TextField label="Organization ID" defaultValue="ORG-0001" disabled />
       </div>
+      <FormControls />
       <div className={styles.row}>
         {STATUSES.map((status) => (
           <StatusChip key={status} status={status} />

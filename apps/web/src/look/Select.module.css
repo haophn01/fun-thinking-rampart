@@ -1,0 +1,82 @@
+.field {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.control {
+  position: relative;
+  min-width: 0;
+}
+
+.select {
+  display: block;
+  width: 100%;
+  min-height: var(--rp-control-min);
+  padding: 10px 32px 10px 0;
+  border: none;
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+  border-radius: 0;
+  background: transparent;
+  color: var(--rp-ink);
+  font-family: var(--rp-font-body);
+  font-size: var(--rp-text-body);
+  text-overflow: ellipsis;
+  appearance: none;
+  cursor: pointer;
+}
+
+/* The chevron: two Ink sides of a small square, turned 45 degrees. It ignores the pointer, so a click still opens the select. */
+.control::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-right: var(--rp-rule) solid var(--rp-ink);
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+  transform: translateY(-75%) rotate(45deg);
+  pointer-events: none;
+}
+
+.select:disabled {
+  border-bottom-style: dashed;
+  border-bottom-color: var(--rp-graphite);
+  color: var(--rp-graphite);
+  cursor: not-allowed;
+}
+
+.control:has(.select:disabled)::after {
+  border-color: var(--rp-graphite);
+}
+
+/* The error mark is red (a non-text mark, allowed on Vellum) and thicker, so it doesn't rely on colour alone. */
+.field[data-invalid] .select {
+  border-bottom: 3px solid var(--rp-red);
+}
+
+.error {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--rp-ink);
+  font-size: var(--rp-text-body);
+}
+
+.error::before {
+  content: '';
+  flex: none;
+  width: 12px;
+  height: 3px;
+  background: var(--rp-red);
+  transform: translateY(-4px);
+}
