@@ -3,9 +3,10 @@ import { RulesInputError } from '../errors';
 import type { Regulation } from '../types';
 import { checkPoamEligibility } from './eligibility';
 import { BARRED_IDS, fixtureCatalog, IDS } from './fixtures';
-import { POAM_NOT_MET_CITATION, REGULATION } from './regulation';
+import { REGULATION } from './regulation';
 
 const catalog = fixtureCatalog();
+const NOT_MET = REGULATION.poamNotMetOnly.citation; // 32 CFR 170.24(c)(2)(i)(B)(6)
 const BARRED = REGULATION.poamBarred.citation; // 32 CFR 170.21(a)(2)(iii)
 const LIMIT = REGULATION.poamMaxItemPoints.citation; // 32 CFR 170.21(a)(2)(ii)
 
@@ -20,15 +21,27 @@ describe('checkPoamEligibility', () => {
   it.each([
     ['met', 'met'],
     ['not_assessed', 'not_assessed'],
-  ] as const)('only not_met requirements: %s is rejected', (_label, status) => {
+  ] as const)('not met only: %s is rejected', (_label, status) => {
     const result = checkPoamEligibility(catalog, { requirementId: IDS.onePoint, status });
     expect(result).toEqual({
       eligible: false,
-      reasons: [{ code: 'not_not_met', citation: POAM_NOT_MET_CITATION }],
+      reasons: [{ code: 'not_not_met', citation: NOT_MET }],
     });
+
+    // The citation is read from the regulation passed in, not from a constant.
+    const recited: Regulation = {
+      ...REGULATION,
+      poamNotMetOnly: { ...REGULATION.poamNotMetOnly, citation: '32 CFR 170.24(test)' },
+    };
+    expect(checkPoamEligibility(catalog, { requirementId: IDS.onePoint, status }, recited)).toEqual(
+      {
+        eligible: false,
+        reasons: [{ code: 'not_not_met', citation: '32 CFR 170.24(test)' }],
+      },
+    );
   });
 
-  it('only not_met requirements: a 1-point not_met requirement is accepted', () => {
+  it('not met only: a 1-point not_met requirement is accepted', () => {
     expect(
       checkPoamEligibility(catalog, { requirementId: IDS.onePoint, status: 'not_met' }),
     ).toEqual({ eligible: true });
@@ -58,6 +71,42 @@ describe('checkPoamEligibility', () => {
     );
   });
 
+  it('not-met-only rule switched off', () => {
+    const off: Regulation = {
+      ...REGULATION,
+      poamNotMetOnly: { ...REGULATION.poamNotMetOnly, value: false },
+    };
+    for (const status of ['met', 'not_assessed', 'not_met'] as const) {
+      expect(checkPoamEligibility(catalog, { requirementId: IDS.onePoint, status }, off)).toEqual({
+        eligible: true,
+      });
+    }
+    // The other reasons still apply, in contract order.
+    expect(
+      checkPoamEligibility(catalog, { requirementId: 'AC.L2-3.1.20', status: 'met' }, off),
+    ).toEqual({ eligible: false, reasons: [{ code: 'barred', citation: BARRED }] });
+    expect(
+      checkPoamEligibility(catalog, { requirementId: IDS.threePoint, status: 'met' }, off),
+    ).toEqual({ eligible: false, reasons: [{ code: 'exceeds_point_limit', citation: LIMIT }] });
+    const barredThreePoint: Regulation = {
+      ...off,
+      poamBarred: { ...REGULATION.poamBarred, value: [IDS.threePoint] },
+    };
+    expect(
+      checkPoamEligibility(
+        catalog,
+        { requirementId: IDS.threePoint, status: 'met' },
+        barredThreePoint,
+      ),
+    ).toEqual({
+      eligible: false,
+      reasons: [
+        { code: 'barred', citation: BARRED },
+        { code: 'exceeds_point_limit', citation: LIMIT },
+      ],
+    });
+  });
+
   it('collects reasons in contract order', () => {
     const regulation: Regulation = {
       ...REGULATION,
@@ -71,7 +120,7 @@ describe('checkPoamEligibility', () => {
     expect(result).toEqual({
       eligible: false,
       reasons: [
-        { code: 'not_not_met', citation: POAM_NOT_MET_CITATION },
+        { code: 'not_not_met', citation: NOT_MET },
         { code: 'barred', citation: BARRED },
         { code: 'exceeds_point_limit', citation: LIMIT },
       ],
