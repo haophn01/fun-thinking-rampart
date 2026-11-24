@@ -12,3 +12,4 @@ export { StatusChip, type StatusChipProps } from './StatusChip';
 export { GraduatedBar, clampPercent, type GraduatedBarProps } from './GraduatedBar';
 export { SectionLabel, type SectionLabelProps } from './SectionLabel';
 export { Checkbox, type CheckboxProps } from './Checkbox';
+export { FileField, type FileFieldProps } from './FileField';
