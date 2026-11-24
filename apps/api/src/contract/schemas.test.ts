@@ -10,6 +10,7 @@ import {
   ERROR_STATUS,
   FILE_INTEGRITY_MESSAGE,
   FILE_NAME_HEADER,
+  INELIGIBLE_REASON_LABELS,
   SESSION_COOKIE,
   UPLOAD_EXTENSIONS,
   UPLOAD_MAX_BYTES,
@@ -95,6 +96,11 @@ describe('contract schemas', () => {
     expect(CLOSEOUT_CONFIRMER_LABELS).toEqual({
       organization: 'Your organization',
       c3pao: 'An authorized C3PAO',
+    });
+    expect(INELIGIBLE_REASON_LABELS).toEqual({
+      not_not_met: 'Only Not Met requirements go on a POA&M',
+      barred: 'This requirement can never go on a POA&M',
+      exceeds_point_limit: "Worth more than 1 point, so it can't go on a POA&M",
     });
     expect(AUDIT_ACTIONS).toEqual([
       'user.created',
