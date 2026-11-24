@@ -1,0 +1,17 @@
+{
+  "catalogVersion": "1.0.0",
+  "requirements": {
+    "title": "NIST SP 800-171 Rev. 2, Protecting Controlled Unclassified Information in Nonfederal Systems and Organizations",
+    "url": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-171r2.pdf",
+    "file": "NIST.SP.800-171r2.pdf",
+    "sha256": "298bdbfcf6a4890a564b225c893230a0b32b2e69e3b98dd898aaeb1d544c5e12",
+    "retrieved": "2026-11-23"
+  },
+  "assessment": {
+    "title": "NIST SP 800-171A, Assessing Security Requirements for Controlled Unclassified Information",
+    "url": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-171A.pdf",
+    "file": "NIST.SP.800-171A.pdf",
+    "sha256": "21bf3acc43f4284f723639b82eb71e3ce597fa3610f7e9dcf5e8484e22bc0f71",
+    "retrieved": "2026-11-23"
+  }
+}

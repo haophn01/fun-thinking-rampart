@@ -1,0 +1,9 @@
+{
+  "overrides": [
+    {
+      "id": "AU.L2-3.3.2",
+      "text": "Ensure that the actions of individual system users can be uniquely traced to those users, so they can be held accountable for their actions.",
+      "reason": "SP 800-171 Rev. 2 (normative) has a comma after \"those users\" that the SP 800-171A restatement drops; the catalog keeps the SP 800-171 wording."
+    }
+  ]
+}

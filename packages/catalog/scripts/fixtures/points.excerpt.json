@@ -1,0 +1,24 @@
+{
+  "source": {
+    "title": "Point lists for the fixture excerpts (not the regulation)",
+    "url": "https://www.law.cornell.edu/cfr/text/32/170.24",
+    "retrieved": "2026-11-23"
+  },
+  "lists": [
+    {
+      "points": 5,
+      "type": "basic",
+      "citation": "32 CFR 170.24(c)(2)(i)(B)(1)(i)",
+      "ids": ["AC .L2-3.1.1", "AC .L2-3.1.2", "CM.L2-3.4.1"]
+    },
+    {
+      "points": 3,
+      "type": "derived",
+      "citation": "32 CFR 170.24(c)(2)(i)(B)(2)(ii)",
+      "ids": ["AC .L2- 3.1.19"]
+    }
+  ],
+  "remaining": { "points": 1, "type": "derived", "citation": "32 CFR 170.24(c)(2)(i)(B)(3)" },
+  "partialCredit": [],
+  "prerequisites": []
+}
