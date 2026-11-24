@@ -49,6 +49,14 @@ describe('contract schemas', () => {
       last_admin: 409,
       unsupported_media_type: 415,
       too_many_attempts: 429,
+      poam_ineligible: 409,
+      poam_item_exists: 409,
+      poam_item_closed: 409,
+      closeout_not_ready: 409,
+      cui_file_refused: 409,
+      evidence_not_cui: 409,
+      unsupported_file_type: 415,
+      file_integrity_failed: 500,
     };
     expect([...ERROR_CODES].sort()).toEqual(Object.keys(table).sort());
     expect(ERROR_STATUS).toEqual(table);
