@@ -64,7 +64,7 @@ Build "Rampart" (a placeholder name), a self-hosted CMMC Level 2 readiness platf
 | db | new | `apps/api/db` | SQLite schema and migrations through an ORM; the only place state lives |
 | evidence store | new | `apps/api/storage` | Storage interface with a local-folder implementation: write a file, hash it, read it back. A later plan adds encryption and other backends |
 | ssp export | new | `apps/api/ssp` | Builds the SSP .docx from the catalog, the system profile, requirement states and POA&M |
-| web | new | `apps/web` | React (Vite) UI in the Shop Floor look: dashboard, assessment, POA&M, evidence, policies, SSP, settings |
+| web | new | `apps/web` | React (Vite) UI in the C · Inspection look: dashboard, assessment, POA&M, evidence, policies, SSP, settings |
 
 **How they connect:**
 
@@ -159,12 +159,14 @@ The human picked direction **C (Spec Sheet)**. They liked the manufacturing cult
   - Graphite `#6B6B66`: muted text
   - Signal Red `#E10600`: accent, primary button, NO GO, the LSL line and the inspector's stamp
   - Draft Blue `#1F4BFF`: GO, Met, and the measured value
+  - **Contrast rule:** Signal Red text on Vellum is about 4.39:1 and fails 4.5:1. Red text at body sizes goes only on Sheet (about 4.97:1), or appears as white text on a red block. Red on Vellum is allowed only for large text (24 px+, or 18.7 px+ bold) and for non-text marks (lines, the stamp border, chips' blocks).
+  - The look-3 draft also uses `#1A1A1A` for rules and `#E4E3DD` for the bar track. The build doesn't: rules are Ink, and the bar track is Sheet with an Ink baseline. Only the six tokens exist.
 - **Type:**
   - Fonts (self-hosted through @fontsource):
     - Space Grotesk 700: display (score, titles, brand).
     - Inter 400/500/600: body.
     - Space Mono 400/700: IDs, hashes, numbers and labels.
-  - Scale: 64 / 40 / 28 display, 18 / 16 body, 16 labels and mono. The smallest text is 16 px, including the caliper's scale labels and the feature control frame, in the real build. The draft's SVG labels shrink below that on phones; the build renders them at 16 px or more.
+  - Scale: 64 / 40 / 28 display, 18 / 16 body, 16 labels and mono. The smallest text is 16 px, including the ruler's scale labels and the feature control frame, in the real build. The draft's SVG labels shrink below that on phones; the build renders them at 16 px or more.
 - **Layout:**
   - Desktop: a masthead with the brand, a text nav (active tab gets a red underline) and the user, then a 3-column grid:
     - row 1: score (2 columns) and Conditional check (1)
@@ -195,7 +197,7 @@ The human picked direction **C (Spec Sheet)**. They liked the manufacturing cult
 - **Catalog source: the PDFs** (human's choice). Sprint 1 builds the catalog from the NIST SP 800-171 Rev 2 and SP 800-171A PDFs, which are the normative text:
   - A repeatable conversion script under `packages/catalog` reads the PDFs and writes the JSON.
   - Each PDF's URL and SHA-256 go into the catalog metadata.
-  - Tests assert 14 families, 110 requirements, 320 objectives and 42 / 14 / 54 requirements at 5 / 3 / 1 points.
+  - Tests assert 14 families, 110 requirements, 320 objectives, and the point values from the regulation (see **Scoring**): 44 requirements at 5 points, 14 at 3, 51 at 1, and CA.L2-3.12.4 unscored.
   - Text the script couldn't extract cleanly is fixed by hand and listed in the catalog README for the human to spot-check.
 - **Built for continuous updates** (human: "the product will circle back for continuous update"):
   - Regulatory values (the catalog, point weights, barred list, thresholds, the 180-day window) live as versioned data with citations, never as literals scattered through code.
@@ -221,7 +223,16 @@ The human picked direction **C (Spec Sheet)**. They liked the manufacturing cult
   - AC.L2-3.1.20, AC.L2-3.1.22, CA.L2-3.12.4, PE.L2-3.10.3, PE.L2-3.10.4 and PE.L2-3.10.5 can never go on a POA&M.
   - Closeout is due within 180 days of the Conditional Status Date.
   - The SSP (3.12.4) must exist.
-- **Scoring:** starts at 110, and each Not Met requirement subtracts its points; the lowest possible score is −203. The score shown in the UI and the score stored by the API come from the same `packages/rules` code, so they can't disagree.
+- **Scoring** (32 CFR 170.24(c)(2), checked against the Cornell LII text on 2026-11-23 after the sprint-planner found the research's 42 / 14 / 54 split inconsistent with −203):
+  - The score starts at 110, and each Not Met requirement subtracts its points.
+  - **5 points:** the 23 basic and 19 derived requirements the regulation lists, plus IA.L2-3.5.3 and SC.L2-3.13.11 at their worst level. That's 44.
+  - **3 points:** the 7 basic and 7 derived requirements the regulation lists. That's 14.
+  - **1 point:** every other derived requirement. That's 51.
+  - **CA.L2-3.12.4 (SSP) has no point value.** It is a prerequisite: with no up-to-date SSP, the assessment cannot be completed. The rules return "assessment incomplete" rather than a score.
+  - IA.L2-3.5.3 and SC.L2-3.13.11 subtract 3 or 5 by implementation level (see Partial credit).
+  - The worst case is 110 − (44×5 + 14×3 + 51) = 110 − 313 = **−203**. That floor is derived from the catalog's point data, not hard-coded, and a test asserts it equals −203.
+  - The source prints two IDs as "IA-L2-3.5.1" and "IA-L2-3.5.2". The catalog normalizes them to `IA.L2-3.5.1` and `IA.L2-3.5.2`.
+  - The score shown in the UI and the score stored by the API come from the same `packages/rules` code, so they can't disagree.
 - **Assessment type:** self-assessment or C3PAO certification, chosen in settings. It changes the labels and who confirms closeout. The human confirms the July 13, 2026 CMMC milestone suspension is real and still wants the platform ready for both kinds of assessment. Self-assessment is the default setting, and the C3PAO path stays fully supported.
 - **CUI:** no real CUI in V1. An evidence item flagged "contains CUI" can't hold a file and stores only a description plus where the file really lives. A banner says not to upload CUI. Storage sits behind an interface so a later plan can add encryption and an approved host without changing the data model. DFARS 252.204-7012 requires FedRAMP Moderate equivalency for cloud hosts of covered defense information.
 - **Users:**
@@ -252,7 +263,7 @@ The human picked direction **C (Spec Sheet)**. They liked the manufacturing cult
 ## Known risks
 - **Catalog accuracy.** 320 objective texts can drift from NIST's if typed from memory. Mitigation: generate the catalog from NIST's files with a conversion script, record their checksums, add count tests, and have the human spot-check any hand-transcribed text.
 - **Rules disagreements.** Vendor sources disagree on POA&M details. Mitigation: encode only from 32 CFR 170.21 and 170.24 (Cornell LII text, since the eCFR fetch failed), with a citation on each rule and table tests. Flag anything the regulation leaves unclear in the queue rather than guessing.
-- **Regulatory churn.** The suspension is reported but unverified. Mitigation: weights, barred lists and thresholds live as data in `packages/rules`, so a change is a data edit plus tests.
+- **Regulatory churn.** The July 2026 suspension is real (the human confirmed it), and the rules may keep changing. Mitigation: weights, barred lists and thresholds live as data in `packages/rules`, so a change is a data edit plus tests.
 - **CUI on a dev machine.** A user could still paste CUI into notes. Mitigation: the CUI banner, the flag, and Key decisions stating that V1 isn't approved for CUI.
 - **The SSP format has no official template.** Mitigation: follow the OSCAL SSP section shape (system characteristics, implementation, per-requirement statements), keep the docx generator isolated, and accept feedback in a later plan.
 
@@ -264,24 +275,25 @@ The human picked direction **C (Spec Sheet)**. They liked the manufacturing cult
   - CI is required.
 
 ## Verification
-- `packages/catalog` tests pass with 14 families, 110 requirements, 320 objectives and 42 / 14 / 54 requirements at 5 / 3 / 1 points. The catalog metadata records its source files and checksums.
+- `packages/catalog` tests pass with 14 families, 110 requirements and 320 objectives. Point values: 44 at 5 (3.5.3 and 3.13.11 included at their worst level), 14 at 3, 51 at 1, and CA.L2-3.12.4 unscored. The catalog metadata records its source PDFs and their checksums.
 - Rule tests in `packages/rules` cite 32 CFR 170.24 or 170.21 and cover at least these cases:
-  - All Met scores 110, and all Not Met (worst case) scores −203.
+  - All Met scores 110, and all Not Met (worst case) scores −203. With no SSP, the result is "assessment incomplete" rather than a score.
   - 3.5.3 and 3.13.11 subtract 3 or 5 by implementation level.
   - Scores of 88 and 87 sit on each side of the Conditional threshold.
   - Each of the 6 barred requirements is rejected for a POA&M.
   - A 3-point requirement other than 3.13.11 is rejected, and 3.13.11 at −3 is accepted.
   - The 180-day due date is computed from the Conditional Status Date.
-- From a clean clone on Windows, one documented command installs, migrates and starts the app. CI is green on the final PR (install, typecheck, tests, gitleaks).
+- From a clean clone on Windows, one documented command installs, migrates and starts the app. CI is green on the final PR: clean install, lint, typecheck, tests, build, and gitleaks.
 - An end-to-end smoke (Playwright) runs this path in the browser:
   1. Create an admin.
   2. Mark objectives so the score is 72 with 3.1.20 Not Met. The dashboard shows 72, HOLD and the 3.1.20 blocker, and adding 3.1.20 to a POA&M is refused.
-  3. Fix 3.1.20 and reach 88 or more with eligible POA&M items. The stamp shows RELEASED.
+  3. Fix 3.1.20 and reach 88 or more with eligible POA&M items. The stamp shows ACCEPT.
   4. Upload evidence and see its SHA-256. A CUI-flagged item refuses a file.
   5. Upload a policy and link it.
   6. Export the SSP and get a .docx with the system profile and every requirement's status and implementation statement.
 - Every status, POA&M, evidence and policy change appears in the audit log with user, time, and before and after values.
-- The UI matches `cmmc-l2-grc-look-2.html` (Shop Floor):
-  - the palette tokens and the three fonts
-  - no text under 16 px, and no yellow text on paper
+- The UI matches `## Look` (C · Inspection, `cmmc-l2-grc-look-3.html`, with C's ruler for the score):
+  - only the six palette tokens and the three fonts
+  - no text under 16 px
+  - every text pair at 4.5:1 or better, so body-size red text sits only on Sheet
   - the phone layout at 375 px has no horizontal scroll
