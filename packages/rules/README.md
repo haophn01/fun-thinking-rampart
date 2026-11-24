@@ -1,0 +1,37 @@
+# @rampart/rules
+
+Pure functions that score a CMMC Level 2 assessment and decide POA&M and Conditional status.
+They take a `Catalog` from `@rampart/catalog` and an assessment input, hold no state, and
+do no I/O. Regulatory values live in one cited data object, `REGULATION`
+(`src/poam/regulation.ts`); a regulatory change is an edit there, a citation, and a test.
+
+Entry points: `@rampart/rules` (status and score) and `@rampart/rules/poam` (POA&M rules).
+
+## Rules
+
+| Rule                                                                                                                                                             | Function                                               | Citation                                                                 | Test files                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Requirement status from objective results: any not_met gives not_met; else any not_assessed or missing gives not_assessed; else met. No objectives is never met. | `deriveRequirementOutcomes`                            | plan: Objectives are first-class                                         | `src/status.test.ts`                                              |
+| Input validation: unknown or duplicate objective, bad implementation level                                                                                       | `deriveRequirementOutcomes` (throws `RulesInputError`) | 32 CFR 170.24(c)(2)                                                      | `src/status.test.ts`                                              |
+| SPRS score: starts at the requirement count (110), each not_met requirement deducts its points                                                                   | `computeScore`, `scoreMax`                             | 32 CFR 170.24(c)(2)                                                      | `src/score.test.ts`, `src/catalog.integration.test.ts`            |
+| Score floor (-203): max minus every points requirement's worst case                                                                                              | `scoreFloor`                                           | 32 CFR 170.24(c)(2)                                                      | `src/score.test.ts`, `src/catalog.integration.test.ts`            |
+| Partial credit: 3.5.3 and 3.13.11 deduct 3 at `partial`, 5 at `none`                                                                                             | `computeScore`                                         | 32 CFR 170.24(c)(2)(i)(B)(2)                                             | `src/score.test.ts`, `src/catalog.integration.test.ts`            |
+| SSP prerequisite: if CA.L2-3.12.4 is not fully met the result is `incomplete`, with no score                                                                     | `computeScore`                                         | 32 CFR 170.24(c)(2)(i)(B)(5) (from the catalog's own `scoring.citation`) | `src/score.test.ts`, `src/catalog.integration.test.ts`            |
+| Only Not Met requirements go on a POA&M                                                                                                                          | `checkPoamEligibility`                                 | 32 CFR 170.24(c)(2)(i)(B)(6)                                             | `src/poam/eligibility.test.ts`                                    |
+| Six requirements are barred from a POA&M (3.1.20, 3.1.22, 3.12.4, 3.10.3, 3.10.4, 3.10.5)                                                                        | `checkPoamEligibility`                                 | 32 CFR 170.21(a)(2)(iii)                                                 | `src/poam/eligibility.test.ts`, `src/catalog.integration.test.ts` |
+| A POA&M item is worth at most 1 point, except 3.13.11 at `partial` (3 points)                                                                                    | `checkPoamEligibility`                                 | 32 CFR 170.21(a)(2)(ii)                                                  | `src/poam/eligibility.test.ts`, `src/catalog.integration.test.ts` |
+| Conditional status needs a score of at least 88 (0.8 x 110)                                                                                                      | `checkConditional`                                     | 32 CFR 170.21(a)(2)(i)                                                   | `src/poam/conditional.test.ts`, `src/catalog.integration.test.ts` |
+| Conditional blockers: prerequisite, not assessed (a tool rule), below threshold, one POA&M-ineligible per requirement                                            | `checkConditional`                                     | 32 CFR 170.21(a)(2)                                                      | `src/poam/conditional.test.ts`, `src/catalog.integration.test.ts` |
+| Closeout is due 180 days after the Conditional Status Date                                                                                                       | `closeoutClock`                                        | 32 CFR 170.21(b)                                                         | `src/poam/clock.test.ts`                                          |
+| Closeout is confirmed by the organization (self) or a C3PAO                                                                                                      | `closeoutConfirmer`                                    | 32 CFR 170.21(b)(1) and (b)(2)                                           | `src/poam/clock.test.ts`                                          |
+| `REGULATION` data shape, citations, and frozen state                                                                                                             | `REGULATION`                                           | 32 CFR 170.21, 170.24                                                    | `src/poam/regulation.test.ts`                                     |
+| Every barred and exception ID in `REGULATION` exists in the real catalog                                                                                         | `REGULATION`                                           | 32 CFR 170.21(a)(2)                                                      | `src/catalog.integration.test.ts`                                 |
+
+## Tests
+
+- The unit tests (`src/*.test.ts`, `src/poam/*.test.ts`) run against small fixture catalogs built in
+  `src/testing/fixture-catalog.ts` and `src/poam/fixtures.ts`.
+- `src/catalog.integration.test.ts` runs the same rules against `loadCatalog()`. It builds scenarios
+  from catalog data and picks requirements by their points, except the IDs the plan names.
+
+Run them from the repo root: `pnpm test`.
