@@ -138,7 +138,11 @@ describe('checkPoamEligibility', () => {
 
   it('does not mutate its inputs', () => {
     const before = JSON.stringify(catalog);
-    const input = { requirementId: IDS.encryption, status: 'not_met', implementationLevel: 'partial' } as const;
+    const input = {
+      requirementId: IDS.encryption,
+      status: 'not_met',
+      implementationLevel: 'partial',
+    } as const;
     const inputBefore = JSON.stringify(input);
     checkPoamEligibility(catalog, input);
     expect(JSON.stringify(catalog)).toBe(before);

@@ -73,7 +73,10 @@ export function checkPoamEligibility(
         points <= e.maxPoints,
     );
     if (!excepted) {
-      reasons.push({ code: 'exceeds_point_limit', citation: regulation.poamMaxItemPoints.citation });
+      reasons.push({
+        code: 'exceeds_point_limit',
+        citation: regulation.poamMaxItemPoints.citation,
+      });
     }
   }
 

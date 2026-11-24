@@ -60,7 +60,11 @@ export function checkConditional(
     anyNotMet = true;
     const eligibility = checkPoamEligibility(
       catalog,
-      { requirementId: o.requirementId, status: o.status, implementationLevel: o.implementationLevel },
+      {
+        requirementId: o.requirementId,
+        status: o.status,
+        implementationLevel: o.implementationLevel,
+      },
       regulation,
     );
     if (!eligibility.eligible) {
