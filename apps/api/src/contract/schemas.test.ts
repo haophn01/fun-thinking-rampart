@@ -138,12 +138,26 @@ describe('contract schemas', () => {
       'assessment.updated',
       'objective_result.updated',
       'requirement_state.updated',
+      'poam_item.created',
+      'poam_item.updated',
+      'poam_item.closed',
+      'evidence.created',
+      'evidence.updated',
+      'evidence.links_updated',
+      'evidence.version_added',
+      'policy.created',
+      'policy.updated',
+      'policy.links_updated',
+      'policy.version_added',
     ]);
     expect(AUDIT_ENTITY_TYPES).toEqual([
       'user',
       'assessment',
       'objective_result',
       'requirement_state',
+      'poam_item',
+      'evidence_item',
+      'policy',
     ]);
   });
 
