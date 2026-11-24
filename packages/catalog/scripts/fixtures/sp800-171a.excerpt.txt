@@ -1,0 +1,151 @@
+NIST SP 800-171A ASSESSING SECURITY REQUIREMENTS FOR CONTROLLED UNCLASSIFIED INFORMATION
+________________________________________________________________________________________________
+CHAPTER TWO PAGE 5
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171A
+ASSESSMENT OBJECTIVE
+Determine if:
+3.1.3[a] information flow control policies are defined.
+3.1.3[b] methods and enforcement mechanisms for controlling the flow of CUI are
+defined.
+<<PAGE>>
+NIST SP 800-171A ASSESSING SECURITY REQUIREMENTS FOR CONTROLLED UNCLASSIFIED INFORMATION
+________________________________________________________________________________________________
+CHAPTER THREE PAGE 9
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171A
+3.1 ACCESS CONTROL
+3.1.1 SECURITY REQUIREMENT
+Limit system access to authorized users, processes acting on behalf of authorized users,
+and devices (including other systems).
+ASSESSMENT OBJECTIVE
+Determine if:
+3.1.1[a] authorized users are identified.
+3.1.1[b] processes acting on behalf of authorized users are identified.
+3.1.1[c] devices (and other systems) authorized to connect to the system are identified.
+3.1.1[d] system access is limited to authorized users.
+3.1.1[e] system access is limited to processes acting on behalf of authorized users.
+3.1.1[f] system access is limited to authorized devices (including other systems).
+POTENTIAL ASSESSMENT METHODS AND OBJECTS
+Examine: [SELECT FROM: Access control policy; procedures addressing account management;
+system security plan; system design documentation; system configuration settings and
+associated documentation; list of active system accounts and the name of the individual
+associated with each account; notifications or records of recently transferred, separated, or
+terminated employees; list of conditions for group and role membership; list of recently
+disabled system accounts along with the name of the individual associated with each
+account; access authorization records; account management compliance reviews; system
+monitoring records; system audit logs and records; list of devices and systems authorized
+to connect to organizational systems; other relevant documents or records].
+Interview: [SELECT FROM: Personnel with account management responsibilities; system or
+network administrators; personnel with information security responsibilities].
+Test: [SELECT FROM: Organizational processes for managing system accounts; mechanisms for
+implementing account management].
+3.1.2 SECURITY REQUIREMENT
+Limit system access to the types of transactions and functions that authorized users are
+permitted to execute.
+ASSESSMENT OBJECTIVE
+Determine if:
+3.1.2[a] the types of transactions and functions that authorized users are permitted to
+execute are defined.
+3.1.2[b] system access is limited to the defined types of transactions and functions for
+authorized users.
+POTENTIAL ASSESSMENT METHODS AND OBJECTS
+Test: [SELECT FROM: Mechanisms implementing access control policy].
+<<PAGE>>
+NIST SP 800-171A ASSESSING SECURITY REQUIREMENTS FOR CONTROLLED UNCLASSIFIED INFORMATION
+________________________________________________________________________________________________
+CHAPTER THREE PAGE 12
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171A
+3.1.9 SECURITY REQUIREMENT
+Provide privacy and security notices consistent with applicable CUI rules.
+ASSESSMENT OBJECTIVE
+Determine if:
+3.1.9[a] privacy and security notices required by CUI-specified rules are identified,
+consistent, and associated with the specific CUI category.
+<<PAGE>>
+NIST SP 800-171A ASSESSING SECURITY REQUIREMENTS FOR CONTROLLED UNCLASSIFIED INFORMATION
+________________________________________________________________________________________________
+CHAPTER THREE PAGE 13
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171A
+3.1.9[b] privacy and security notices are displayed.
+POTENTIAL ASSESSMENT METHODS AND OBJECTS
+Examine: [SELECT FROM: Privacy and security policies, procedures addressing system use
+notification; documented approval of system use notification messages or banners; system
+audit logs and records; system design documentation; user acknowledgements of notification
+message or banner; system security plan; system use notification messages; system
+configuration settings and associated documentation; other relevant documents or records].
+3.1.10 SECURITY REQUIREMENT
+Use session lock with pattern-hiding displays to prevent access and viewing of data after a
+period of inactivity.
+ASSESSMENT OBJECTIVE
+Determine if:
+3.1.10[a] the period of inactivity after which the system initiates a session lock is
+defined.
+3.1.10[b] access to the system and viewing of data is prevented by initiating a session
+lock after the defined period of inactivity.
+3.1.10[c] previously visible information is concealed via a pattern-hiding display after
+the defined period of inactivity.
+POTENTIAL ASSESSMENT METHODS AND OBJECTS
+Test: [SELECT FROM: Mechanisms implementing access control policy for session lock].
+3.1.15 SECURITY REQUIREMENT
+Authorize remote execution of privileged commands and remote access to security-
+relevant information.
+ASSESSMENT OBJECTIVE
+Determine if:
+3.1.15[a] privileged commands authorized for remote execution are identified.
+3.1.15[b] security-relevant information authorized to be accessed remotely is identified.
+3.1.15[c] the execution of the identified privileged commands via remote access is
+authorized.
+3.1.15[d] access to the identified security-relevant information via remote access is
+authorized.
+POTENTIAL ASSESSMENT METHODS AND OBJECTS
+Test: [SELECT FROM: Mechanisms implementing remote access management].
+3.1.19 SECURITY REQUIREMENT
+Encrypt CUI on mobile devices and mobile computing platforms.
+ASSESSMENT OBJECTIVE
+Determine if:
+3.1.19[a] mobile devices and mobile computing platforms that process, store, or
+transmit CUI are identified.
+3.1.19[b] encryption is employed to protect CUI on identified mobile devices and mobile
+computing platforms.
+POTENTIAL ASSESSMENT METHODS AND OBJECTS
+Test: [SELECT FROM: Encryption mechanisms protecting confidentiality of CUI on mobile
+devices and computing platforms].
+<<PAGE>>
+NIST SP 800-171A ASSESSING SECURITY REQUIREMENTS FOR CONTROLLED UNCLASSIFIED INFORMATION
+________________________________________________________________________________________________
+CHAPTER THREE PAGE 26
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171A
+3.4 CONFIGURATION MANAGEMENT
+3.4.1 SECURITY REQUIREMENT
+Establish and maintain baseline configurations and inventories of organizational systems
+(including hardware, software, firmware, and documentation) throughout the respective
+system development life cycles.
+ASSESSMENT OBJECTIVE
+Determine if:
+3.4.1[a] a baseline configuration is established.
+3.4.1[b] the baseline configuration includes hardware, software, firmware, and
+documentation.
+3.4.1[c] the baseline configuration is maintained (reviewed and updated) throughout
+the system development life cycle.
+3.4.1[d] a system inventory is established.
+3.4.1[e] the system inventory includes hardware, software, firmware, and
+documentation.
+3.4.1[f] the inventory is maintained (reviewed and updated) throughout the system
+development life cycle.
+POTENTIAL ASSESSMENT METHODS AND OBJECTS
+Test: [SELECT FROM: Organizational processes for managing baseline configurations].
+3.4.4 SECURITY REQUIREMENT
+Analyze the security impact of changes prior to implementation.
+ASSESSMENT OBJECTIVE
+Determine if the security impact of changes to the system is analyzed prior to
+implementation.
+POTENTIAL ASSESSMENT METHODS AND OBJECTS
+Test: [SELECT FROM: Organizational processes for security impact analysis].
+<<PAGE>>
+NIST SP 800-171A ASSESSING SECURITY REQUIREMENTS FOR CONTROLLED UNCLASSIFIED INFORMATION
+________________________________________________________________________________________________
+APPENDIX A PAGE 65
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171A
+APPENDIX A
+REFERENCES
+3.4.9 SECURITY REQUIREMENT
+Not a requirement: text after the chapter ends is ignored.
