@@ -218,7 +218,7 @@ describe('auth forms', () => {
       'DELETE /api/session': () =>
         down ? Promise.reject(new TypeError('Failed to fetch')) : json(204),
     });
-    renderApp('/settings');
+    renderApp('/poam');
     await screen.findByRole('button', { name: 'Sign out' });
     const banner = screen.getByRole('banner');
     const signOut = () => within(banner).getByRole('button', { name: 'Sign out' });

@@ -1,5 +1,10 @@
 import { healthResponseSchema, userResponseSchema } from '@rampart/api/contract';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { createElement } from 'react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AuthedApp } from '../App';
 import { ApiError, apiGet, apiSend, setApiSessionHooks } from './client';
 
 function respond(body: BodyInit | null, status = 200) {
@@ -212,5 +217,54 @@ describe('unauthenticated hook', () => {
     stubFetch(() => Promise.resolve(respond(envelope('forbidden', 'No'), 403)));
     await failure(apiSend('POST', '/api/users', {}));
     expect(onUnauthenticated).not.toHaveBeenCalled();
+  });
+
+  function renderAppWith(routes: Record<string, () => Response>, path: string) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string, init: RequestInit = {}) => {
+        const handler = routes[`${init.method ?? 'GET'} ${input}`];
+        return Promise.resolve(
+          handler ? handler() : respond(JSON.stringify({ status: 'ok', db: 'ok' })),
+        );
+      }),
+    );
+    return render(
+      createElement(MemoryRouter, { initialEntries: [path] }, createElement(AuthedApp)),
+    );
+  }
+
+  const ADMIN = { id: 'u-1', email: 'ada@example.com', displayName: 'Ada', role: 'admin' };
+
+  it('shows Sign in with "Your session ended. Sign in again." after a 401 from a non-auth call', async () => {
+    renderAppWith(
+      {
+        'GET /api/session': () =>
+          respond(JSON.stringify({ setupRequired: false, user: ADMIN, csrfToken: 'c' })),
+        'GET /api/users': () => respond(envelope('unauthenticated', 'Sign in'), 401),
+      },
+      '/settings',
+    );
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByText('Your session ended. Sign in again.')).toBeInTheDocument();
+  });
+
+  it('does not show it after a 401 from sign-in', async () => {
+    const user = userEvent.setup();
+    renderAppWith(
+      {
+        'GET /api/session': () =>
+          respond(JSON.stringify({ setupRequired: false, user: null, csrfToken: null })),
+        'POST /api/session': () =>
+          respond(envelope('invalid_credentials', 'Email or password is incorrect.'), 401),
+      },
+      '/',
+    );
+    await screen.findByRole('heading', { level: 1, name: 'Sign in' });
+    await user.type(screen.getByLabelText('Email'), 'ada@example.com');
+    await user.type(screen.getByLabelText('Password'), 'wrong password');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText('Email or password is incorrect.')).toBeInTheDocument();
+    expect(screen.queryByText('Your session ended. Sign in again.')).not.toBeInTheDocument();
   });
 });

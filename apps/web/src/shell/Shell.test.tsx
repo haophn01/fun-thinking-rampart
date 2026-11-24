@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppRoutes } from '../App';
+import { AuthedApp } from '../App';
 
 const TABS = [
   ['Dashboard', '/'],
@@ -15,18 +15,31 @@ const TABS = [
   ['Settings', '/settings'],
 ] as const;
 
-function renderAt(path: string) {
-  return render(
+const ADMIN = { id: 'u-1', email: 'ada@example.com', displayName: 'Ada', role: 'admin' };
+
+/** Renders the signed-in app at a path and waits for the shell. */
+async function renderAt(path: string) {
+  const result = render(
     <MemoryRouter initialEntries={[path]}>
-      <AppRoutes />
+      <AuthedApp />
     </MemoryRouter>,
   );
+  await screen.findByRole('navigation', { name: 'Primary' });
+  return result;
 }
 
 beforeEach(() => {
+  const answers: Record<string, unknown> = {
+    '/api/session': { setupRequired: false, user: ADMIN, csrfToken: 'csrf-1' },
+    '/api/users': {
+      users: [{ ...ADMIN, active: true, createdAt: '2026-11-24T10:00:00.000Z' }],
+    },
+  };
   vi.stubGlobal(
     'fetch',
-    vi.fn(() => Promise.resolve(new Response(JSON.stringify({ status: 'ok', db: 'ok' })))),
+    vi.fn((path: string) =>
+      Promise.resolve(new Response(JSON.stringify(answers[path] ?? { status: 'ok', db: 'ok' }))),
+    ),
   );
 });
 
@@ -35,8 +48,8 @@ afterEach(() => {
 });
 
 describe('Shell', () => {
-  it('nav marks the current tab', () => {
-    renderAt('/poam');
+  it('nav marks the current tab', async () => {
+    const poam = await renderAt('/poam');
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     const links = within(nav).getAllByRole('link');
     expect(links).toHaveLength(7);
@@ -46,10 +59,24 @@ describe('Shell', () => {
     const current = links.filter((link) => link.getAttribute('aria-current') === 'page');
     expect(current).toHaveLength(1);
     expect(current[0]).toHaveTextContent('POA&M');
+    poam.unmount();
+
+    // /assessment and /settings render their page modules.
+    const assessment = await renderAt('/assessment');
+    expect(screen.getByRole('heading', { level: 1, name: 'Assessment' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Assessment' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    assessment.unmount();
+    await renderAt('/settings');
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: /Users/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('marks Dashboard only at the root, not on every path', () => {
-    renderAt('/');
+  it('marks Dashboard only at the root, not on every path', async () => {
+    await renderAt('/');
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
       'aria-current',
@@ -62,25 +89,31 @@ describe('Shell', () => {
     ).toHaveLength(1);
   });
 
-  it('shows the brand and decorative registration marks', () => {
-    const { container } = renderAt('/');
+  it('shows the brand, the user slot and decorative registration marks', async () => {
+    const { container } = await renderAt('/');
+    const banner = screen.getByRole('banner');
+    expect(within(banner).getByText('Ada')).toBeInTheDocument();
+    expect(within(banner).getByText('Admin')).toBeInTheDocument();
+    expect(within(banner).getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
     expect(within(screen.getByRole('banner')).getByText(PRODUCT_NAME)).toBeInTheDocument();
     const marks = container.querySelectorAll('header svg[aria-hidden="true"]');
     expect(marks.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('routes and titles', () => {
+  it('routes and titles', async () => {
     for (const [label, path] of TABS) {
-      const { unmount } = renderAt(path);
+      const { unmount } = await renderAt(path);
       expect(screen.getByRole('heading', { level: 1, name: label })).toBeInTheDocument();
-      expect(screen.getByText("This section isn't built yet.")).toBeInTheDocument();
+      if (path !== '/settings') {
+        expect(screen.getByText("This section isn't built yet.")).toBeInTheDocument();
+      }
       expect(document.title).toBe(`${label} · ${PRODUCT_NAME}`);
       unmount();
     }
   });
 
-  it('not found', () => {
-    renderAt('/nope/deeper');
+  it('not found', async () => {
+    await renderAt('/nope/deeper');
     expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument();
     expect(document.title).toBe(`Page not found · ${PRODUCT_NAME}`);
     const main = screen.getByRole('main');
@@ -89,7 +122,7 @@ describe('Shell', () => {
 
   it('phone menu', async () => {
     const user = userEvent.setup();
-    renderAt('/');
+    await renderAt('/');
     const button = screen.getByRole('button', { name: 'Menu' });
     expect(button).toHaveAttribute('aria-expanded', 'false');
 
@@ -115,7 +148,7 @@ describe('Shell', () => {
 
   it('Escape with the menu closed leaves focus alone', async () => {
     const user = userEvent.setup();
-    renderAt('/');
+    await renderAt('/');
     screen.getByRole('link', { name: 'SSP' }).focus();
     await user.keyboard('{Escape}');
     expect(screen.getByRole('link', { name: 'SSP' })).toHaveFocus();
