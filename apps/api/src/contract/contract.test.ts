@@ -72,6 +72,15 @@ describe('api contract', () => {
       'payload_too_large',
       'db_unavailable',
       'internal_error',
+      'unauthenticated',
+      'invalid_credentials',
+      'forbidden',
+      'csrf_failed',
+      'setup_complete',
+      'email_taken',
+      'last_admin',
+      'unsupported_media_type',
+      'too_many_attempts',
     ]);
 
     const envelope = { error: { code: 'not_found', message: 'No route', requestId: 'abc' } };
