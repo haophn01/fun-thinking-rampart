@@ -13,7 +13,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsup",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx db/migrate.ts"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",

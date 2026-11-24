@@ -3,3 +3,6 @@
 
 /** The product name. Nothing else in the codebase spells it. */
 export const PRODUCT_NAME = 'Rampart';
+
+export * from './error';
+export * from './health';

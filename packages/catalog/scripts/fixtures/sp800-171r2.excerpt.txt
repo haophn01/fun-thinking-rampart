@@ -1,0 +1,76 @@
+SP 800-171, REVISION 2 PROTECTING CONTROLLED UNCLASSIFIED INFORMATION
+_________________________________________________________________________________________________
+CHAPTER THREE PAGE 10
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171r2
+To accommodate such issues, the system security plan, as reflected in requirement 3.12.4, is
+used to describe any enduring exceptions to the security requirements. Individual, isolated, or
+temporary deficiencies are managed though plans of action, as reflected in requirement 3.12.2.
+3.1 ACCESS CONTROL
+Basic Security Requirements
+3.1.1 Limit system access to authorized users, processes acting on behalf of authorized users, and
+devices (including other systems).
+DISCUSSION
+Access control policies (e.g., identity- or role-based policies, control matrices, and cryptography)
+control access between active entities or subjects (i.e., users or processes acting on behalf of users)
+type (e.g., privileged verses non-privileged) are addressed in requirement 3.1.2.
+3.1.2 Limit system access to the types of transactions and functions that authorized users are
+permitted to execute.
+THE MEANING OF ORGANIZATIONAL SYSTEMS
+The term organizational system is used in many of the recommended CUI security requirements
+in this publication. This term has a specific meaning regarding the scope of applicability for the
+<<PAGE>>
+SP 800-171, REVISION 2 PROTECTING CONTROLLED UNCLASSIFIED INFORMATION
+_________________________________________________________________________________________________
+CHAPTER THREE PAGE 11
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171r2
+DISCUSSION
+Organizations may choose to define access privileges or other attributes by account, by type of
+account, or a combination of both. System account types include individual, shared, group, system,
+Derived Security Requirements
+3.1.9 Provide privacy and security notices consistent with applicable CUI rules.
+DISCUSSION
+System use notifications can be implemented using messages or warning banners displayed before
+3.1.10 Use session lock with pattern-hiding displays to prevent access and viewing of data after a
+period of inactivity.
+DISCUSSION
+Session locks are temporary actions taken when users stop work and move away from the
+3.1.15 Authorize remote execution of privileged commands and remote access to security-relevant
+information.
+DISCUSSION
+A privileged command is a human-initiated (interactively or via a process operating on behalf of
+3.1.19 Encrypt CUI on mobile devices and mobile computing platforms.23
+DISCUSSION
+Organizations can employ full-device encryption or container-based encryption to protect the
+confidentiality of CUI on mobile devices and computing platforms. Container-based encryption
+23 Mobile devices and computing platforms include, for example, smartphones and tablets.
+<<PAGE>>
+SP 800-171, REVISION 2 PROTECTING CONTROLLED UNCLASSIFIED INFORMATION
+_________________________________________________________________________________________________
+CHAPTER THREE PAGE 21
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171r2
+3.4 CONFIGURATION MANAGEMENT
+Basic Security Requirements
+3.4.1 Establish and maintain baseline configurations and inventories of organizational systems
+(including hardware, software, firmware, and documentation) throughout the respective
+system development life cycles.
+DISCUSSION
+Baseline configurations are documented, formally reviewed, and agreed-upon specifications for
+Derived Security Requirements
+3.4.4 Analyze the security impact of changes prior to implementation.
+<<PAGE>>
+SP 800-171, REVISION 2 PROTECTING CONTROLLED UNCLASSIFIED INFORMATION
+_________________________________________________________________________________________________
+CHAPTER THREE PAGE 22
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171r2
+DISCUSSION
+Organizational personnel with information security responsibilities (e.g., system administrators,
+system security officers, system security managers, and systems security engineers) conduct
+<<PAGE>>
+SP 800-171, REVISION 2 PROTECTING CONTROLLED UNCLASSIFIED INFORMATION
+_________________________________________________________________________________________________
+APPENDIX A PAGE 44
+This publication is available free of charge from: https://doi.org/10.6028/NIST.SP.800-171r2
+APPENDIX A
+REFERENCES
+LAWS, POLICIES, DIRECTIVES, REGULATIONS, STANDARDS, AND GUIDELINES
+3.4.9 Not a requirement: text after the chapter ends is ignored.

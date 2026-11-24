@@ -1,0 +1,58 @@
+/* The chip sits on Sheet so its coloured word is a body pair on any page background
+   (red text at body size is allowed only on Sheet). */
+.chip {
+  display: inline-flex;
+  align-items: stretch;
+  border: var(--rp-rule) solid currentColor;
+  background: var(--rp-sheet);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.gauge {
+  padding: 0 7px;
+}
+
+.word {
+  padding: 0 10px 0 8px;
+}
+
+.chip[data-status='met'] {
+  color: var(--rp-blue);
+}
+
+.chip[data-status='met'] .gauge {
+  background: var(--rp-blue);
+  color: var(--rp-sheet);
+}
+
+.chip[data-status='not_met'] {
+  color: var(--rp-red);
+}
+
+.chip[data-status='not_met'] .gauge {
+  background: var(--rp-red);
+  color: var(--rp-sheet);
+}
+
+.chip[data-status='na'] {
+  border-style: dashed;
+  color: var(--rp-graphite);
+}
+
+.chip[data-status='not_assessed'] {
+  color: var(--rp-graphite);
+}
+
+.chip[data-status='na'] .gauge,
+.chip[data-status='not_assessed'] .gauge {
+  border-right: var(--rp-rule) solid currentColor;
+}
+
+.chip[data-status='na'] .gauge {
+  border-right-style: dashed;
+}
