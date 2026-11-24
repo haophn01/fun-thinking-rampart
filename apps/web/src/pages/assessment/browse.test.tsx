@@ -1,6 +1,6 @@
 import { loadCatalog, type Requirement } from '@rampart/catalog';
 import { evaluateAssessment, type ObjectiveStatus } from '@rampart/rules';
-import { configure, render, screen, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -91,9 +91,14 @@ afterEach(() => {
 describe('browse', () => {
   it('shows loading, then 14 families with counts and bars', async () => {
     let answer: (r: Response) => void = () => undefined;
-    fakeApi(() => new Promise<Response>((resolve) => (answer = resolve)));
+    const api = fakeApi(() => new Promise<Response>((resolve) => (answer = resolve)));
     renderAt('/assessment');
     expect(await screen.findByText('Loading assessment…')).toBeInTheDocument();
+    // The page asks for the view in an effect that can run after "Loading" is on screen;
+    // answering before that request exists would resolve nothing and hang the test.
+    await waitFor(() => {
+      expect(api.assessmentCalls()).toBe(1);
+    });
     // AC: first requirement Not Met, second not assessed, the rest Met.
     answer(
       json(
