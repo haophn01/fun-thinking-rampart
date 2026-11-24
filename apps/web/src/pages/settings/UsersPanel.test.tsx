@@ -87,6 +87,7 @@ function usersApi(signedInAs: User = ADA, extra: Record<string, Handler> = {}) {
     'GET /api/users': () => json(200, { users }),
     'POST /api/users': (call) => {
       const body = call.body as User;
+      if (users.some((u) => u.email === body.email)) return apiError(409, 'email_taken');
       const user = { ...body, id: 'u-3', active: true, createdAt: CREATED };
       delete (user as { password?: string }).password;
       users = [...users, user];
@@ -157,6 +158,15 @@ describe('UsersPanel', () => {
     expect(create?.headers.get('x-csrf-token')).toBe('csrf-1');
     expect(within(form()).getByLabelText('Email')).toHaveValue('');
     expect(within(form()).getByLabelText('Password')).toHaveValue('');
+    expect(screen.getByRole('status')).toHaveTextContent('Added Lee.');
+
+    // A second add clears the old notice before it shows its own error.
+    await user.type(within(form()).getByLabelText('Email'), 'lee@example.com');
+    await user.type(within(form()).getByLabelText('Display name'), 'Lee Again');
+    await user.type(within(form()).getByLabelText('Password'), 'a long password');
+    await user.click(within(form()).getByRole('button', { name: 'Add user' }));
+    expect(await within(form()).findByText('That email is already in use.')).toBeInTheDocument();
+    expect(screen.queryByText('Added Lee.')).not.toBeInTheDocument();
 
     // Change role.
     await user.selectOptions(within(row('Kim')).getByLabelText('Role'), 'admin');

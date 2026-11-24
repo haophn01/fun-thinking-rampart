@@ -50,13 +50,15 @@ function RoleOptions() {
 }
 
 interface CreateFormProps {
+  /** Called as a valid add is sent, so the panel can clear an old message. */
+  onSubmitting: () => void;
   onCreated: (user: User) => Promise<void>;
 }
 
 type CreateField = 'email' | 'displayName' | 'password';
 const EMPTY = { email: '', displayName: '', role: 'contributor' as Role, password: '' };
 
-function CreateUserForm({ onCreated }: CreateFormProps) {
+function CreateUserForm({ onSubmitting, onCreated }: CreateFormProps) {
   const headingId = useId();
   const [values, setValues] = useState(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<CreateField, string>>>({});
@@ -78,6 +80,7 @@ function CreateUserForm({ onCreated }: CreateFormProps) {
 
     setPending(true);
     setFailure(null);
+    onSubmitting();
     try {
       const { user } = await apiSend('POST', '/api/users', body.data, userResponseSchema);
       setValues(EMPTY);
@@ -300,6 +303,11 @@ export function UsersPanel() {
     [meId, session],
   );
 
+  const clearMessages = useCallback(() => {
+    setFailure(null);
+    setNotice(null);
+  }, []);
+
   const created = useCallback(
     async (user: User) => {
       setFailure(null);
@@ -341,7 +349,7 @@ export function UsersPanel() {
           />
         ))}
       </ul>
-      <CreateUserForm onCreated={created} />
+      <CreateUserForm onSubmitting={clearMessages} onCreated={created} />
     </div>
   );
 }
