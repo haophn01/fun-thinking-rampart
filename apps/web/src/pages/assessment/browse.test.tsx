@@ -1,13 +1,18 @@
 import { loadCatalog, type Requirement } from '@rampart/catalog';
 import { evaluateAssessment, type ObjectiveStatus } from '@rampart/rules';
-import { configure, render, screen, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthedApp } from '../../App';
 
-// The first render of the whole app is slow on a loaded machine.
+// Each wait for the app may take up to 5 s, for a full-app render on a loaded CI runner. The
+// test timeout sits above that (the 5 s default would equal it), so a wait that never succeeds
+// fails with its own message and the DOM instead of a bare "Test timed out", and a test whose
+// few waits are each slow still finishes. It only bounds a failing test; a passing one takes
+// well under a second.
 configure({ asyncUtilTimeout: 5000 });
+vi.setConfig({ testTimeout: 15_000 });
 
 const catalog = loadCatalog();
 const ADMIN = { id: 'u-1', email: 'ada@example.com', displayName: 'Ada Admin', role: 'admin' };
@@ -91,9 +96,14 @@ afterEach(() => {
 describe('browse', () => {
   it('shows loading, then 14 families with counts and bars', async () => {
     let answer: (r: Response) => void = () => undefined;
-    fakeApi(() => new Promise<Response>((resolve) => (answer = resolve)));
+    const api = fakeApi(() => new Promise<Response>((resolve) => (answer = resolve)));
     renderAt('/assessment');
     expect(await screen.findByText('Loading assessment…')).toBeInTheDocument();
+    // The page asks for the view in an effect that can run after "Loading" is on screen;
+    // answering before that request exists would resolve nothing and hang the test.
+    await waitFor(() => {
+      expect(api.assessmentCalls()).toBe(1);
+    });
     // AC: first requirement Not Met, second not assessed, the rest Met.
     answer(
       json(
