@@ -7,9 +7,6 @@ import type { Regulation } from '../types';
  * a citation, and a test.
  */
 
-/** 32 CFR 170.24(c)(2)(i)(B)(6): "For each NOT MET security requirement the OSA must have a POA&M". */
-export const POAM_NOT_MET_CITATION = '32 CFR 170.24(c)(2)(i)(B)(6)';
-
 function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === 'object') {
     for (const child of Object.values(value)) deepFreeze(child);
@@ -20,7 +17,7 @@ function deepFreeze<T>(value: T): T {
 
 export const REGULATION: Regulation = deepFreeze<Regulation>({
   id: 'cmmc-32-cfr-170',
-  version: '1.0.0',
+  version: '1.1.0',
   sources: [
     {
       title: '32 CFR 170.21 Plan of Action and Milestones requirements',
@@ -34,6 +31,9 @@ export const REGULATION: Regulation = deepFreeze<Regulation>({
   // "The assessment score divided by the total number of CMMC Level 2 security
   // requirements is greater than or equal to 0.8": 0.8 x 110 = 88.
   conditionalMinScore: { value: 88, citation: '32 CFR 170.21(a)(2)(i)' },
+  // "For each NOT MET security requirement the OSA must have a POA&M": only Not Met
+  // requirements go on one.
+  poamNotMetOnly: { value: true, citation: '32 CFR 170.24(c)(2)(i)(B)(6)' },
   // "None of the security requirements included in the POA&M have a point value of greater than 1".
   poamMaxItemPoints: { value: 1, citation: '32 CFR 170.21(a)(2)(ii)' },
   // "except SC.L2-3.13.11 CUI Encryption may be included on a POA&M if encryption is
