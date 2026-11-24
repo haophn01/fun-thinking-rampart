@@ -1,5 +1,6 @@
 import { PRODUCT_NAME } from '@rampart/api/contract';
 import { useRef, useState, type KeyboardEvent } from 'react';
+import { UserSlot } from '../auth/UserSlot';
 import { Button } from '../look';
 import styles from './Masthead.module.css';
 import { NavMenu } from './NavMenu';
@@ -46,6 +47,10 @@ export function Masthead() {
           setOpen(false);
         }}
       />
+      {/* On a phone the user slot sits in the menu, under the nav. */}
+      <div className={styles.user} data-open={open}>
+        <UserSlot />
+      </div>
     </header>
   );
 }

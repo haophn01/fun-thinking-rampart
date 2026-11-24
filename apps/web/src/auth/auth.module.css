@@ -1,0 +1,121 @@
+/* The frame around the gate's own pages: a masthead strip with the brand, then one sheet. */
+.frame {
+  min-height: 100vh;
+}
+
+.head {
+  position: relative;
+  padding: 12px 48px;
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+}
+
+.brand {
+  white-space: nowrap;
+  font-family: var(--rp-font-display);
+  font-size: var(--rp-text-display-3);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.tag {
+  margin-left: 8px;
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.body {
+  display: grid;
+  justify-items: center;
+  padding: 48px;
+}
+
+.sheet {
+  display: grid;
+  gap: 24px;
+  width: 100%;
+  max-width: 480px;
+  min-width: 0;
+  padding: 32px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  background: var(--rp-sheet);
+}
+
+.intro {
+  display: grid;
+  gap: 8px;
+}
+
+.kicker {
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.form {
+  display: grid;
+  gap: 20px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.retry {
+  margin-top: 12px;
+}
+
+/* The masthead's user slot. */
+.slot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-width: 0;
+}
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.role {
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.role::before {
+  content: '· ';
+}
+
+.slotAlert {
+  flex-basis: 100%;
+  max-width: 360px;
+}
+
+@media (max-width: 767px) {
+  .body {
+    padding: 24px 16px;
+  }
+
+  .sheet {
+    padding: 24px 16px;
+  }
+
+  .slotAlert {
+    max-width: none;
+  }
+}
