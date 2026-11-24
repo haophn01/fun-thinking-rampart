@@ -92,12 +92,13 @@ describe('download', () => {
     expect((await admin.get(unknown)).statusCode).toBe(404);
   });
 
-  it('gives 400 for a version that is not a positive whole number', async () => {
+  it('gives 404 for a version that is not a positive whole number, or a malformed item ID', async () => {
     const { admin } = await world();
     const item = await uploaded(admin, new TextEncoder().encode('x'), 'x.txt');
-    for (const version of ['0', '-1', '1.5', 'abc']) {
-      expect((await admin.get(fileUrl(item.id, version))).statusCode, version).toBe(400);
+    for (const version of ['0', '-1', '1.5', 'abc', '01', '99999999999']) {
+      expect((await admin.get(fileUrl(item.id, version))).statusCode, version).toBe(404);
     }
+    expect((await admin.get(fileUrl('not-a-uuid', 1))).statusCode).toBe(404);
   });
 
   it('needs a session', async () => {

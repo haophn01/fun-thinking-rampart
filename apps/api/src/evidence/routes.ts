@@ -25,13 +25,14 @@ import {
 } from './repository';
 
 const itemParams = z.object({ id: z.string() });
-const fileParams = z.object({
-  id: z.string(),
-  version: z
-    .string()
-    .regex(/^[1-9][0-9]{0,8}$/, 'A version is a whole number from 1')
-    .transform(Number),
-});
+const fileParams = z.object({ id: z.string(), version: z.string() });
+const VERSION = /^[1-9][0-9]{0,8}$/;
+
+/** A version in a URL is a whole number from 1; anything else names no version, so 404. */
+function versionNumber(raw: string): number {
+  if (!VERSION.test(raw)) throw new AppError('not_found', 'No such file version.');
+  return Number(raw);
+}
 
 /** The signed-in writer. The guard has already refused a request without a session. */
 function actorOf(request: FastifyRequest, deps: ApiDeps): Actor {
@@ -93,7 +94,7 @@ export function registerEvidenceRoutes(api: FastifyInstance, deps: ApiDeps): voi
 
     scope.get('/api/evidence/:id/versions/:version/file', async (request, reply) => {
       const { id, version } = fileParams.parse(request.params);
-      const file = await readFileVersion(deps.db, deps.store, id, version);
+      const file = await readFileVersion(deps.db, deps.store, id, versionNumber(version));
       return sendFile(reply, file.bytes, file.fileName);
     });
 
