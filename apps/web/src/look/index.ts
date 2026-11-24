@@ -11,3 +11,4 @@ export { Alert, type AlertProps, type AlertTone } from './Alert';
 export { StatusChip, type StatusChipProps } from './StatusChip';
 export { GraduatedBar, clampPercent, type GraduatedBarProps } from './GraduatedBar';
 export { SectionLabel, type SectionLabelProps } from './SectionLabel';
+export { Checkbox, type CheckboxProps } from './Checkbox';
