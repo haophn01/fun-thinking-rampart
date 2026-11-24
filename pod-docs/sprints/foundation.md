@@ -2,18 +2,18 @@
 
 _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: foundation · Status: active · Generated: 2026-11-23_
 
-<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=0 waves=2 -->
+<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=0 waves=3 -->
 
 ## Status board
 
 | Wave | Slice | Title | Branch | PR | Status | Confidence | Depends on |
 |------|-------|-------|--------|----|--------|------------|------------|
 | 1 | B1 | Bootstrap: pnpm monorepo, strict TS, lint, Vitest, CI | foundation-b1 | merged | done | medium | — |
-| 2 | C1 | Catalog: PDF conversion script, Rev 2 data, loader, count tests | foundation-c1 | — | pending | — | B1 |
-| 2 | R1 | Rules: requirement status and SPRS score | foundation-r1 | — | pending | — | B1 |
-| 2 | R2 | Rules: POA&M eligibility, Conditional check, 180-day clock | foundation-r2 | — | pending | — | B1 |
-| 2 | A1 | API and DB skeleton: config, errors, logging, headers, migrations | foundation-a1 | — | pending | — | B1 |
-| 2 | L1 | Look: tokens, self-hosted fonts, base controls | foundation-l1 | — | pending | — | B1 |
+| 2 | C1 | Catalog: PDF conversion script, Rev 2 data, loader, count tests | foundation-c1 | merged | done | medium | B1 |
+| 2 | R1 | Rules: requirement status and SPRS score | foundation-r1 | merged | done | medium | B1 |
+| 2 | R2 | Rules: POA&M eligibility, Conditional check, 180-day clock | foundation-r2 | merged | done | medium | B1 |
+| 2 | A1 | API and DB skeleton: config, errors, logging, headers, migrations | foundation-a1 | merged | done | medium | B1 |
+| 2 | L1 | Look: tokens, self-hosted fonts, base controls | foundation-l1 | merged | done | medium | B1 |
 | 3 | S1 | Web shell: masthead, nav, routes, API client | foundation-s1 | — | pending | — | L1, A1 |
 | 3 | R3 | Rules against the real catalog: the plan's verification table | foundation-r3 | — | pending | — | C1, R1, R2 |
 
