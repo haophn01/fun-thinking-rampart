@@ -36,17 +36,43 @@ run it from an elevated shell, or put the shims in a folder of your own that is 
 
 Run these from the repo root.
 
-| Script           | What it does                                                               |
-| ---------------- | -------------------------------------------------------------------------- |
-| `pnpm dev`       | Runs the api (`tsx watch`) and the web app (Vite) in parallel              |
-| `pnpm lint`      | `eslint .`, then `prettier --check .`                                      |
-| `pnpm format`    | `prettier --write .`                                                       |
-| `pnpm typecheck` | `tsc --noEmit` in every workspace package                                  |
-| `pnpm test`      | `vitest run` across every package plus the repo checks in `tests/`         |
-| `pnpm build`     | Bundles the api with tsup and the web app with Vite                        |
-| `pnpm verify`    | lint, typecheck, test, build, in that order, stopping at the first failure |
+| Script            | What it does                                                               |
+| ----------------- | -------------------------------------------------------------------------- |
+| `pnpm dev`        | Runs the api (`tsx watch`) and the web app (Vite) in parallel              |
+| `pnpm lint`       | `eslint .`, then `prettier --check .`                                      |
+| `pnpm format`     | `prettier --write .`                                                       |
+| `pnpm typecheck`  | `tsc --noEmit` in every workspace package                                  |
+| `pnpm test`       | `vitest run` across every package plus the repo checks in `tests/`         |
+| `pnpm build`      | Bundles the api with tsup and the web app with Vite                        |
+| `pnpm verify`     | lint, typecheck, test, build, in that order, stopping at the first failure |
+| `pnpm db:migrate` | Applies pending database migrations (the api also does this on start)      |
 
 Run `pnpm verify` before you open a pull request; CI runs the same command.
+
+`pnpm --filter @rampart/api db:generate` writes a new SQL migration into
+`apps/api/db/migrations` from `apps/api/db/schema.ts`. The database changes only through
+migrations: change the schema, generate, commit the SQL, and never edit a migration once it is
+committed.
+
+## Configuration
+
+The api reads these environment variables and refuses to start (exit code 1) if any is invalid,
+naming every bad one:
+
+| Variable        | Default               | Rules                                                                                |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------ |
+| `API_PORT`      | `3001`                | An integer from 1 to 65535                                                           |
+| `DATABASE_PATH` | `data/rampart.sqlite` | Relative paths are resolved from `apps/api`; the folder is created; `:memory:` works |
+| `LOG_LEVEL`     | `info`                | A pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`         |
+
+An empty value counts as unset. The host is always `127.0.0.1`. On start the api opens the SQLite
+database (WAL, foreign keys on), applies pending migrations, then listens. There is no seed data
+yet.
+
+The api logs JSON lines (pino) with the request's id on every line; cookies, `authorization` and
+`set-cookie` are redacted. Every error response has the same shape,
+`{ "error": { "code", "message", "requestId", "details"? } }`, and the `x-request-id` header
+carries the same id.
 
 ## Parts
 
