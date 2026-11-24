@@ -1,10 +1,12 @@
 import { BrowserRouter, Route, Routes } from 'react-router';
+import { Gate } from './auth/Gate';
+import { SessionProvider } from './auth/session';
 import { NotFound } from './pages/NotFound';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { Shell } from './shell/Shell';
 import { APP_ROUTES } from './shell/routes';
 
-/** The route tree, without a router, so tests can mount it in a MemoryRouter. */
+/** The route tree, without a router or session, so tests can mount it in a MemoryRouter. */
 export function AppRoutes() {
   return (
     <Routes>
@@ -22,10 +24,21 @@ export function AppRoutes() {
   );
 }
 
+/** The session store and gate around the routes; mount it inside any router. */
+export function AuthedApp() {
+  return (
+    <SessionProvider>
+      <Gate>
+        <AppRoutes />
+      </Gate>
+    </SessionProvider>
+  );
+}
+
 export function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <AuthedApp />
     </BrowserRouter>
   );
 }
