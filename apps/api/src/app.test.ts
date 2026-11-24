@@ -163,6 +163,132 @@ describe('api app', () => {
     expect(envelope(malformed.body).error.code).toBe('validation_failed');
   });
 
+  it('only json bodies are parsed', async () => {
+    let reached = 0;
+    const { app } = setup((instance) => {
+      for (const method of ['POST', 'PUT', 'PATCH', 'DELETE'] as const) {
+        instance.route({
+          method,
+          url: '/api/test/json',
+          handler: (request) => {
+            reached += 1;
+            return { body: request.body ?? null };
+          },
+        });
+      }
+    });
+
+    const refused: [string, string | undefined, string][] = [
+      ['POST', 'text/plain', '{"a":1}'],
+      ['POST', 'text/plain;charset=UTF-8', 'hello'],
+      ['POST', 'application/x-www-form-urlencoded', 'a=1&b=2'],
+      [
+        'POST',
+        'multipart/form-data; boundary=x',
+        '--x\r\nContent-Disposition: form-data; name="a"\r\n\r\n1\r\n--x--',
+      ],
+      ['PUT', 'text/plain', 'x'],
+      ['PATCH', 'application/xml', '<a/>'],
+      ['DELETE', 'text/plain', 'x'],
+      ['POST', 'application/jsonx', '{"a":1}'],
+    ];
+    for (const [method, type, payload] of refused) {
+      const response = await app.inject({
+        method: method as 'POST',
+        url: '/api/test/json',
+        headers: type === undefined ? {} : { 'content-type': type },
+        payload,
+      });
+      const label = `${method} ${type ?? '(none)'}`;
+      expect(response.statusCode, label).toBe(415);
+      const body = envelope(response.body);
+      expect(body.error.code, label).toBe('unsupported_media_type');
+      expect(body.error.requestId, label).toBe(response.headers['x-request-id']);
+    }
+    expect(reached).toBe(0);
+
+    for (const type of ['application/json', 'application/json; charset=utf-8']) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/test/json',
+        headers: { 'content-type': type },
+        payload: '{"a":1}',
+      });
+      expect(response.statusCode, type).toBe(200);
+      expect(response.json()).toEqual({ body: { a: 1 } });
+    }
+    // A bodyless DELETE needs no content type.
+    const bodyless = await app.inject({ method: 'DELETE', url: '/api/test/json' });
+    expect(bodyless.statusCode).toBe(200);
+    expect(reached).toBe(3);
+  });
+
+  it('not found wins over body errors', async () => {
+    const { app } = setup((instance) => {
+      instance.post('/api/test/validate', (request) =>
+        z.object({ name: z.string() }).parse(request.body),
+      );
+    });
+    const oversize = JSON.stringify({ data: 'x'.repeat(ONE_MIB) });
+    const cases: [string, string, string][] = [
+      ['malformed json', 'application/json', '{"name":'],
+      ['oversize json', 'application/json', oversize],
+      ['text/plain', 'text/plain', 'hello'],
+      ['form', 'application/x-www-form-urlencoded', 'a=1'],
+      ['empty json', 'application/json', ''],
+    ];
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE'] as const) {
+      for (const [label, type, payload] of cases) {
+        const response = await app.inject({
+          method,
+          url: '/api/nope?x=1',
+          headers: { 'content-type': type },
+          payload,
+        });
+        const name = `${method} ${label}`;
+        expect(response.statusCode, name).toBe(404);
+        expect(response.headers['content-type'], name).toMatch(/^application\/json/);
+        const body = envelope(response.body);
+        expect(body.error.code, name).toBe('not_found');
+        expect(body.error.message, name).toBe(`No route for ${method} /api/nope`);
+        expect(body.error.requestId, name).toBe(response.headers['x-request-id']);
+        // The early answer still carries the security headers.
+        expect(response.headers['x-content-type-options'], name).toBe('nosniff');
+        expect(String(response.headers['content-security-policy']), name).toContain(
+          "default-src 'none'",
+        );
+      }
+    }
+
+    // A known route with a wrong method is unknown too.
+    const wrongMethod = await app.inject({
+      method: 'PUT',
+      url: '/api/test/validate',
+      headers: { 'content-type': 'text/plain' },
+      payload: 'x',
+    });
+    expect(wrongMethod.statusCode).toBe(404);
+    expect(envelope(wrongMethod.body).error.code).toBe('not_found');
+
+    const malformed = await app.inject({
+      method: 'POST',
+      url: '/api/test/validate',
+      headers: { 'content-type': 'application/json' },
+      payload: '{"name":',
+    });
+    expect(malformed.statusCode).toBe(400);
+    expect(envelope(malformed.body).error.code).toBe('validation_failed');
+
+    const tooLarge = await app.inject({
+      method: 'POST',
+      url: '/api/test/validate',
+      headers: { 'content-type': 'application/json' },
+      payload: oversize,
+    });
+    expect(tooLarge.statusCode).toBe(413);
+    expect(envelope(tooLarge.body).error.code).toBe('payload_too_large');
+  });
+
   it('request id', async () => {
     const { app } = setup();
     const valid = ['abc-123', 'A'.repeat(64)];
