@@ -113,6 +113,26 @@ describe('Shell', () => {
     }
   });
 
+  it('sets the title in the same commit that shows the page', async () => {
+    // Records the title at each DOM change, before anything else can run, so a title that
+    // lands in a later task (after the next route has rendered) shows up here.
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => {
+      const heading = document.querySelector('h1');
+      if (heading) seen.push(`${heading.textContent} | ${document.title}`);
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    document.title = 'stale';
+    try {
+      await renderAt('/poam');
+    } finally {
+      observer.disconnect();
+    }
+    const shown = seen.filter((entry) => entry.startsWith('POA&M |'));
+    expect(shown.length).toBeGreaterThan(0);
+    expect(shown[0]).toBe(`POA&M | POA&M · ${PRODUCT_NAME}`);
+  });
+
   it('not found', async () => {
     await renderAt('/nope/deeper');
     expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument();
