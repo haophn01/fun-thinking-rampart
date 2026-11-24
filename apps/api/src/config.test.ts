@@ -21,6 +21,7 @@ describe('config', () => {
       host: '127.0.0.1',
       port: 3001,
       databasePath: join(apiRoot, 'data', 'rampart.sqlite'),
+      storagePath: join(apiRoot, 'data', 'files'),
       logLevel: 'info',
     });
 
@@ -32,8 +33,13 @@ describe('config', () => {
     }
 
     // One error names every bad key.
-    const error = configError({ API_PORT: 'abc', LOG_LEVEL: 'loud', DATABASE_PATH: '   ' });
-    expect(error.keys).toEqual(['API_PORT', 'DATABASE_PATH', 'LOG_LEVEL']);
+    const error = configError({
+      API_PORT: 'abc',
+      LOG_LEVEL: 'loud',
+      DATABASE_PATH: '   ',
+      STORAGE_PATH: ' ',
+    });
+    expect(error.keys).toEqual(['API_PORT', 'DATABASE_PATH', 'LOG_LEVEL', 'STORAGE_PATH']);
     for (const key of error.keys) expect(error.message).toContain(key);
     expect(error.name).toBe('ConfigError');
   });
@@ -59,6 +65,29 @@ describe('config', () => {
     expect(isAbsolute(absolute)).toBe(true);
     expect(loadConfig({ DATABASE_PATH: absolute }).databasePath).toBe(absolute);
     expect(loadConfig({ DATABASE_PATH: ':memory:' }).databasePath).toBe(':memory:');
+  });
+
+  it('storage path', () => {
+    // Defaults to apps/api/data/files, whatever the working directory.
+    expect(loadConfig({}).storagePath).toBe(join(apiRoot, 'data', 'files'));
+    // An empty value means the default.
+    expect(loadConfig({ STORAGE_PATH: '' }).storagePath).toBe(join(apiRoot, 'data', 'files'));
+    // A relative value resolves against apps/api, and may contain spaces.
+    expect(loadConfig({ STORAGE_PATH: 'scratch/evidence files' }).storagePath).toBe(
+      join(apiRoot, 'scratch', 'evidence files'),
+    );
+    expect(loadConfig({ STORAGE_PATH: '../outside' }).storagePath).toBe(
+      resolve(apiRoot, '..', 'outside'),
+    );
+    // An absolute value is kept as given.
+    const absolute = resolve(apiRoot, '..', 'evidence-store');
+    expect(loadConfig({ STORAGE_PATH: absolute }).storagePath).toBe(absolute);
+    // Whitespace only is refused, naming the key.
+    for (const blank of [' ', '\t', ' \n ']) {
+      const error = configError({ STORAGE_PATH: blank });
+      expect(error.keys).toEqual(['STORAGE_PATH']);
+      expect(error.message).toContain('STORAGE_PATH');
+    }
   });
 
   it('accepts every pino level and nothing else', () => {
