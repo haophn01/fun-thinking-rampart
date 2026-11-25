@@ -23,3 +23,28 @@ Consequences: <trade-offs, follow-ups> -->
 Context: 32 CFR 170.24(c)(2)(i)(B)(6) says each Not Met requirement must have a POA&M. The plan's Verification has the stamp read ACCEPT only after reaching 88+ "with eligible POA&M items". The sprint-planner settled this for sprint `ssp-dashboard`.
 Decision: the rules add a `poam_missing` blocker, citing 32 CFR 170.24(c)(2)(i)(B)(6), for each POA&M-eligible Not Met requirement with no **open** POA&M item. A closed item doesn't count. A requirement that is ineligible for a POA&M gets only `poam_ineligible`, never both. `Regulation` gains `poamRequiredForNotMet` (REGULATION v1.2.0). `AssessmentInput.openPoamRequirementIds` is optional: when it's absent the check is skipped, and the API always fills it. The blocker is still listed while the score is incomplete; the stamp reads HOLD either way. Built in R6 (PR #10).
 Consequences: the dashboard's ACCEPT now matches the regulation. The workspace's live and what-if scores apply the same rule, because the view carries the open list. Switching `poamRequiredForNotMet` off in the regulation data turns the rule off.
+
+## 2026-11-25 — Objective IDs for single-statement requirements (agent default — override anytime)
+Context: 23 NIST SP 800-171A requirements have one unlettered "Determine if…" statement.
+Decision: each gets a single objective `[a]` (e.g. `3.4.4[a]`), matching the CMMC assessment guide, so the total stays 320.
+Consequences: users see these IDs on the assessment screen and in the SSP. Changing it means a catalog version bump plus a data migration for stored results.
+
+## 2026-11-25 — 3.3.2 wording (agent default — override anytime)
+Context: SP 800-171 Rev 2 and SP 800-171A word 3.3.2 slightly differently (a comma).
+Decision: keep the Rev 2 wording ("…those users, so they can…"), through the catalog override listed in `packages/catalog/README.md`.
+Consequences: it's cosmetic. Changing it is a one-line override plus a catalog version bump.
+
+## 2026-11-25 — Selected "Not met" objective radio fill (agent default — override anytime)
+Context: the look-3 draft fills a selected Not Met option in Signal Red, but the sprint scope said Ink.
+Decision: the selected option is always filled Ink. Each option exposes `data-status`, so a red Not Met fill is a small CSS change.
+Consequences: none for behavior.
+
+## 2026-11-25 — No confirm step before resetting or deactivating yourself (agent default — override anytime)
+Context: on your own row in Settings › Users, Reset password and Deactivate act immediately and end your session.
+Decision: no confirm step. You land on Sign in with "Your session ended. Sign in again."
+Consequences: an admin can sign themself out with one click. Adding a confirm dialog is a small UI change.
+
+## 2026-11-25 — "Today" is the UTC date (agent default — override anytime)
+Context: the plan review found that POA&M due dates, the 180-day clock and the closeout checks use the UTC calendar date. For a US user after about 4–5 pm local time, they read one day ahead.
+Decision: keep UTC days, as `contract/poam.ts` documents.
+Consequences: near the end of the US day, countdowns and "due today" can be off by one. Fixing it needs the user's time zone (a setting, or the browser's offset sent with requests).
