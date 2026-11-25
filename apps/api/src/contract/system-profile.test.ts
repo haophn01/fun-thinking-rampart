@@ -129,7 +129,9 @@ describe('system profile contract', () => {
     expect(sspFileName('x'.repeat(65), TODAY)).toBe(`SSP-${'x'.repeat(64)}-${TODAY}.docx`);
     expect(sspFileName(`!!${'y'.repeat(80)}`, TODAY)).toBe(`SSP-${'y'.repeat(64)}-${TODAY}.docx`);
     // A cut that lands on a `-` doesn't leave it hanging.
-    expect(sspFileName(`${'z'.repeat(63)} tail`, TODAY)).toBe(`SSP-${'z'.repeat(63)}-${TODAY}.docx`);
+    expect(sspFileName(`${'z'.repeat(63)} tail`, TODAY)).toBe(
+      `SSP-${'z'.repeat(63)}-${TODAY}.docx`,
+    );
     // Null, empty, and all-symbol IDs fall back to `system`.
     expect(sspFileName(null, TODAY)).toBe(`SSP-system-${TODAY}.docx`);
     expect(sspFileName('', TODAY)).toBe(`SSP-system-${TODAY}.docx`);
