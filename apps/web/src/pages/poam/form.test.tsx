@@ -247,4 +247,59 @@ describe('create', () => {
       body: { due: '2026-12-15' },
     });
   });
+
+  it('a milestone edit that only moves text across a field boundary is still sent', async () => {
+    // Joined without separators, both lists read "Order2026-11-302026-11-25Install2026-12-01".
+    const user = userEvent.setup();
+    const milestones = [
+      { title: 'Order', due: '2026-11-30', doneOn: null },
+      { title: '2026-11-25Install', due: '2026-12-01', doneOn: null },
+    ];
+    const api = fakeApi({ items: [item({ milestones })] }, () => json(200, { item: item() }));
+    render(
+      <MemoryRouter initialEntries={['/poam']}>
+        <AuthedApp />
+      </MemoryRouter>,
+    );
+    const list = await screen.findByRole('list', { name: 'POA&M items' });
+    await user.click(within(list).getByRole('button', { name: 'Edit' }));
+    const form = await screen.findByRole('form', { name: 'Edit POA&M item' });
+    await user.type(within(form).getByLabelText('Milestone 1 done on (optional)'), '2026-11-25');
+    const title = within(form).getByLabelText('Milestone 2 title');
+    await user.clear(title);
+    await user.type(title, 'Install');
+    await user.click(within(form).getByRole('button', { name: 'Save item' }));
+    await waitFor(() => {
+      expect(api.calls).toHaveLength(1);
+    });
+    expect(api.calls[0]).toEqual({
+      method: 'PATCH',
+      path: '/api/poam/p-1',
+      body: {
+        milestones: [
+          { title: 'Order', due: '2026-11-30', doneOn: '2026-11-25' },
+          { title: 'Install', due: '2026-12-01', doneOn: null },
+        ],
+      },
+    });
+  });
+
+  it('saving unchanged milestones sends nothing', async () => {
+    const user = userEvent.setup();
+    const milestones = [{ title: 'Order', due: '2026-11-30', doneOn: null }];
+    const api = fakeApi({ items: [item({ milestones })] }, () => json(200, { item: item() }));
+    render(
+      <MemoryRouter initialEntries={['/poam']}>
+        <AuthedApp />
+      </MemoryRouter>,
+    );
+    const list = await screen.findByRole('list', { name: 'POA&M items' });
+    await user.click(within(list).getByRole('button', { name: 'Edit' }));
+    const form = await screen.findByRole('form', { name: 'Edit POA&M item' });
+    await user.click(within(form).getByRole('button', { name: 'Save item' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('form', { name: 'Edit POA&M item' })).toBeNull();
+    });
+    expect(api.calls).toHaveLength(0);
+  });
 });
