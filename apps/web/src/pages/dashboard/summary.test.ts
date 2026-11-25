@@ -3,16 +3,22 @@ import { describe, expect, it } from 'vitest';
 import { familyRows, objectiveCounts } from './summary';
 
 const catalog = loadCatalog();
+
+function must<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('fixture missing');
+  return value;
+}
+
 const ALL = catalog.requirements.flatMap((r) => r.objectives.map((o) => o.id));
 
 describe('objective and family counts', () => {
   it('counts every catalog objective, a missing result as not assessed', () => {
     const results = [
-      { objectiveId: ALL[0]!, status: 'met' as const },
-      { objectiveId: ALL[1]!, status: 'met' as const },
-      { objectiveId: ALL[2]!, status: 'not_met' as const },
-      { objectiveId: ALL[3]!, status: 'na' as const },
-      { objectiveId: ALL[4]!, status: 'not_assessed' as const },
+      { objectiveId: must(ALL[0]), status: 'met' as const },
+      { objectiveId: must(ALL[1]), status: 'met' as const },
+      { objectiveId: must(ALL[2]), status: 'not_met' as const },
+      { objectiveId: must(ALL[3]), status: 'na' as const },
+      { objectiveId: must(ALL[4]), status: 'not_assessed' as const },
       { objectiveId: 'not-in-catalog', status: 'met' as const },
     ];
     const counts = objectiveCounts(results, catalog);
@@ -33,7 +39,7 @@ describe('objective and family counts', () => {
   });
 
   it('family rows give assessed percent and met / not met requirement counts', () => {
-    const family = catalog.families[0]!;
+    const family = must(catalog.families[0]);
     const reqs = catalog.requirements.filter((r) => r.family === family.code);
     const famObjectives = reqs.flatMap((r) => r.objectives.map((o) => o.id));
     const results = famObjectives.slice(0, 1).map((objectiveId) => ({
@@ -41,10 +47,10 @@ describe('objective and family counts', () => {
       status: 'met' as const,
     }));
     const outcomes = [
-      { requirementId: reqs[0]!.id, status: 'met' as const },
-      { requirementId: reqs[1]!.id, status: 'not_met' as const },
-      { requirementId: reqs[2]!.id, status: 'not_met' as const },
-      { requirementId: reqs[3]!.id, status: 'not_assessed' as const },
+      { requirementId: must(reqs[0]).id, status: 'met' as const },
+      { requirementId: must(reqs[1]).id, status: 'not_met' as const },
+      { requirementId: must(reqs[2]).id, status: 'not_met' as const },
+      { requirementId: must(reqs[3]).id, status: 'not_assessed' as const },
     ];
     const rows = familyRows(results, outcomes, catalog);
     expect(rows).toHaveLength(catalog.families.length);
@@ -61,7 +67,7 @@ describe('objective and family counts', () => {
   });
 
   it('a not-applicable objective counts as assessed', () => {
-    const family = catalog.families[0]!;
+    const family = must(catalog.families[0]);
     const famObjectives = catalog.requirements
       .filter((r) => r.family === family.code)
       .flatMap((r) => r.objectives.map((o) => o.id));

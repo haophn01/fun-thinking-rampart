@@ -4,8 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { needsAttention } from './attention';
 
 const catalog = loadCatalog();
+
+function must<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('fixture missing');
+  return value;
+}
+
 const [R1, R2, R3, R4] = catalog.requirements.filter((r) => r.scoring.kind === 'points');
-const id = (r: typeof R1) => r!.id;
+const id = (r: typeof R1) => must(r).id;
 
 type Blockers = AssessmentView['evaluation']['conditional']['blockers'];
 
@@ -100,8 +106,9 @@ describe('order and empty', () => {
     expect(rows[2]).toMatchObject({
       requirementId: id(R3),
       chip: 'not_met',
-      text: R3!.text,
-      points: R3!.scoring.kind === 'points' ? R3!.scoring.points : null,
+      text: must(R3).text,
+      points:
+        must(R3).scoring.kind === 'points' ? (must(R3).scoring as { points: number }).points : null,
     });
     expect(rows[3]).toMatchObject({ owner: 'Olive Owner', requirementId: id(R1) });
     expect(rows[6]?.message).toBe('3 requirements not yet assessed');
