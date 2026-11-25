@@ -1,0 +1,20 @@
+CREATE TABLE `system_profile` (
+	`assessment_id` text PRIMARY KEY NOT NULL,
+	`system_name` text,
+	`system_identifier` text,
+	`organization_name` text,
+	`cage_code` text,
+	`description` text,
+	`authorization_boundary` text,
+	`environment` text,
+	`interconnections` text,
+	`information_types` text,
+	`system_owner` text,
+	`system_owner_email` text,
+	`security_contact` text,
+	`security_contact_email` text,
+	`updated_by` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`assessment_id`) REFERENCES `assessment`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE no action
+);

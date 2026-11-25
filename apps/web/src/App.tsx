@@ -3,21 +3,25 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { Gate } from './auth/Gate';
 import { SessionProvider } from './auth/session';
 import { AssessmentPage } from './pages/assessment/AssessmentPage';
+import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { EvidencePage } from './pages/evidence/EvidencePage';
 import { NotFound } from './pages/NotFound';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { PoamPage } from './pages/poam/PoamPage';
 import { PoliciesPage } from './pages/policies/PoliciesPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
+import { SspPage } from './pages/ssp/SspPage';
 import { Shell } from './shell/Shell';
 import { APP_ROUTES } from './shell/routes';
 
 /** The routes that have a page module; every other nav route shows its empty-state page. */
 const PAGES: Readonly<Record<string, ComponentType>> = {
+  '/': DashboardPage,
   '/assessment': AssessmentPage,
   '/poam': PoamPage,
   '/evidence': EvidencePage,
   '/policies': PoliciesPage,
+  '/ssp': SspPage,
   '/settings': SettingsPage,
 };
 

@@ -149,6 +149,7 @@ describe('contract schemas', () => {
       'policy.updated',
       'policy.links_updated',
       'policy.version_added',
+      'system_profile.updated',
     ]);
     expect(AUDIT_ENTITY_TYPES).toEqual([
       'user',
@@ -158,6 +159,7 @@ describe('contract schemas', () => {
       'poam_item',
       'evidence_item',
       'policy',
+      'system_profile',
     ]);
   });
 

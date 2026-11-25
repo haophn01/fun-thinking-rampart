@@ -372,3 +372,33 @@ export const policyLink = sqliteTable(
     index('policy_link_requirement_id_idx').on(table.requirementId),
   ],
 );
+
+/**
+ * The system profile: the SSP's system characteristics, one row per assessment. The first
+ * `PATCH /api/system-profile` creates it; until then every field reads as null.
+ */
+export const systemProfile = sqliteTable('system_profile', {
+  assessmentId: text('assessment_id')
+    .primaryKey()
+    .references(() => assessment.id),
+  systemName: text('system_name'),
+  systemIdentifier: text('system_identifier'),
+  organizationName: text('organization_name'),
+  /** Five of A–Z and 0–9, stored uppercased. */
+  cageCode: text('cage_code'),
+  description: text('description'),
+  authorizationBoundary: text('authorization_boundary'),
+  environment: text('environment'),
+  interconnections: text('interconnections'),
+  informationTypes: text('information_types'),
+  systemOwner: text('system_owner'),
+  /** Stored trimmed and lowercased. */
+  systemOwnerEmail: text('system_owner_email'),
+  securityContact: text('security_contact'),
+  securityContactEmail: text('security_contact_email'),
+  updatedBy: text('updated_by')
+    .notNull()
+    .references(() => user.id),
+  /** ISO timestamp from the api's clock. */
+  updatedAt: text('updated_at').notNull(),
+});

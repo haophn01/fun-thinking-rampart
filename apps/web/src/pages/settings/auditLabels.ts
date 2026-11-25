@@ -23,6 +23,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'policy.updated': 'Policy changed',
   'policy.links_updated': 'Policy requirement links changed',
   'policy.version_added': 'Policy version added',
+  'system_profile.updated': 'System profile changed',
 };
 
 export const ENTITY_LABELS: Record<AuditEntityType, string> = {
@@ -33,4 +34,5 @@ export const ENTITY_LABELS: Record<AuditEntityType, string> = {
   poam_item: 'POA&M item',
   evidence_item: 'Evidence',
   policy: 'Policy',
+  system_profile: 'System profile',
 };

@@ -6,6 +6,10 @@ Run `pnpm verify`. It runs lint, typecheck, test and build, in that order, and s
 failure. CI runs the same command on Ubuntu and Windows, plus a gitleaks secret scan over the full
 history. A red check blocks the merge.
 
+CI also runs `pnpm e2e` (Playwright, Chromium) on both OSes. Run it locally when you change a
+page or a route the end-to-end specs drive; it needs `pnpm exec playwright install chromium` once.
+Specs live in `e2e/*.spec.ts` and Vitest never collects them.
+
 ## Commits
 
 Use [Conventional Commits](https://www.conventionalcommits.org/), scoped by the area of code:

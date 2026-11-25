@@ -1,0 +1,121 @@
+/* C's dimension-line ruler on Sheet. Rows are stacked bands so no two labels can share a line;
+   heights are in rem so they grow with the 16 px labels under zoom. Every rule that sets a
+   text colour sets its background too (inspection.test.tsx checks the pair). */
+.ruler {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 0;
+  background: var(--rp-sheet);
+  color: var(--rp-ink);
+}
+
+.row {
+  position: relative;
+  height: 1.5rem;
+}
+
+.scale {
+  position: relative;
+  height: 1.125rem;
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+}
+
+.markerRow {
+  position: relative;
+  height: 0.875rem;
+}
+
+/* Labels hang off their point: from it (start), across it (middle) or up to it (end). */
+.scaleLabel,
+.thresholdLabel,
+.youLabel,
+.gapLabel {
+  position: absolute;
+  top: 0;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+[data-anchor='middle'] {
+  transform: translateX(-50%);
+}
+
+[data-anchor='end'] {
+  transform: translateX(-100%);
+}
+
+.thresholdLabel[data-anchor='end'],
+.youLabel[data-anchor='end'],
+.gapLabel[data-anchor='end'] {
+  padding-right: 6px;
+}
+
+.thresholdLabel[data-anchor='start'],
+.youLabel[data-anchor='start'],
+.gapLabel[data-anchor='start'] {
+  padding-left: 6px;
+}
+
+.scaleLabel {
+  color: var(--rp-ink);
+  background: var(--rp-sheet);
+}
+
+.thresholdLabel {
+  font-weight: 700;
+  color: var(--rp-red);
+  background: var(--rp-sheet);
+}
+
+.youLabel,
+.gapLabel {
+  font-weight: 700;
+  color: var(--rp-blue);
+  background: var(--rp-sheet);
+}
+
+.tick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 6px;
+  background: var(--rp-ink);
+}
+
+.tick[data-major='true'] {
+  width: var(--rp-rule);
+  height: 12px;
+}
+
+/* The Conditional line: from beside its label down through the scale to the marker. */
+.threshold {
+  position: absolute;
+  top: calc(4px + 1.5rem);
+  height: 3.5rem;
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--rp-red);
+}
+
+/* The YOU marker: a Blue triangle pointing up at the scale. */
+.marker {
+  position: absolute;
+  top: 0;
+  width: 12px;
+  height: 10px;
+  transform: translateX(-6px);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: var(--rp-blue);
+}
+
+/* The gap: a dashed Blue dimension from the marker to the line. */
+.gap {
+  position: absolute;
+  top: 50%;
+  height: 0;
+  border-top: var(--rp-rule) dashed var(--rp-blue);
+}

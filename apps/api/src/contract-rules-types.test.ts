@@ -65,17 +65,37 @@ describe('contract evaluation mirrors', () => {
         ),
         implementationLevels: {},
       },
+      // An eligible Not Met requirement with no open POA&M item: a poam_missing blocker.
+      {
+        objectiveResults: catalog.requirements.flatMap((requirement) =>
+          requirement.objectives.map((objective) => ({
+            objectiveId: objective.id,
+            status: requirement.id === 'AC.L2-3.1.10' ? ('not_met' as const) : ('met' as const),
+          })),
+        ),
+        implementationLevels: {},
+        openPoamRequirementIds: [],
+      },
     ];
     const kinds = new Set<string>();
+    const blockerCodes = new Set<string>();
     for (const input of inputs) {
       const outcomes = deriveRequirementOutcomes(catalog, input);
       const score = computeScore(catalog, input);
-      const conditional = checkConditional(catalog, outcomes, score);
+      const conditional = checkConditional(
+        catalog,
+        outcomes,
+        score,
+        undefined,
+        input.openPoamRequirementIds,
+      );
       const evaluation: RulesEvaluation = { outcomes, score, conditional };
       kinds.add(`${score.kind}/${conditional.status}`);
+      for (const blocker of conditional.blockers) blockerCodes.add(blocker.code);
       expect(evaluationSchema.parse(evaluation)).toEqual(evaluation);
     }
     expect(kinds.size).toBeGreaterThan(1);
+    expect(blockerCodes).toContain('poam_missing');
 
     for (const clock of [
       closeoutClock('2026-11-23', '2026-11-23'),
@@ -87,6 +107,9 @@ describe('contract evaluation mirrors', () => {
     // The mirrors are not loose: an off-contract shape fails.
     expect(scoreResultSchema.safeParse({ kind: 'scored', score: 110 }).success).toBe(false);
     expect(blockerSchema.safeParse({ code: 'below_threshold', score: 1 }).success).toBe(false);
+    expect(blockerSchema.safeParse({ code: 'poam_missing', requirementId: 'x' }).success).toBe(
+      false,
+    );
   });
 
   it('eligibility mirror', () => {

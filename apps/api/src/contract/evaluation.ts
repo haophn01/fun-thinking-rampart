@@ -75,6 +75,7 @@ export const blockerSchema = z.discriminatedUnion('code', [
     reasons: z.array(ineligibleCodeSchema),
     citation: z.string(),
   }),
+  z.object({ code: z.literal('poam_missing'), requirementId: z.string(), citation: z.string() }),
 ]);
 
 export const conditionalResultSchema = z.object({
