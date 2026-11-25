@@ -28,5 +28,7 @@ export function blockerText(blocker: Blocker, catalog: Catalog): string {
       return `${blocker.requirementId} cannot go on a POA&M: ${blocker.reasons
         .map((reason) => INELIGIBLE[reason])
         .join('; ')}`;
+    case 'poam_missing':
+      return `${blocker.requirementId} is Not Met and has no open POA&M item`;
   }
 }
