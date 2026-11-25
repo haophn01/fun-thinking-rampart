@@ -1,20 +1,33 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
+import { openDb, runMigrations } from '../../db/client';
 import { requirementState } from '../../db/schema';
+import { createMemoryStore } from '../../storage';
+import { buildApp } from '../app';
+import { loadConfig } from '../config';
 import {
+  CSRF_HEADER,
+  SESSION_COOKIE,
   assessmentViewSchema,
   auditPageSchema,
   errorEnvelopeSchema,
   requirementWriteResponseSchema,
+  sessionResponseSchema,
   userResponseSchema,
   type AuditPage,
   type RequirementWriteResponse,
 } from '../contract';
-import { createHarness, type Client, type Harness } from '../testing/harness';
+import { ADMIN, START, createHarness, type Client, type Harness } from '../testing/harness';
 
 const harnesses: Harness[] = [];
+const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
   for (const h of harnesses.splice(0)) await h.close();
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
 const CONTRIBUTOR = {
@@ -232,5 +245,165 @@ describe('limits and access', () => {
 
     const view = assessmentViewSchema.parse((await carl.get('/api/assessment')).json());
     expect(view.requirementStates[0]?.implementationLevel).toBe('partial');
+  });
+});
+
+describe('planned and N/A fields', () => {
+  it('planned and N/A fields: save on any status, audit only changed fields, a repeat writes nothing', async () => {
+    const { h, admin } = await world();
+    // Stored whatever the requirement's status: met, na and not assessed alike.
+    await admin.put(objectiveUrl('3.1.1[a]'), { status: 'met', note: null });
+    await admin.put(objectiveUrl('3.1.2[a]'), { status: 'na', note: null });
+
+    const only = await patch(admin, 'AC.L2-3.1.1', { plannedImplementation: '  Roll out MFA.  ' });
+    expect(only.requirementState).toMatchObject({
+      plannedImplementation: 'Roll out MFA.',
+      naRationale: null,
+    });
+    let events = await requirementEvents(admin, 'AC.L2-3.1.1');
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      action: 'requirement_state.updated',
+      before: null,
+      after: { plannedImplementation: 'Roll out MFA.' },
+    });
+
+    h.clock.advance(60_000);
+    const na = await patch(admin, 'AC.L2-3.1.2', { naRationale: 'No remote access exists.' });
+    expect(na.requirementState).toMatchObject({
+      plannedImplementation: null,
+      naRationale: 'No remote access exists.',
+    });
+
+    h.clock.advance(60_000);
+    const both = await patch(admin, 'AC.L2-3.1.1', {
+      plannedImplementation: 'Roll out MFA.',
+      naRationale: 'Not applicable',
+    });
+    events = await requirementEvents(admin, 'AC.L2-3.1.1');
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      before: { naRationale: null },
+      after: { naRationale: 'Not applicable' },
+    });
+    expect(events[0]?.after).not.toHaveProperty('plannedImplementation');
+
+    // A repeat writes nothing: no event, same updatedAt.
+    h.clock.advance(60_000);
+    const repeat = await patch(admin, 'AC.L2-3.1.1', {
+      plannedImplementation: 'Roll out MFA.',
+      naRationale: 'Not applicable',
+    });
+    expect(repeat.requirementState).toEqual(both.requirementState);
+    expect(await requirementEvents(admin, 'AC.L2-3.1.1')).toHaveLength(2);
+
+    // Null clears, and is audited as a change.
+    await patch(admin, 'AC.L2-3.1.1', { naRationale: null });
+    events = await requirementEvents(admin, 'AC.L2-3.1.1');
+    expect(events[0]).toMatchObject({
+      before: { naRationale: 'Not applicable' },
+      after: { naRationale: null },
+    });
+
+    // The limits are 20,000 and 4,000.
+    const long = await admin.patch(url('AC.L2-3.1.1'), {
+      plannedImplementation: 'x'.repeat(20_001),
+    });
+    expect(long.statusCode).toBe(400);
+    const longNa = await admin.patch(url('AC.L2-3.1.1'), { naRationale: 'x'.repeat(4_001) });
+    expect(longNa.statusCode).toBe(400);
+    const okNa = await admin.patch(url('AC.L2-3.1.1'), { naRationale: 'x'.repeat(4_000) });
+    expect(okNa.statusCode).toBe(200);
+  });
+
+  it("fields don't change the score: a first write creates the row with before null", async () => {
+    const { admin } = await world();
+    const view = assessmentViewSchema.parse((await admin.get('/api/assessment')).json());
+    const written = await patch(admin, ENCRYPTION, {
+      plannedImplementation: 'Deploy FIPS modules.',
+      naRationale: 'Pending scoping',
+    });
+    expect(written.evaluation).toEqual(view.evaluation);
+    expect(written.requirementState).toMatchObject({
+      requirementId: ENCRYPTION,
+      implementationLevel: null,
+      implementationStatement: null,
+      owner: null,
+    });
+    const events = await requirementEvents(admin, ENCRYPTION);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      before: null,
+      after: { plannedImplementation: 'Deploy FIPS modules.', naRationale: 'Pending scoping' },
+    });
+    const after = assessmentViewSchema.parse((await admin.get('/api/assessment')).json());
+    expect(after.evaluation).toEqual(view.evaluation);
+    expect(after.requirementStates).toHaveLength(1);
+  });
+
+  it('persists across restart', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rampart-reqfields-'));
+    cleanups.push(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+    const path = join(dir, 'rampart.sqlite');
+    const now = () => START;
+
+    function start(): { app: FastifyInstance; close: () => Promise<void> } {
+      const handle = openDb(path);
+      runMigrations(handle.db);
+      const config = loadConfig({ DATABASE_PATH: path, LOG_LEVEL: 'silent' });
+      const app = buildApp({ config, db: handle.db, now, store: createMemoryStore() });
+      let closed = false;
+      const close = async () => {
+        if (closed) return;
+        closed = true;
+        await app.close();
+        if (handle.sqlite.open) handle.sqlite.close();
+      };
+      cleanups.push(close);
+      return { app, close };
+    }
+
+    async function session(app: FastifyInstance, target: string, payload: unknown) {
+      const response = await app.inject({
+        method: 'POST',
+        url: target,
+        payload: payload as object,
+      });
+      expect(response.statusCode, response.body).toBeLessThan(300);
+      const cookie = response.cookies.find((c) => c.name === SESSION_COOKIE)?.value ?? '';
+      const { csrfToken } = sessionResponseSchema.parse(response.json());
+      return { cookie: `${SESSION_COOKIE}=${cookie}`, [CSRF_HEADER]: csrfToken ?? '' };
+    }
+
+    const first = start();
+    const headers = await session(first.app, '/api/setup', ADMIN);
+    const written = await first.app.inject({
+      method: 'PATCH',
+      url: url('AC.L2-3.1.1'),
+      headers: { ...headers, 'content-type': 'application/json' },
+      payload: JSON.stringify({
+        plannedImplementation: 'Durable plan',
+        naRationale: 'Durable why',
+      }),
+    });
+    expect(written.statusCode, written.body).toBe(200);
+    await first.close();
+
+    const second = start();
+    const again = await session(second.app, '/api/session', {
+      email: ADMIN.email,
+      password: ADMIN.password,
+    });
+    const read = assessmentViewSchema.parse(
+      (await second.app.inject({ method: 'GET', url: '/api/assessment', headers: again })).json(),
+    );
+    expect(read.requirementStates).toHaveLength(1);
+    expect(read.requirementStates[0]).toMatchObject({
+      requirementId: 'AC.L2-3.1.1',
+      plannedImplementation: 'Durable plan',
+      naRationale: 'Durable why',
+    });
   });
 });

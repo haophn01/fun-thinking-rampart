@@ -217,6 +217,8 @@ function listRequirementStates(
       requirementId: row.requirementId,
       implementationLevel: row.implementationLevel,
       implementationStatement: row.implementationStatement,
+      plannedImplementation: row.plannedImplementation,
+      naRationale: row.naRationale,
       owner:
         owner === null
           ? null
@@ -344,6 +346,8 @@ const EMPTY_STATE = {
   implementationStatement: null,
   implementationLevel: null,
   ownerId: null,
+  plannedImplementation: null,
+  naRationale: null,
 } as const;
 
 interface StateFields {
@@ -351,6 +355,8 @@ interface StateFields {
   implementationStatement: string | null;
   implementationLevel: ImplementationLevel | null;
   ownerId: string | null;
+  plannedImplementation: string | null;
+  naRationale: string | null;
 }
 
 function checkOwner(db: Reader, ownerId: string): void {
@@ -364,7 +370,8 @@ function checkOwner(db: Reader, ownerId: string): void {
 
 /**
  * `PATCH /api/assessment/requirements/:requirementId`: the implementation statement, the
- * partial-credit level and the owner. Throws `not_found` for a requirement the catalog doesn't
+ * partial-credit level, the owner, the planned implementation and the N/A rationale (the last two
+ * are stored on any status). Throws `not_found` for a requirement the catalog doesn't
  * have, and `validation_failed` for a level on a requirement without partial credit or an owner
  * who isn't an active user. A change that leaves the content as it was writes nothing.
  */
@@ -400,12 +407,16 @@ export function patchRequirement(
           implementationStatement: row.implementationStatement,
           implementationLevel: row.implementationLevel,
           ownerId: row.ownerUserId,
+          plannedImplementation: row.plannedImplementation,
+          naRationale: row.naRationale,
         }
       : { ...EMPTY_STATE };
     const { before, after } = changedFields<StateFields>(current, body, [
       'implementationStatement',
       'implementationLevel',
       'ownerId',
+      'plannedImplementation',
+      'naRationale',
     ]);
 
     if (!isEmpty(after)) {
@@ -414,6 +425,8 @@ export function patchRequirement(
         implementationStatement: next.implementationStatement,
         implementationLevel: next.implementationLevel,
         ownerUserId: next.ownerId,
+        plannedImplementation: next.plannedImplementation,
+        naRationale: next.naRationale,
         updatedBy: actor.userId,
         updatedAt: actor.now.toISOString(),
       };
@@ -441,6 +454,8 @@ export function patchRequirement(
       requirementId,
       implementationLevel: null,
       implementationStatement: null,
+      plannedImplementation: null,
+      naRationale: null,
       owner: null,
       updatedAt: actor.now.toISOString(),
     };
