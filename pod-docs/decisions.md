@@ -18,3 +18,8 @@ Consequences: the catalog count tests and the rules floor test use these values.
 Context: <why this came up>
 Decision: <what was decided>
 Consequences: <trade-offs, follow-ups> -->
+
+## 2026-11-25 — A Not Met requirement needs an open POA&M item before ACCEPT
+Context: 32 CFR 170.24(c)(2)(i)(B)(6) says each Not Met requirement must have a POA&M. The plan's Verification has the stamp read ACCEPT only after reaching 88+ "with eligible POA&M items". The sprint-planner settled this for sprint `ssp-dashboard`.
+Decision: the rules add a `poam_missing` blocker, citing 32 CFR 170.24(c)(2)(i)(B)(6), for each POA&M-eligible Not Met requirement with no **open** POA&M item. A closed item doesn't count. A requirement that is ineligible for a POA&M gets only `poam_ineligible`, never both. `Regulation` gains `poamRequiredForNotMet` (REGULATION v1.2.0). `AssessmentInput.openPoamRequirementIds` is optional: when it's absent the check is skipped, and the API always fills it. The blocker is still listed while the score is incomplete; the stamp reads HOLD either way. Built in R6 (PR #10).
+Consequences: the dashboard's ACCEPT now matches the regulation. The workspace's live and what-if scores apply the same rule, because the view carries the open list. Switching `poamRequiredForNotMet` off in the regulation data turns the rule off.

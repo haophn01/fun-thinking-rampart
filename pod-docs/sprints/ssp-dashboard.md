@@ -2,16 +2,16 @@
 
 _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: ssp-dashboard · Status: active · Generated: 2026-11-24_
 
-<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=3 waves=10 -->
+<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=3 waves=11 -->
 
 ## Status board
 
 | Wave | Slice | Title | Branch | PR | Status | Confidence | Depends on |
 |------|-------|-------|--------|----|--------|------------|------------|
-| 1 | X1 | Dependencies, Playwright harness, e2e CI job, one-command start | ssp-dashboard-x1 | — | pending | — | — |
-| 1 | R6 | Rules: a Not Met requirement needs an open POA&M item (contract change) | ssp-dashboard-r6 | — | pending | — | — |
-| 1 | P1 | System profile: contract, migration, API; redact the CSRF header in logs | ssp-dashboard-p1 | — | pending | — | — |
-| 1 | L4 | Look: dimension-line ruler, feature control frame, stamp, IR strip; mount pages | ssp-dashboard-l4 | — | pending | — | — |
+| 1 | X1 | Dependencies, Playwright harness, e2e CI job, one-command start | ssp-dashboard-x1 | merged | done | medium | — |
+| 1 | R6 | Rules: a Not Met requirement needs an open POA&M item (contract change) | ssp-dashboard-r6 | merged | done | medium | — |
+| 1 | P1 | System profile: contract, migration, API; redact the CSRF header in logs | ssp-dashboard-p1 | merged | done | high | — |
+| 1 | L4 | Look: dimension-line ruler, feature control frame, stamp, IR strip; mount pages | ssp-dashboard-l4 | merged | done | high | — |
 | 2 | S3 | SSP export: .docx builder and `GET /api/ssp/export` | ssp-dashboard-s3 | — | pending | — | X1, P1 |
 | 2 | W7 | Readiness dashboard | ssp-dashboard-w7 | — | pending | — | R6, P1, L4 |
 | 2 | W8 | SSP page: system profile form and export | ssp-dashboard-w8 | — | pending | — | P1, L4 |
