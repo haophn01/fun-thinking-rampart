@@ -32,7 +32,12 @@ const POAM_EVIDENCE_TABLES = [
   'policy_link',
   'policy_version',
 ];
-const ALL_TABLES = ['assessment', ...ASSESSMENT_TABLES, ...POAM_EVIDENCE_TABLES].sort();
+const ALL_TABLES = [
+  'assessment',
+  ...ASSESSMENT_TABLES,
+  ...POAM_EVIDENCE_TABLES,
+  'system_profile',
+].sort();
 const AT = '2026-11-23T00:00:00.000Z';
 const SHA = 'a'.repeat(64);
 
