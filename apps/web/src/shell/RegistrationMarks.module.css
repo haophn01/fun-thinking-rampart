@@ -1,0 +1,14 @@
+.mark {
+  position: absolute;
+  top: 8px;
+  color: var(--rp-ink);
+  pointer-events: none;
+}
+
+.mark[data-side='left'] {
+  left: 8px;
+}
+
+.mark[data-side='right'] {
+  right: 8px;
+}

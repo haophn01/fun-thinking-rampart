@@ -1,0 +1,167 @@
+.page {
+  display: grid;
+  gap: 24px;
+  max-width: 1200px;
+  min-width: 0;
+}
+
+.section {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+}
+
+.sectionHead {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.muted {
+  color: var(--rp-graphite);
+}
+
+.mono {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  overflow-wrap: anywhere;
+}
+
+.retry {
+  margin-top: 12px;
+}
+
+.form {
+  display: grid;
+  gap: 20px;
+  max-width: 640px;
+  min-width: 0;
+}
+
+.list {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* An evidence item as a drawing's parts card: Ink rule, Sheet face. */
+.card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  background: var(--rp-sheet);
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--rp-text-body-lg);
+  overflow-wrap: anywhere;
+}
+
+/* CUI is flagged in Ink with a square outline; red body text is reserved for Sheet-on-red. */
+.cuiTag {
+  padding: 2px 8px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.facts {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hash {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.detail {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  padding-top: 16px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+}
+
+.versions {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.version {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: var(--rp-rule) solid var(--rp-ink);
+}
+
+.versionNo {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.download {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--rp-control-min);
+  color: var(--rp-ink);
+  text-decoration: underline;
+  text-decoration-thickness: var(--rp-rule);
+  text-underline-offset: 3px;
+}
+
+.download:focus-visible {
+  outline: var(--rp-focus-width) solid var(--rp-ink);
+  outline-offset: var(--rp-focus-offset);
+}
+
+.links {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-bottom: 12px;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.objectives {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}

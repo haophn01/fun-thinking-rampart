@@ -1,0 +1,42 @@
+{
+  "name": "@rampart/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    "./contract": "./src/contract/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsup",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx db/migrate.ts"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.19.2",
+    "drizzle-kit": "^0.31.11",
+    "fflate": "^0.8.3",
+    "tsup": "^9.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/helmet": "^13.2.0",
+    "@node-rs/argon2": "^2.2.2",
+    "@rampart/catalog": "workspace:*",
+    "@rampart/rules": "workspace:*",
+    "better-sqlite3": "^12.11.1",
+    "docx": "^9.16.0",
+    "drizzle-orm": "^0.45.4",
+    "fastify": "^5.12.8",
+    "pino": "^10.4.0",
+    "zod": "^4.6.7"
+  }
+}

@@ -1,0 +1,17 @@
+node_modules
+dist
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml
+.claude
+pod-docs
+apps/api/data
+apps/api/db/migrations
+packages/catalog/sources
+packages/catalog/data
+
+# Frozen contract text, kept exactly as the foundation sprint doc writes it
+packages/catalog/src/types.ts
+packages/rules/src/types.ts
+packages/rules/src/errors.ts

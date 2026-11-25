@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Research: CMMC L2 GRC for a single contractor</title>
+<style>
+body{font-family:system-ui,Segoe UI,sans-serif;max-width:1100px;margin:24px auto;padding:0 16px;color:#1b1f24;background:#f6f7f9}
+h1{margin-bottom:4px}h2{margin-top:32px;border-bottom:2px solid #d0d5dd;padding-bottom:4px}
+.meta{color:#555;font-size:.9em}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.card{background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:12px}
+.card h3{margin:0 0 4px;font-size:1.05em}.card p{margin:4px 0;font-size:.9em}
+.tag{display:inline-block;font-size:.75em;padding:1px 7px;border-radius:10px;background:#e7ecf3;margin-right:4px}
+.warn{background:#fff4e0;border-left:4px solid #e49b0f;padding:8px 12px;border-radius:4px;margin:12px 0}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-top:6px}
+.opt{background:#eef3fb;border:1px solid #c9d6ec;border-radius:6px;padding:6px;font-size:.85em}
+.q{background:#fff;border:1px solid #d0d5dd;border-left:5px solid #3b6fd4;border-radius:8px;padding:12px;margin:10px 0}
+.q.top{border-left-color:#c0392b}
+ul{padding-left:20px}li{margin:4px 0}a{color:#1d4ed8}
+svg{vertical-align:middle}
+</style></head><body>
+<h1>CMMC Level 2 GRC for a single defense contractor</h1>
+<p class="meta">Generated 2026-11-23 · standard depth · 3 researchers · 22 searches · 29 pages read. NIST SP 800-171 r2: 110 requirements / 320 objectives.</p>
+<p><b>Assumptions:</b> single org, workflow-first V1 (controls and objectives, SSP, POA&amp;M, SPRS, evidence, policies), local dev machine, evidence may contain CUI. "Radicle GRC" read as Radiant Defense, which was not found. Rev 2 baseline comes from the brief. Most facts are vendor-stated.</p>
+<div class="warn"><b>Verify:</b> Secureframe and Exostar report a July 13, 2026 CMMC milestone suspension (Level 1/2 Self designations, C3PAO requirements being removed). No official DoD source was fetched. It could change the C3PAO target.</div>
+
+<h2>At a glance</h2>
+<svg width="640" height="150" role="img" aria-label="Summary bars">
+<text x="0" y="20" font-size="13">Closest existing thing</text><rect x="200" y="8" width="380" height="16" fill="#3b6fd4"/><text x="205" y="21" font-size="11" fill="#fff">clucraft/cmmc (MIT, 1 star) and CISO Assistant (AGPL)</text>
+<text x="0" y="55" font-size="13">Biggest gap</text><rect x="200" y="43" width="380" height="16" fill="#c0392b"/><text x="205" y="56" font-size="11" fill="#fff">objective-level (320) tracking is thin</text>
+<text x="0" y="90" font-size="13">Top practice</text><rect x="200" y="78" width="380" height="16" fill="#2e8b57"/><text x="205" y="91" font-size="11" fill="#fff">score from objective status per 32 CFR 170.24 and 170.21</text>
+<text x="0" y="125" font-size="13">Key question</text><rect x="200" y="113" width="380" height="16" fill="#e49b0f"/><text x="205" y="126" font-size="11" fill="#fff">where may CUI evidence live?</text>
+</svg>
+
+<h2>What exists</h2>
+<p class="meta">Closeness bar: share of the V1 scope covered (the planner's reading of fetched pages, not a measurement).</p>
+<div class="grid">
+<div class="card"><h3><a href="https://github.com/clucraft/cmmc">clucraft/cmmc</a></h3><span class="tag">MIT</span><span class="tag">self-hosted</span><span class="tag">1 star, 19 commits</span>
+<svg width="200" height="10"><rect width="200" height="10" fill="#e3e6ea"/><rect width="150" height="10" fill="#3b6fd4"/></svg>
+<p>110 practices, POA&amp;M, evidence, SSP to .docx, SPRS and gap reports. React, Node, Postgres/Prisma. No objectives, policies or per-user access mentioned. Hobby scale, last commit date unknown.</p></div>
+<div class="card"><h3><a href="https://github.com/intuitem/ciso-assistant-community/blob/main/README.md">CISO Assistant Community</a></h3><span class="tag">AGPL v3 + commercial enterprise/</span><span class="tag">active</span>
+<svg width="200" height="10"><rect width="200" height="10" fill="#e3e6ea"/><rect width="100" height="10" fill="#3b6fd4"/></svg>
+<p>Django + SvelteKit, Postgres/SQLite, Docker. Lists CMMC v2 and 800-171 r2/r3; evidence local, S3 or Azure Blob. CMMC scoring and POA&amp;M depth not stated.</p></div>
+<div class="card"><h3><a href="https://orcannus.github.io/ARMS">ARMS (Orcannus)</a></h3><span class="tag">$39.99, proprietary</span><span class="tag">single-user</span>
+<svg width="200" height="10"><rect width="200" height="10" fill="#e3e6ea"/><rect width="110" height="10" fill="#3b6fd4"/></svg>
+<p>Single HTML file, 110 controls, SPRS calculator, POA&amp;M Gantt, evidence catalog, data in browser storage. No source link.</p></div>
+<div class="card"><h3><a href="https://docs.defectdojo.com/federal_compliance/cmmc_assessments/">DefectDojo CMMC L2</a></h3><span class="tag">Pro, beta</span>
+<svg width="200" height="10"><rect width="200" height="10" fill="#e3e6ea"/><rect width="70" height="10" fill="#3b6fd4"/></svg>
+<p>SPRS by DoD weights, conditional status, 180-day clock. Per-requirement only, no SSP, score advisory.</p></div>
+<div class="card"><h3><a href="https://exostar.com/certification-assistant">Exostar Certification Assistant</a></h3><span class="tag">commercial, sales</span><span class="tag">alive</span>
+<svg width="200" height="10"><rect width="200" height="10" fill="#e3e6ea"/><rect width="160" height="10" fill="#3b6fd4"/></svg>
+<p>Self-assessment, SPRS, SSP, POA&amp;M, evidence and policy storage. SaaS, hosting not stated. Shows the Phase 2 suspension notice.</p></div>
+<div class="card"><h3><a href="https://www.preveil.com/grc/">PreVeil GRC</a></h3><span class="tag">commercial</span><span class="tag">alive</span>
+<svg width="200" height="10"><rect width="200" height="10" fill="#e3e6ea"/><rect width="130" height="10" fill="#3b6fd4"/></svg>
+<p>Readiness dashboard, SSP and POA&amp;M generation, evidence and tasks. SPRS not mentioned. Standalone purchase unknown.</p></div>
+<div class="card"><h3><a href="https://secureframe.com/blog/announcing-secureframe-federal.md">Secureframe Defense</a></h3><span class="tag">commercial</span><span class="tag">alive</span>
+<svg width="200" height="10"><rect width="200" height="10" fill="#e3e6ea"/><rect width="180" height="10" fill="#3b6fd4"/></svg>
+<p>SSP Builder, POA&amp;M, SPRS, gap assessments, GovCloud integrations. Says it cannot collect and store CUI.</p></div>
+<div class="card"><h3><a href="https://vanta.com/resources/best-cmmc-compliance-management-software">Vanta</a></h3><span class="tag">commercial</span><span class="tag">enterprise</span>
+<svg width="200" height="10"><rect width="200" height="10" fill="#e3e6ea"/><rect width="170" height="10" fill="#3b6fd4"/></svg>
+<p>Full-featured, Government Cloud. CMMC is an add-on to a broader platform (competitor view). Same roundup also describes Paramify (OSCAL SSP, POA&amp;M, Jira/ServiceNow) and IntelliGRC (heavy to configure); price unconfirmed.</p></div>
+<div class="card"><h3><a href="https://www.scalepad.com/controlmap/cmmc">ScalePad ControlMap</a></h3><span class="tag">commercial</span><span class="tag">MSP model</span>
+<svg width="200" height="10"><rect width="200" height="10" fill="#e3e6ea"/><rect width="140" height="10" fill="#3b6fd4"/></svg>
+<p>SSP builder, POA&amp;M, SPRS, shared responsibility matrix. Feature match, wrong customer model.</p></div>
+<div class="card"><h3><a href="https://help.drata.com/en/articles/14724964-nist-sp-800-171-rev-2-self-assessment">Drata</a></h3><span class="tag">commercial</span>
+<svg width="200" height="10"><rect width="200" height="10" fill="#e3e6ea"/><rect width="60" height="10" fill="#3b6fd4"/></svg>
+<p>Shows 171A objectives, exports status. Does not compute SPRS; SSP manual.</p></div>
+<div class="card"><h3>Building blocks</h3><span class="tag">not products</span>
+<p><a href="https://github.com/oscal-compass/compliance-trestle">compliance-trestle</a> (Apache-2.0, 293 stars, OSCAL 1.2.1). <a href="https://github.com/linville/cmmcdb">cmmcdb</a> (ISC, archived 2026-03-12). <a href="https://github.com/usnistgov/oscal-content/tree/main/nist.gov/SP800-171">NIST oscal-content</a> shows only rev3. <a href="https://csrc.nist.gov/pubs/sp/800/171/a/final">NIST 171A</a> is withdrawn (2024-05-14).</p></div>
+</div>
+
+<h2>Gaps and angles</h2>
+<ul>
+<li>Open-source CMMC trackers are thin: 1 star and 0 forks for the only self-hosted one.</li>
+<li>Objective-level (320) tracking is thin: DefectDojo is per requirement, ControlMap names 171A without describing it, Drata displays objectives. (<a href="https://docs.defectdojo.com/federal_compliance/cmmc_assessments/">DefectDojo</a>, <a href="https://www.scalepad.com/controlmap/cmmc">ControlMap</a>, <a href="https://help.drata.com/en/articles/14724964-nist-sp-800-171-rev-2-self-assessment">Drata</a>)</li>
+<li>Scoring is inconsistent: Drata won't compute SPRS; DefectDojo calls its score advisory.</li>
+<li>SOC 2-origin tools treat CMMC as a thin overlay and are heavy or costly for CMMC-only use (competitor blog). (<a href="https://www.complyjet.com/blog/best-cmmc-compliance-software">ComplyJet</a>)</li>
+<li>Single-contractor framing is underserved: Apptega and ControlMap lean MSP.</li>
+<li>SaaS vendors avoid CUI: Secureframe "cannot collect and store CUI". (<a href="https://secureframe.com/hub/cmmc/manual-vs-automated">source</a>)</li>
+<li>Catalog data: NIST OSCAL has only rev3; 171A is withdrawn and the PDF wins over CSV/XLSX. (<a href="https://csrc.nist.gov/pubs/sp/800/171/a/final">NIST</a>)</li>
+<li>Regulatory churn: vendor-reported July 13, 2026 suspension. (<a href="https://secureframe.com/blog/cmmc-level-2-compliance">Secureframe</a>, <a href="https://exostar.com/certification-assistant">Exostar</a>)</li>
+<li>User-review evidence is scarce; pricing is mostly hidden (only ARMS public).</li>
+</ul>
+
+<h2>Best practices</h2>
+<div class="grid">
+<div class="card"><h3>Score by the book</h3><p>Start 110, subtract 5/3/1 per NOT MET. 42 five-point, 14 three-point, 54 one-point (arithmetic from the page). MFA 3.5.3 and encryption 3.13.11 are partial credit (-3 or -5). <a href="https://www.law.cornell.edu/cfr/text/32/170.24">32 CFR 170.24</a></p></div>
+<div class="card"><h3>POA&amp;M as rules engine</h3><p>Score at least 88; items 1 point or less (3.13.11 at 3 is the exception); six requirements barred; 180-day closeout. <a href="https://www.law.cornell.edu/cfr/text/32/170.21">32 CFR 170.21</a></p></div>
+<div class="card"><h3>Evidence per objective</h3><p>Every objective carries evidence. <a href="https://help.drata.com/en/articles/14724964-nist-sp-800-171-rev-2-self-assessment">Drata</a></p></div>
+<div class="card"><h3>Catalog separate from records</h3><p>Mirror OSCAL: catalog, SSP, linked POA&amp;M. Import/export, don't author in OSCAL. <a href="https://pages.nist.gov/OSCAL/learn/concepts/layer/implementation/ssp">OSCAL SSP</a>, <a href="https://pages.nist.gov/OSCAL/learn/concepts/layer/assessment/poam/">POA&amp;M</a>, <a href="https://github.com/oscal-compass/compliance-trestle">trestle</a></p></div>
+<div class="card"><h3>SSP is mandatory</h3><p>CA.L2-3.12.4 needs an SSP at assessment; a POA&amp;M doesn't replace implementing. Keep the POA&amp;M living.</p></div>
+<div class="card"><h3>CUI hosting</h3><p>External clouds holding covered defense information need FedRAMP Moderate equivalent; incidents reported in 72 hours. Self-hosted case not addressed in the clause fetched. <a href="https://www.law.cornell.edu/cfr/text/48/252.204-7012">DFARS 7012</a></p></div>
+</div>
+
+<h2>Ideas to consider</h2>
+<ul>
+<li>Objectives as first-class rows; derive requirement status, SPRS and SSP from them.</li>
+<li>Pure-function scoring and POA&amp;M library with table-driven tests (plus known DoD example scores, own idea).</li>
+<li>Conditional status view: live score, 88 line, barred-requirement warnings, 180-day countdown.</li>
+<li>Versioned catalog file with checksum and per-family count test.</li>
+<li>Rules and weights as data, not code (own idea).</li>
+<li>Evidence store behind an interface with hashing and encryption at rest (local now, S3/Blob later).</li>
+<li>Self-hosted single-org positioning that can hold CUI evidence.</li>
+<li>OSCAL-compatible, not OSCAL-native, data model with OSCAL JSON plus DOCX/PDF export (own idea).</li>
+<li>Fork or study clucraft (MIT) or CISO Assistant (check AGPL first).</li>
+</ul>
+
+<h2>Questions for the plan</h2>
+<div class="q top"><b>Where may evidence live while it may contain CUI?</b><p>An external cloud holding CDI needs FedRAMP Moderate equivalent; a dev laptop is still a system holding CUI.</p>
+<div class="opts"><div class="opt">No real CUI in V1 (metadata and links)</div><div class="opt">Encrypted local store with controls</div><div class="opt">Defer until hosting decided</div></div></div>
+<div class="q top"><b>Is the target still a C3PAO assessment?</b><p>Two vendors report a July 2026 suspension; no DoD source fetched.</p>
+<div class="opts"><div class="opt">Verify, then keep C3PAO</div><div class="opt">Support self and C3PAO</div></div></div>
+<div class="q"><b>Build, fork or buy?</b><p>clucraft: fits scope, tiny. CISO Assistant: broad, AGPL, CMMC depth unverified. Commercial tools already cover V1 scope; prices hidden.</p>
+<div class="opts"><div class="opt">Fork clucraft</div><div class="opt">Fork CISO Assistant</div><div class="opt">Reference only / scratch</div><div class="opt">Buy or hybrid</div></div></div>
+<div class="q"><b>Objectives first-class, or 110 requirements only?</b><p>A C3PAO assesses objectives; most products track requirements.</p>
+<div class="opts"><div class="opt">Objectives first-class</div><div class="opt">Requirements plus checklist</div></div></div>
+<div class="q"><b>Source for the Rev 2 catalog?</b><p>NIST OSCAL shows only rev3; 171A is withdrawn.</p>
+<div class="opts"><div class="opt">Build from PDF and spreadsheet</div><div class="opt">CISO Assistant r2 library (unchecked)</div><div class="opt">Rev 3</div></div></div>
+<div class="q"><b>Which authority encodes weights and POA&amp;M rules?</b><p>Vendor sources differ in detail.</p>
+<div class="opts"><div class="opt">32 CFR 170.21/170.24 plus DoD methodology v1.2.1, cited per rule</div></div></div>
+<div class="q"><b>Partial-credit items (3.5.3, 3.13.11)?</b><div class="opts"><div class="opt">Implementation-level enum</div><div class="opt">Special-case fields</div><div class="opt">Binary with note</div></div></div>
+<div class="q"><b>POA&amp;M granularity?</b><p>170.24 requires one per NOT MET requirement.</p>
+<div class="opts"><div class="opt">Requirement-level</div><div class="opt">Objective-level linked to requirement</div></div></div>
+<div class="q"><b>Is OSCAL the internal model?</b><p>Objective-level encoding unconfirmed.</p>
+<div class="opts"><div class="opt">Native OSCAL</div><div class="opt">Relational with import/export</div><div class="opt">No OSCAL in V1</div></div></div>
+<div class="q"><b>SSP export formats?</b><div class="opts"><div class="opt">docx only</div><div class="opt">docx plus OSCAL</div></div></div>
+
+<h2>Not found / unverified leads</h2>
+<ul>
+<li>Radicle GRC / Radiant Defense: no evidence found.</li>
+<li>Official DoD source for the July 13, 2026 suspension: none fetched.</li>
+<li>Unverified leads (search results only, not facts): a DoD training deck on Rev 2; GovReady-Q; Paramify pricing of $8k to $25k a year.</li>
+<li>Most vendor pricing; PreVeil GRC without its enclave; CISO Assistant CMMC depth; OSCAL objective encoding; DoD methodology v1.2.1 PDF.</li>
+</ul>
+<h2>Suspect pages</h2><p>none</p>
+<p class="meta">Full source list is in the markdown report (cmmc-l2-grc.md).</p>
+</body></html>

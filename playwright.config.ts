@@ -1,0 +1,72 @@
+import { mkdtempSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { defineConfig, devices } from '@playwright/test';
+
+// `@rampart/catalog` imports its JSON data without `with { type: 'json' }` (Vite, Vitest, tsx and
+// tsup don't need it), but Playwright loads specs through Node's own ESM loader, which refuses
+// that import. This resolve hook marks .json imports as JSON. Every Playwright process that runs
+// specs loads this config, so each one gets the hook.
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const result = nextResolve(specifier, context);
+    const isJson = /\.json$/i.test(new URL(result.url).pathname);
+    if (isJson && context.importAttributes.type === undefined) {
+      return { ...result, importAttributes: { ...context.importAttributes, type: 'json' } };
+    }
+    return result;
+  },
+});
+
+// Fresh state every run: one new folder per `pnpm e2e`, shared by every worker through the env.
+process.env.E2E_RUN_DIR ??= mkdtempSync(join(tmpdir(), 'rampart-e2e-'));
+const runDir = process.env.E2E_RUN_DIR;
+
+const HOST = '127.0.0.1';
+const webPort = process.env.E2E_WEB_PORT ?? '3290';
+const apiPort = process.env.E2E_API_PORT ?? '3291';
+
+export default defineConfig({
+  testDir: 'e2e',
+  testMatch: '*.spec.ts',
+  fullyParallel: false,
+  workers: 1,
+  retries: 0,
+  forbidOnly: process.env.CI !== undefined,
+  timeout: 60_000,
+  reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
+  outputDir: 'test-results',
+  use: {
+    baseURL: `http://${HOST}:${webPort}`,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  webServer: [
+    {
+      // The api without watch, on a database and file store that live only for this run.
+      command: 'pnpm --filter @rampart/api exec tsx src/server.ts',
+      url: `http://${HOST}:${apiPort}/api/health`,
+      env: {
+        API_PORT: apiPort,
+        DATABASE_PATH: join(runDir, 'e2e.sqlite'),
+        STORAGE_PATH: join(runDir, 'files'),
+        LOG_LEVEL: 'warn',
+      },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      command: 'pnpm --filter @rampart/web exec vite',
+      url: `http://${HOST}:${webPort}/`,
+      env: { WEB_PORT: webPort, API_PORT: apiPort },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  ],
+});

@@ -1,0 +1,10 @@
+packages:
+  - packages/*
+  - apps/*
+
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+
+# Supply-chain guard: never resolve a version published less than a day ago.
+minimumReleaseAge: 1440

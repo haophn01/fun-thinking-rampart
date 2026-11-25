@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Dev-only specimen of the look (pnpm dev, then /look.html). Not a build input. -->
+    <title>Look specimen</title>
+  </head>
+  <body>
+    <div id="specimen"></div>
+    <script type="module">
+      import '/src/look/fonts.ts';
+      import '/src/look/base.css';
+      import { createElement } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import { Specimen } from '/src/look/Specimen.tsx';
+
+      createRoot(document.getElementById('specimen')).render(createElement(Specimen));
+    </script>
+  </body>
+</html>

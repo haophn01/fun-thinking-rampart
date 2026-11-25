@@ -1,0 +1,237 @@
+import {
+  INELIGIBLE_REASON_LABELS,
+  calendarDateSchema,
+  type CreatePoamItemRequest,
+  type Milestone,
+  type PatchPoamItemRequest,
+  type PoamItem,
+  type User,
+} from '@rampart/api/contract';
+import { useRef, useState, type SyntheticEvent } from 'react';
+import type { ApiError } from '../../api/client';
+import { Alert, Button, Select, TextArea, TextField } from '../../look';
+import {
+  DATE_ERROR,
+  MilestonesEditor,
+  checkMilestones,
+  nextKey,
+  toMilestones,
+  type MilestoneDraft,
+  type MilestoneErrors,
+} from './MilestonesEditor';
+import styles from './poam.module.css';
+
+export type FormMode =
+  | { kind: 'create'; requirementId: string; requirementText: string }
+  | { kind: 'edit'; item: PoamItem; requirementText: string };
+
+export interface PoamFormProps {
+  mode: FormMode;
+  users: readonly User[];
+  /** Sends the body; resolves to `null` when saved, or the error to show. */
+  onCreate: (body: CreatePoamItemRequest) => Promise<ApiError | null>;
+  onPatch: (id: string, body: PatchPoamItemRequest) => Promise<ApiError | null>;
+  onClose: () => void;
+}
+
+interface Reason {
+  code: keyof typeof INELIGIBLE_REASON_LABELS;
+  citation: string;
+}
+
+/** The `reasons` of a `poam_ineligible` error's details, or none if they aren't shaped so. */
+function reasonsOf(error: ApiError): Reason[] {
+  const details = error.details as { reasons?: unknown } | undefined;
+  if (!Array.isArray(details?.reasons)) return [];
+  const reasons: Reason[] = [];
+  for (const entry of details.reasons as unknown[]) {
+    const reason = entry as Partial<Reason> | null;
+    if (
+      reason !== null &&
+      typeof reason.code === 'string' &&
+      reason.code in INELIGIBLE_REASON_LABELS &&
+      typeof reason.citation === 'string'
+    ) {
+      reasons.push({ code: reason.code, citation: reason.citation });
+    }
+  }
+  return reasons;
+}
+
+function failureAlert(error: ApiError) {
+  if (error.code === 'poam_ineligible') {
+    const reasons = reasonsOf(error);
+    return (
+      <Alert tone="error" title="This requirement can't go on a POA&M">
+        {reasons.length > 0 ? (
+          <div className={styles.reasons}>
+            {reasons.map((reason) => (
+              <p key={reason.code}>
+                {INELIGIBLE_REASON_LABELS[reason.code]}{' '}
+                <span className={styles.citation}>{reason.citation}</span>
+              </p>
+            ))}
+          </div>
+        ) : (
+          <p>{error.message}</p>
+        )}
+      </Alert>
+    );
+  }
+  return (
+    <Alert tone="error" title="The item was not saved">
+      <p>{error.message}</p>
+      {error.requestId !== undefined && (
+        <p className={styles.mono}>{`Request ID: ${error.requestId}`}</p>
+      )}
+    </Alert>
+  );
+}
+
+function sameMilestones(a: readonly Milestone[], b: readonly Milestone[]): boolean {
+  const key = (m: Milestone) => [m.title, m.due, m.doneOn ?? ''];
+  return JSON.stringify(a.map(key)) === JSON.stringify(b.map(key));
+}
+
+interface FieldErrors {
+  plan?: string;
+  due?: string;
+  milestones: MilestoneErrors[];
+}
+
+/** A new item (the requirement is fixed) or an edit of an open one. */
+export function PoamForm({ mode, users, onCreate, onPatch, onClose }: PoamFormProps) {
+  const item = mode.kind === 'edit' ? mode.item : null;
+  const [plan, setPlan] = useState(item?.plan ?? '');
+  const [due, setDue] = useState(item?.due ?? '');
+  const [ownerId, setOwnerId] = useState(item?.owner?.id ?? '');
+  const [rows, setRows] = useState<MilestoneDraft[]>(
+    () =>
+      item?.milestones.map((m) => ({
+        key: nextKey(),
+        title: m.title,
+        due: m.due,
+        doneOn: m.doneOn ?? '',
+      })) ?? [],
+  );
+  const [errors, setErrors] = useState<FieldErrors>({ milestones: [] });
+  const [failure, setFailure] = useState<ApiError | null>(null);
+  const [pending, setPending] = useState(false);
+  const sending = useRef(false);
+
+  const current = item?.owner ?? null;
+  const choices = users.filter((u) => u.active);
+  const ownerMissing = current !== null && !choices.some((u) => u.id === current.id);
+  const ownerChoices = ownerMissing ? [current, ...choices] : choices;
+
+  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (sending.current) return;
+
+    const next: FieldErrors = { milestones: checkMilestones(rows, due) };
+    if (plan.trim() === '') next.plan = 'Enter the plan of action.';
+    if (!calendarDateSchema.safeParse(due.trim()).success) next.due = DATE_ERROR;
+    setErrors(next);
+    if (next.plan !== undefined || next.due !== undefined) return;
+    if (next.milestones.some((e) => Object.keys(e).length > 0)) return;
+
+    const milestones = toMilestones(rows);
+    sending.current = true;
+    setPending(true);
+    setFailure(null);
+    let result: ApiError | null;
+    if (item === null) {
+      const body: CreatePoamItemRequest = {
+        requirementId: mode.kind === 'create' ? mode.requirementId : '',
+        plan: plan.trim(),
+        due: due.trim(),
+        milestones,
+      };
+      if (ownerId !== '') body.ownerId = ownerId;
+      result = await onCreate(body);
+    } else {
+      const body: PatchPoamItemRequest = {};
+      if (plan.trim() !== item.plan) body.plan = plan.trim();
+      if (due.trim() !== item.due) body.due = due.trim();
+      if (ownerId !== (item.owner?.id ?? '')) body.ownerId = ownerId === '' ? null : ownerId;
+      if (!sameMilestones(milestones, item.milestones)) {
+        body.milestones = milestones;
+      }
+      result = Object.keys(body).length === 0 ? null : await onPatch(item.id, body);
+    }
+    sending.current = false;
+    setPending(false);
+    if (result === null) onClose();
+    else setFailure(result);
+  }
+
+  const title = mode.kind === 'create' ? 'New POA&M item' : 'Edit POA&M item';
+  const requirementId = mode.kind === 'create' ? mode.requirementId : mode.item.requirementId;
+  return (
+    <form
+      className={styles.form}
+      aria-label={title}
+      noValidate
+      onSubmit={(event) => {
+        void onSubmit(event);
+      }}
+    >
+      <h3 className={styles.formTitle}>{title}</h3>
+      <p>
+        <span className={styles.mono}>{requirementId}</span> {mode.requirementText}
+      </p>
+      {failure !== null && failureAlert(failure)}
+      <TextArea
+        label="Plan"
+        rows={4}
+        maxLength={20000}
+        value={plan}
+        disabled={pending}
+        error={errors.plan}
+        onChange={(event) => {
+          setPlan(event.target.value);
+        }}
+      />
+      <TextField
+        label="Due date"
+        placeholder="YYYY-MM-DD"
+        autoComplete="off"
+        value={due}
+        disabled={pending}
+        error={errors.due}
+        onChange={(event) => {
+          setDue(event.target.value);
+        }}
+      />
+      <Select
+        label="Owner"
+        value={ownerId}
+        disabled={pending}
+        onChange={(event) => {
+          setOwnerId(event.target.value);
+        }}
+      >
+        <option value="">Unassigned</option>
+        {ownerChoices.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.active ? u.displayName : `${u.displayName} (inactive)`}
+          </option>
+        ))}
+      </Select>
+      <MilestonesEditor
+        rows={rows}
+        errors={errors.milestones}
+        disabled={pending}
+        onChange={setRows}
+      />
+      <div className={styles.actions}>
+        <Button type="submit" variant="primary" disabled={pending}>
+          {pending ? 'Saving…' : 'Save item'}
+        </Button>
+        <Button disabled={pending} onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
