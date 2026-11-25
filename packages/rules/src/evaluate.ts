@@ -52,13 +52,21 @@ export function evaluateAssessment(
 ): Evaluation {
   const outcomes = deriveRequirementOutcomes(catalog, input);
   const score = computeScore(catalog, input);
-  return { outcomes, score, conditional: checkConditional(catalog, outcomes, score, regulation) };
+  const conditional = checkConditional(
+    catalog,
+    outcomes,
+    score,
+    regulation,
+    input.openPoamRequirementIds,
+  );
+  return { outcomes, score, conditional };
 }
 
 /**
  * A new input with `changes` applied; the argument is not mutated. A changed objective that
  * already has a result is replaced in place; one with no result is added after the existing
- * results, in catalog order. A level of `null` removes the requirement's level. Throws
+ * results, in catalog order. A level of `null` removes the requirement's level. The open POA&M
+ * list is kept as it was (a copy), and stays absent when the input has none. Throws
  * RulesInputError for an unknown objective or requirement, a level (or `null`) on a requirement
  * without partial credit, and anything `deriveRequirementOutcomes` would reject in the result.
  */
@@ -119,7 +127,14 @@ export function applyWhatIf(
     }
   }
 
-  const next: AssessmentInput = { objectiveResults, implementationLevels };
+  const next: AssessmentInput =
+    input.openPoamRequirementIds === undefined
+      ? { objectiveResults, implementationLevels }
+      : {
+          objectiveResults,
+          implementationLevels,
+          openPoamRequirementIds: [...input.openPoamRequirementIds],
+        };
   validateInput(catalog, next);
   return next;
 }

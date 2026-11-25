@@ -8,11 +8,12 @@ const CITED = /^32 CFR 170\.(21|24)\(/;
 describe('REGULATION', () => {
   it('values are cited data', () => {
     expect(REGULATION.id).toBe('cmmc-32-cfr-170');
-    expect(REGULATION.version).toBe('1.1.0');
+    expect(REGULATION.version).toBe('1.2.0');
 
     const citations = [
       REGULATION.conditionalMinScore.citation,
       REGULATION.poamNotMetOnly.citation,
+      REGULATION.poamRequiredForNotMet.citation,
       REGULATION.poamMaxItemPoints.citation,
       REGULATION.poamBarred.citation,
       REGULATION.closeoutWindowDays.citation,
@@ -65,6 +66,18 @@ describe('REGULATION', () => {
       'https://www.law.cornell.edu/cfr/text/32/170.21',
       'https://www.law.cornell.edu/cfr/text/32/170.24',
     ]);
+  });
+
+  it('poamRequiredForNotMet is cited data', () => {
+    // 32 CFR 170.24(c)(2)(i)(B)(6): "For each NOT MET security requirement the OSA must have a
+    // POA&M", so Conditional status needs an open item for every Not Met requirement.
+    expect(REGULATION.poamRequiredForNotMet).toEqual({
+      value: true,
+      citation: '32 CFR 170.24(c)(2)(i)(B)(6)',
+    });
+    expect(Object.isFrozen(REGULATION.poamRequiredForNotMet)).toBe(true);
+    // The new rule is a minor version of the regulation data.
+    expect(REGULATION.version).toBe('1.2.0');
   });
 
   it('is frozen so callers cannot change the shared data', () => {

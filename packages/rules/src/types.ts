@@ -6,7 +6,8 @@ export type ImplementationLevel = 'none' | 'partial';           // only for requ
 export type AssessmentType = 'self' | 'c3pao';
 export interface ObjectiveResult { objectiveId: ObjectiveId; status: ObjectiveStatus }
 export interface AssessmentInput { objectiveResults: readonly ObjectiveResult[];
-  implementationLevels: Readonly<Partial<Record<RequirementId, ImplementationLevel>>> }
+  implementationLevels: Readonly<Partial<Record<RequirementId, ImplementationLevel>>>;
+  openPoamRequirementIds?: readonly RequirementId[] }   // absent: the caller has no POA&M data
 export interface RequirementOutcome { requirementId: RequirementId; status: RequirementStatus; allNa: boolean;
   counts: Record<ObjectiveStatus, number>; implementationLevel: ImplementationLevel | null; deduction: number }
 export interface Deduction { requirementId: RequirementId; points: number }
@@ -21,12 +22,14 @@ export type Blocker =
   | { code: 'prerequisite_not_met'; requirementId: RequirementId; citation: string }
   | { code: 'not_assessed'; requirementIds: RequirementId[] }
   | { code: 'below_threshold'; score: number; threshold: number; citation: string }
-  | { code: 'poam_ineligible'; requirementId: RequirementId; reasons: IneligibleCode[]; citation: string };
+  | { code: 'poam_ineligible'; requirementId: RequirementId; reasons: IneligibleCode[]; citation: string }
+  | { code: 'poam_missing'; requirementId: RequirementId; citation: string };
 export interface ConditionalResult { status: 'final' | 'conditional' | 'not_eligible' | 'incomplete'; blockers: Blocker[] }
 export interface CloseoutClock { conditionalStatusDate: string; deadline: string; daysRemaining: number; expired: boolean }
 export interface Cited<T> { value: T; citation: string }
 export interface Regulation { id: 'cmmc-32-cfr-170'; version: string; sources: { title: string; url: string }[];
-  conditionalMinScore: Cited<number>; poamNotMetOnly: Cited<boolean>; poamMaxItemPoints: Cited<number>;
+  conditionalMinScore: Cited<number>; poamNotMetOnly: Cited<boolean>; poamRequiredForNotMet: Cited<boolean>;
+  poamMaxItemPoints: Cited<number>;
   poamPointExceptions: { requirementId: RequirementId; implementationLevel: ImplementationLevel; maxPoints: number; citation: string }[];
   poamBarred: Cited<RequirementId[]>; closeoutWindowDays: Cited<number>;
   closeoutConfirmedBy: Cited<Record<AssessmentType, 'organization' | 'c3pao'>> }
