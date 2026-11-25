@@ -216,18 +216,51 @@ describe('AuditLog', () => {
     for (const type of AUDIT_ENTITY_TYPES) expect(labelled(entities[type]), type).toBe(true);
     expect(Object.keys(ACTION_LABELS).sort()).toEqual([...AUDIT_ACTIONS].sort());
     expect(Object.keys(ENTITY_LABELS).sort()).toEqual([...AUDIT_ENTITY_TYPES].sort());
-    // This sprint's actions and entities are among them.
-    expect(AUDIT_ACTIONS).toEqual(
-      expect.arrayContaining([
-        'poam_item.closed',
-        'evidence.version_added',
-        'policy.links_updated',
-        'system_profile.updated',
-      ]),
+    // The ssp-data actions and entities are among them, each with its own label.
+    const added = {
+      'ssp_profile.updated': 'SSP details changed',
+      'system_role.created': 'System role created',
+      'system_role.updated': 'System role changed',
+      'system_role.removed': 'System role removed',
+      'asset.created': 'Asset created',
+      'asset.updated': 'Asset changed',
+      'asset.removed': 'Asset removed',
+      'service_provider.created': 'Service provider created',
+      'service_provider.updated': 'Service provider changed',
+      'service_provider.removed': 'Service provider removed',
+      'responsibility.updated': 'Responsibility changed',
+      'diagram_link.created': 'Diagram link created',
+      'diagram_link.updated': 'Diagram link changed',
+      'diagram_link.removed': 'Diagram link removed',
+      'ssp_revision.created': 'SSP revision recorded',
+      'ssp_approval.created': 'SSP approval created',
+      'ssp_approval.updated': 'SSP approval changed',
+      'ssp_approval.removed': 'SSP approval removed',
+    };
+    const addedEntities = {
+      ssp_profile: 'SSP details',
+      system_role: 'System role',
+      asset: 'Asset',
+      service_provider: 'Service provider',
+      responsibility: 'Responsibility',
+      diagram_link: 'Diagram link',
+      ssp_revision: 'SSP revision',
+      ssp_approval: 'SSP approval',
+    };
+    expect(AUDIT_ACTIONS.slice(-Object.keys(added).length)).toEqual(Object.keys(added));
+    expect(AUDIT_ENTITY_TYPES.slice(-Object.keys(addedEntities).length)).toEqual(
+      Object.keys(addedEntities),
     );
-    expect(AUDIT_ENTITY_TYPES).toEqual(expect.arrayContaining(['system_profile']));
+    for (const [action, label] of Object.entries(added))
+      expect(actions[action], action).toBe(label);
+    for (const [type, label] of Object.entries(addedEntities)) {
+      expect(entities[type], type).toBe(label);
+    }
     expect(actions['system_profile.updated']).toBe('System profile changed');
     expect(entities.system_profile).toBe('System profile');
+    // Labels are told apart in the log and the filter.
+    expect(new Set(Object.values(ACTION_LABELS)).size).toBe(AUDIT_ACTIONS.length);
+    expect(new Set(Object.values(ENTITY_LABELS)).size).toBe(AUDIT_ENTITY_TYPES.length);
 
     // The entity filter offers every type by its label.
     fakeApi({ ...BASE, 'GET /api/audit': () => json(200, { events: [], nextBefore: null }) });
@@ -238,6 +271,9 @@ describe('AuditLog', () => {
       'All',
       ...AUDIT_ENTITY_TYPES.map((type) => entities[type]),
     ]);
+    for (const label of Object.values(addedEntities)) {
+      expect(options.map((option) => option.textContent)).toContain(label);
+    }
   });
 
   it('section order', async () => {
