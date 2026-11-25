@@ -24,3 +24,4 @@ Resolve inline; never delete a pending entry. Decision-worthy → a one-liner in
   - repeated `actorOf`, `requireAssessment` and `utcDate`
 
   `PlaceholderPage` in `apps/web/src/App.tsx:9,39` is unreachable dead code. **Resolution:** pending
+- `[2026-11-25 · PENDING · orchestrator → human · plan: ssp-export-v2]` gate 6 (escalation-valve): by policy, the final plan PR `ssp-export-v2` → `main` would be held for the human, because the plan adds migration 0005 (additive only). Undo: revert the final PR's merge commit on `main`. The added tables and columns stay in any local database, unused. **Resolution:** pending **Answer (human):** you merge it
