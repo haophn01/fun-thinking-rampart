@@ -200,6 +200,7 @@ describe('manual revisions', () => {
     expect(response.statusCode).toBe(400);
     expect(errorOf(response)).toMatchObject({
       code: 'validation_failed',
+      message: "The revision date can't be after today.",
       details: [{ path: ['date'] }],
     });
     expect(h.db.select().from(sspRevision).all()).toEqual([]);
@@ -371,7 +372,10 @@ describe('approvals', () => {
     const { h, admin } = await world();
     const created = await admin.post(APPROVALS, { name: 'A', title: 'B', approvedOn: TOMORROW });
     expect(created.statusCode).toBe(400);
-    expect(errorOf(created)).toMatchObject({ details: [{ path: ['approvedOn'] }] });
+    expect(errorOf(created)).toMatchObject({
+      message: "The approval date can't be after today.",
+      details: [{ path: ['approvedOn'] }],
+    });
     const ok = await addApproval(admin, { name: 'A', title: 'B', approvedOn: TODAY });
     const future = await admin.patch(`${APPROVALS}/${ok.id}`, { approvedOn: TOMORROW });
     expect(future.statusCode).toBe(400);

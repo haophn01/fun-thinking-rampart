@@ -57,9 +57,14 @@ const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
  * Refuses a date after the UTC today of `now` with a 400 on `field`. Runs before any lookup, as
  * the contract's check order puts body errors before 404.
  */
-function refuseFuture(date: string | null | undefined, now: Date, field: string): void {
+function refuseFuture(
+  date: string | null | undefined,
+  now: Date,
+  field: string,
+  label: string,
+): void {
   if (date === null || date === undefined || date <= utcDate(now)) return;
-  throw new AppError('validation_failed', `The ${field} can't be after today.`, {
+  throw new AppError('validation_failed', `The ${label} can't be after today.`, {
     details: [{ path: [field], message: 'Must be today or earlier' }],
   });
 }
@@ -169,7 +174,7 @@ function insertRevision(
 
 /** `POST /api/ssp/revisions`: a manual entry dated today or earlier. Revisions never change. */
 export function createRevision(db: AppDb, body: CreateRevisionRequest, actor: Actor): SspRevision {
-  refuseFuture(body.date, actor.now, 'date');
+  refuseFuture(body.date, actor.now, 'date', 'revision date');
   return db.transaction((tx) =>
     insertRevision(tx, requireAssessmentId(tx), actor, {
       kind: 'manual',
@@ -226,7 +231,7 @@ function requireApproval(db: Reader, assessmentId: string, id: string): Approval
 
 /** `POST /api/ssp/approvals` (admin). */
 export function createApproval(db: AppDb, body: CreateApprovalRequest, actor: Actor): SspApproval {
-  refuseFuture(body.approvedOn, actor.now, 'approvedOn');
+  refuseFuture(body.approvedOn, actor.now, 'approvedOn', 'approval date');
   return db.transaction((tx) => {
     const assessmentId = requireAssessmentId(tx);
     const stamp = actor.now.toISOString();
@@ -260,7 +265,7 @@ export function patchApproval(
   body: PatchApprovalRequest,
   actor: Actor,
 ): SspApproval {
-  refuseFuture(body.approvedOn, actor.now, 'approvedOn');
+  refuseFuture(body.approvedOn, actor.now, 'approvedOn', 'approval date');
   return db.transaction((tx) => {
     const assessmentId = requireAssessmentId(tx);
     const current = requireApproval(tx, assessmentId, id);
