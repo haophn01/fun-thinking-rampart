@@ -11,11 +11,11 @@ _From plan: pod-docs/plans/ssp-export-v2.md · Slug: ssp-data · Status: active 
 | 1 | K3 | Contract: SSP data schemas, requirement fields, audit actions, `provider_in_use` | ssp-data-k3 | #15 | done | d34fb5b | — |
 | 1 | D3 | DB: migration 0005, schema, `ssp-data` module scaffold, brief | ssp-data-d3 | #15 | done | d34fb5b | — |
 | 1 | T1 | `templates/` reference folder and SOURCES.md | ssp-data-t1 | #15 | done | d34fb5b | — |
-| 2 | A7 | API: SSP profile (identification, CUI, environment, review) and roles | ssp-data-a7 | — | pending | — | K3, D3 |
-| 2 | A8 | API: assets and diagram links | ssp-data-a8 | — | pending | — | K3, D3 |
-| 2 | A9 | API: service providers and the responsibility matrix | ssp-data-a9 | — | pending | — | K3, D3 |
-| 2 | A10 | API: document control (revisions, approvals, review status) | ssp-data-a10 | — | pending | — | K3, D3 |
-| 2 | A11 | API: planned implementation and N/A rationale on requirements | ssp-data-a11 | — | pending | — | K3, D3 |
+| 2 | A7 | API: SSP profile (identification, CUI, environment, review) and roles | ssp-data-a7 | #16 | done | 68d5136 | K3, D3 |
+| 2 | A8 | API: assets and diagram links | ssp-data-a8 | #16 | done | 68d5136 | K3, D3 |
+| 2 | A9 | API: service providers and the responsibility matrix | ssp-data-a9 | #16 | done | 68d5136 | K3, D3 |
+| 2 | A10 | API: document control (revisions, approvals, review status) | ssp-data-a10 | #16 | done | 68d5136 | K3, D3 |
+| 2 | A11 | API: planned implementation and N/A rationale on requirements | ssp-data-a11 | #16 | done | 68d5136 | K3, D3 |
 
 Plan branch `ssp-export-v2`; wave heads `ssp-data-w1`, `ssp-data-w2`. Merge target `main`. No UI this sprint (the workspace is sprint `ssp-workspace`), so no Look slice and no `[manual]` look checks.
 
@@ -233,3 +233,26 @@ Everything in the four archived `cmmc-l2-grc` Shared contracts still holds (tool
 - **Depends on:** K3, D3
 - **One-way door:** none
 - **Model:** sonnet
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date (`main` has no new commits since 440ff09).
+- **Slices shipped:** K3, D3 and T1 (PR #15, d34fb5b); A7, A8, A9, A10 and A11 (PR #16, 68d5136), both into `ssp-export-v2`.
+- **One-way door:** D3, migration 0005. The human approved it ("merge the migration wave"). Before merging, the human's DB was backed up to `apps/api/data/rampart.pre-0005.sqlite` with the SQLite online backup. The human's app migrated on reload: 6 migrations, account intact.
+- **Queue entries:** resolved 2: the human's approval of the D3 door, and A11 closing K3's interim drop of `plannedImplementation`/`naRationale`. Added: the duplicated `actorOf` helper, appended to the open someday duplication item. A10's PENDING (overdue through the real profile route) was closed by the orchestrator's cross-slice runtime check on PR #16.
+- **Slice log:**
+  - K3: opus · medium · test-first yes · runtime: the audit filter in a browser accepts the 8 new entity types · 7 NOTEs · time lost: none
+  - D3: opus · medium · test-first yes (10 tests) · runtime: a real 0004 DB migrated twice with every row kept, the app and export still worked, and data survived a restart · deliberately tightened the responsibility CHECK (null party + provider) · time lost: none
+  - T1: sonnet · medium · test-first yes (red was ENOENT, not an assertion) · 4 NIST files committed and the DoD guides linked (they return 403) · gitleaks run only in CI · time lost: one classifier refusal
+  - A7: opus · high · test-first yes · runtime: curl on a scratch API, data survived a restart · 4 NOTEs (actorOf duplicated) · time lost: none
+  - A8: opus · high · test-first yes (10 tests) · runtime: PNG link embeddable, CUI link never embeddable, lists byte-identical after a restart · time lost: none
+  - A9: opus · high · test-first yes (8 tests) · runtime: 409 `provider_in_use`, a rename reflected in the matrix, restart · time lost: none
+  - A10: opus · medium · test-first yes (2 stub-green tests noted) · runtime: dates, admin-only approvals, overdue after a restart (profile row written directly) · time lost: a few minutes (test clock vs session idle)
+  - A11: sonnet · high · test-first yes · runtime: an naRationale-only PATCH was stored and audited · time lost: none
+  - Stalls: one. The sprint-planner hit the usage limit and was resumed.
+- **Wave checks:** both waves passed `pnpm verify` (725, then 779 tests), `pnpm e2e` (11) and root `tsc`. CI was green on both OSes for #15 and #16. There were no wave fixes. Orchestrator slip: wave 1's first check run used a `.cmd`-only pnpm shim that `timeout` couldn't call. It was rerun with an sh shim, and the engineer prompts now ask for both shims.
+- **Agent context at hand-back:** about 1,210,000 tokens. This is the sum of each agent's reported `subagent_tokens`, i.e. its final context size, not tokens billed.
+- **For the next sprint (ssp-workspace):**
+  - Web clients for every route in this sprint's Shared contract.
+  - Repository loaders for the export sprint: `loadSspProfile`, `loadSystemRoles`/`roleTotals`, `loadAssets`, `loadDiagramLinks`/`resolveVersion`/`isEmbeddable`, `loadProviders`/`loadResponsibilityMatrix`/`findLiveProvider`, `appendExportRevision`.
+  - The duplicated `actorOf` still stands.
