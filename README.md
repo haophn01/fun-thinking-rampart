@@ -32,6 +32,21 @@ If `corepack enable` fails with `EPERM` (Node is installed in a folder you can't
 run it from an elevated shell, or put the shims in a folder of your own that is on your `PATH`:
 `corepack enable --install-directory <folder> pnpm`.
 
+### End-to-end tests
+
+`pnpm e2e` runs the Playwright specs in `e2e/` in Chromium. It needs the browser once per machine:
+
+```sh
+pnpm exec playwright install chromium
+pnpm e2e
+```
+
+Each run starts its own api (without watch) and web app on `127.0.0.1`, on `E2E_WEB_PORT`
+(default 3290) and `E2E_API_PORT` (default 3291), with a new database and file store in a fresh
+temporary folder (`E2E_RUN_DIR`), so it never touches `apps/api/data`. A failing test keeps its
+trace and screenshot in `test-results/`, and the HTML report goes to `playwright-report/`. Vitest
+never collects `e2e/`, so `pnpm verify` needs no browser.
+
 ## Scripts
 
 Run these from the repo root.
@@ -45,9 +60,11 @@ Run these from the repo root.
 | `pnpm test`       | `vitest run` across every package plus the repo checks in `tests/`         |
 | `pnpm build`      | Bundles the api with tsup and the web app with Vite                        |
 | `pnpm verify`     | lint, typecheck, test, build, in that order, stopping at the first failure |
+| `pnpm e2e`        | Playwright specs in `e2e/` against a fresh api and web app (see above)     |
 | `pnpm db:migrate` | Applies pending database migrations (the api also does this on start)      |
 
-Run `pnpm verify` before you open a pull request; CI runs the same command.
+Run `pnpm verify` before you open a pull request; CI runs the same command, and runs `pnpm e2e`
+in a job of its own on Ubuntu and Windows.
 
 `pnpm --filter @rampart/api db:generate` writes a new SQL migration into
 `apps/api/db/migrations` from `apps/api/db/schema.ts`. The database changes only through
