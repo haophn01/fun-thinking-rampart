@@ -237,6 +237,16 @@ describe('main flow 72 with 3.1.20', () => {
       reasons: ['barred'],
       citation: REGULATION.poamBarred.citation,
     });
+    // The two eligible one-pointers have no open POA&M item; the barred one is ineligible only.
+    const uncovered = catalog.requirements
+      .map((r) => r.id)
+      .filter((id) => failing.has(id) && points(1).includes(id) && !barred.has(id));
+    expect(uncovered).toHaveLength(2);
+    expect(
+      evaluation.conditional.blockers
+        .filter((b) => b.code === 'poam_missing')
+        .map((b) => b.requirementId),
+    ).toEqual(uncovered);
 
     const view = assessmentViewSchema.parse((await admin.get('/api/assessment')).json());
     expect(view.evaluation).toEqual(evaluation);

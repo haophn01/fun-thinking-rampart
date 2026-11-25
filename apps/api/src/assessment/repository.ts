@@ -13,7 +13,7 @@ import {
 import { REGULATION, closeoutClock } from '@rampart/rules/poam';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { AppDb } from '../../db/client';
-import { assessment, objectiveResult, requirementState, user } from '../../db/schema';
+import { assessment, objectiveResult, poamItem, requirementState, user } from '../../db/schema';
 import { recordAudit } from '../audit/record';
 import type {
   Assessment,
@@ -105,7 +105,26 @@ function requireAssessment(db: Reader): AssessmentRow {
   return row;
 }
 
-/** The rules input stored for an assessment: its objective results and implementation levels. */
+/**
+ * The requirements with an open POA&M item, in catalog order. Closed items are history and cover
+ * nothing; the partial unique index allows one open item per requirement.
+ */
+function listOpenPoamRequirementIds(db: Reader, assessmentId: string): RequirementId[] {
+  const rows = db
+    .select({ requirementId: poamItem.requirementId })
+    .from(poamItem)
+    .where(and(eq(poamItem.assessmentId, assessmentId), eq(poamItem.status, 'open')))
+    .all();
+  const { requirements } = catalogIndex();
+  return byPosition(rows, (r) => requirements.get(r.requirementId)?.position).map(
+    (r) => r.requirementId,
+  );
+}
+
+/**
+ * The rules input stored for an assessment: its objective results, implementation levels and the
+ * requirements with an open POA&M item, so every evaluation applies the POA&M rule.
+ */
 export function loadInput(db: Reader, assessmentId: string): AssessmentInput {
   const results = db
     .select({ objectiveId: objectiveResult.objectiveId, status: objectiveResult.status })
@@ -128,6 +147,7 @@ export function loadInput(db: Reader, assessmentId: string): AssessmentInput {
   return {
     objectiveResults: byPosition(results, (r) => objectives.get(r.objectiveId)),
     implementationLevels,
+    openPoamRequirementIds: listOpenPoamRequirementIds(db, assessmentId),
   };
 }
 
@@ -208,11 +228,13 @@ function listRequirementStates(
 }
 
 function viewOf(db: Reader, row: AssessmentRow, now: Date): AssessmentView {
+  const input = loadInput(db, row.id);
   return {
     assessment: toAssessment(row),
     objectiveResults: listObjectiveResults(db, row.id),
     requirementStates: listRequirementStates(db, row.id),
-    evaluation: evaluateStored(db, row.id),
+    openPoamRequirementIds: [...(input.openPoamRequirementIds ?? [])],
+    evaluation: evaluateAssessment(loadCatalog(), input, REGULATION),
     closeout:
       row.conditionalStatusDate === null
         ? null

@@ -3,7 +3,7 @@ import { catalogKey, loadCatalog } from '@rampart/catalog';
 import { evaluateAssessment, type AssessmentInput, type ImplementationLevel } from '@rampart/rules';
 import { REGULATION } from '@rampart/rules/poam';
 import { afterEach, describe, expect, it } from 'vitest';
-import { assessment, objectiveResult, requirementState } from '../../db/schema';
+import { assessment, objectiveResult, poamItem, requirementState } from '../../db/schema';
 import { assessmentViewSchema, errorEnvelopeSchema, type AssessmentView } from '../contract';
 import { createHarness, type Harness } from '../testing/harness';
 
@@ -28,9 +28,18 @@ function storedInput(h: Harness): AssessmentInput {
       implementationLevels[state.requirementId] = state.implementationLevel;
     }
   }
+  const order = catalog.requirements.map((r) => r.id);
+  const openPoamRequirementIds = h.db
+    .select()
+    .from(poamItem)
+    .all()
+    .filter((item) => item.status === 'open')
+    .map((item) => item.requirementId)
+    .sort((a, b) => order.indexOf(a) - order.indexOf(b));
   return {
     objectiveResults: results.map((r) => ({ objectiveId: r.objectiveId, status: r.status })),
     implementationLevels,
+    openPoamRequirementIds,
   };
 }
 
@@ -62,8 +71,13 @@ describe('view uses the shared evaluation', () => {
     expect(body.evaluation.outcomes.every((o) => o.status === 'not_assessed')).toBe(true);
     expect(body.evaluation.score.kind).toBe('incomplete');
     expect(body.evaluation.conditional.status).toBe('incomplete');
+    expect(body.openPoamRequirementIds).toEqual([]);
     expect(body.evaluation).toEqual(
-      evaluateAssessment(catalog, { objectiveResults: [], implementationLevels: {} }, REGULATION),
+      evaluateAssessment(
+        catalog,
+        { objectiveResults: [], implementationLevels: {}, openPoamRequirementIds: [] },
+        REGULATION,
+      ),
     );
   });
 
@@ -94,6 +108,15 @@ describe('view uses the shared evaluation', () => {
 
     const body = view((await admin.get('/api/assessment')).body);
     expect(body.evaluation).toEqual(evaluateAssessment(catalog, storedInput(h), REGULATION));
+    // 3.13.11 Not Met at partial is POA&M-eligible and has no open item; 3.5.3 at none is not.
+    expect(body.openPoamRequirementIds).toEqual([]);
+    expect(body.evaluation.conditional.blockers.filter((b) => b.code === 'poam_missing')).toEqual([
+      {
+        code: 'poam_missing',
+        requirementId: 'SC.L2-3.13.11',
+        citation: REGULATION.poamRequiredForNotMet.citation,
+      },
+    ]);
 
     const catalogObjectives = catalog.requirements.flatMap((r) => r.objectives.map((o) => o.id));
     const listed = body.objectiveResults.map((r) => r.objectiveId);
