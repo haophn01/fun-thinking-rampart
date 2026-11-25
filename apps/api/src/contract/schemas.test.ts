@@ -91,7 +91,10 @@ describe('contract schemas', () => {
       evidence_not_cui: 409,
       unsupported_file_type: 415,
       file_integrity_failed: 500,
+      provider_in_use: 409,
     };
+    expect(ERROR_CODES).toEqual(Object.keys(table));
+    expect(ERROR_CODES.at(-1)).toBe('provider_in_use');
     expect([...ERROR_CODES].sort()).toEqual(Object.keys(table).sort());
     expect(ERROR_STATUS).toEqual(table);
     for (const code of ERROR_CODES) expect(ERROR_STATUS[code], code).toBe(table[code]);
@@ -151,6 +154,24 @@ describe('contract schemas', () => {
       'policy.links_updated',
       'policy.version_added',
       'system_profile.updated',
+      'ssp_profile.updated',
+      'system_role.created',
+      'system_role.updated',
+      'system_role.removed',
+      'asset.created',
+      'asset.updated',
+      'asset.removed',
+      'service_provider.created',
+      'service_provider.updated',
+      'service_provider.removed',
+      'responsibility.updated',
+      'diagram_link.created',
+      'diagram_link.updated',
+      'diagram_link.removed',
+      'ssp_revision.created',
+      'ssp_approval.created',
+      'ssp_approval.updated',
+      'ssp_approval.removed',
     ]);
     expect(AUDIT_ENTITY_TYPES).toEqual([
       'user',
@@ -161,6 +182,14 @@ describe('contract schemas', () => {
       'evidence_item',
       'policy',
       'system_profile',
+      'ssp_profile',
+      'system_role',
+      'asset',
+      'service_provider',
+      'responsibility',
+      'diagram_link',
+      'ssp_revision',
+      'ssp_approval',
     ]);
   });
 
@@ -733,7 +762,6 @@ describe('contract schemas', () => {
     expect(policyListSchema.parse({ items: [policy] })).toEqual({ items: [policy] });
     expect(accepts(policySchema, { ...policy, requirementIds: undefined })).toBe(false);
   });
-
   it('requirement fields', () => {
     const base = {
       requirementId: 'AC.L2-3.1.1',
