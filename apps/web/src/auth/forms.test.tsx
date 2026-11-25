@@ -4,6 +4,11 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthedApp } from '../App';
 
+// The Dashboard is stubbed: this file tests the auth forms, not the dashboard's API calls.
+vi.mock('../pages/dashboard/DashboardPage', () => ({
+  DashboardPage: () => <h1>Dashboard</h1>,
+}));
+
 interface Call {
   method: string;
   path: string;
@@ -218,8 +223,8 @@ describe('auth forms', () => {
       'DELETE /api/session': () =>
         down ? Promise.reject(new TypeError('Failed to fetch')) : json(204),
     });
-    // A page with no API calls: a data page would add its own error alert to this test's.
-    renderApp('/ssp');
+    // The Dashboard is stubbed (see the mock above): its own API calls would add error alerts.
+    renderApp('/');
     await screen.findByRole('button', { name: 'Sign out' });
     const banner = screen.getByRole('banner');
     const signOut = () => within(banner).getByRole('button', { name: 'Sign out' });
