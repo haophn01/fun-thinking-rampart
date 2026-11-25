@@ -3,6 +3,7 @@
 _Generated: 2026-11-23 · Status: active · Grilled-with: pod_
 
 Port base: 3200
+<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=4 waves=12 -->
 
 ## Goal
 Build "Rampart" (a placeholder name), a self-hosted CMMC Level 2 readiness platform that one defense contractor runs locally to prepare for a self-assessment or a C3PAO assessment. You assess each of the 320 NIST SP 800-171A (Rev 2) objectives. The platform derives requirement status from them, a live SPRS score, a Conditional-status check and a rules-checked POA&M, and it manages evidence and policies and generates the SSP as a Word document.
@@ -146,7 +147,7 @@ erDiagram
 | foundation | Monorepo and CI bootstrap; Rev 2 catalog with count tests; the rules package (status, score, partial credit, POA&M eligibility, Conditional check, 180-day clock) fully tested against 32 CFR 170.24 and 170.21; API and DB skeleton; web shell with the look's tokens and self-hosted fonts | done | — |
 | assessment | Local accounts and roles, audit log, assessment workspace (objective status, notes, implementation statements, owners), live and what-if SPRS score, assessment type and Conditional Status Date | done | foundation |
 | poam-evidence | POA&M with rule-enforced eligibility, countdown and closeout; evidence store with versions, hashes, objective links and the CUI flag; policy library linked to requirements | done | assessment |
-| ssp-dashboard | System profile, SSP .docx export, readiness dashboard (QC stamp, title block, Conditional check, objective status, families, needs attention), end-to-end smoke | active | poam-evidence |
+| ssp-dashboard | System profile, SSP .docx export, readiness dashboard (QC stamp, title block, Conditional check, objective status, families, needs attention), end-to-end smoke | done | poam-evidence |
 
 ## Look
 The human picked direction **C (Spec Sheet)**. They liked the manufacturing culture but found the Shop Floor variant had too many colors: "lets go back with option C. However you can add in inspection tools style look in it". The result is **C · Inspection**: C's palette and fonts unchanged, plus motifs from inspection tools.

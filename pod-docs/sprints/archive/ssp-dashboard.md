@@ -1,8 +1,7 @@
 # Sprint: SSP, dashboard and end-to-end smoke
 
-_From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: ssp-dashboard · Status: active · Generated: 2026-11-24_
+_From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: ssp-dashboard · Status: archived · Generated: 2026-11-24_
 
-<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=3 waves=12 -->
 
 ## Status board
 
@@ -15,7 +14,7 @@ _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: ssp-dashboard · Status: acti
 | 2 | S3 | SSP export: .docx builder and `GET /api/ssp/export` | ssp-dashboard-s3 | merged | done | high | X1, P1 |
 | 2 | W7 | Readiness dashboard | ssp-dashboard-w7 | merged | done | medium | R6, P1, L4 |
 | 2 | W8 | SSP page: system profile form and export | ssp-dashboard-w8 | merged | done | medium | P1, L4 |
-| 3 | E2 | End-to-end smoke, Look checks, docs | ssp-dashboard-e2 | — | pending | — | X1, R6, P1, L4, S3, W7, W8 |
+| 3 | E2 | End-to-end smoke, Look checks, docs | ssp-dashboard-e2 | merged | done | medium | X1, R6, P1, L4, S3, W7, W8 |
 
 Plan branch `cmmc-l2-grc`; wave heads `ssp-dashboard-w1`, `ssp-dashboard-w2`, `ssp-dashboard-w3`. Merge target `main`. This is the plan's last sprint: E2 proves the plan's **Verification** section.
 
@@ -348,3 +347,27 @@ export interface Regulation { id: 'cmmc-32-cfr-170'; version: string; sources: {
 - **Depends on:** X1, R6, P1, L4, S3, W7, W8
 - **One-way door:** none
 - **Model:** opus
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date (`main` has no new commits).
+- **Slices shipped:** X1, R6, P1, L4, S3, W7, W8, E2, plus the wave 3 proxy fix (PRs #10, #11 and #12 into `cmmc-l2-grc`).
+- **Queue entries:** resolved 1 (K2 `x-csrf-token` log redaction, by P1). Added: X1's someday catalog JSON import attribute, the human's approval to merge the final PR, and the post-plan SSP template research. The four human PENDINGs from earlier sprints still run on the values in use.
+- **Slice log:**
+  - X1: opus · medium · test-first yes (one red came from a non-fresh DB) · runtime: fresh clone in PowerShell, `corepack pnpm start` → Setup → Dashboard · fixed a nested-`pnpm` PATH bug found in the clone · 6 NOTEs · left a stray `D:\x1-ci.bak`, deleted by the human · time lost: ~10 min
+  - R6: opus · medium · test-first yes (one guard proven by mutation) · runtime: real API through a restart, plus the workspace in a browser · contract change (`poam_missing`, REGULATION v1.2.0) · 4 NOTEs · time lost: a few minutes on classifier refusals
+  - P1: opus · high · test-first yes · runtime: real API through a restart, 0 tokens in the log · BLOCKED on the unowned `db.test.ts`, resolved under the gate 1 exception · 5 NOTEs · time lost: none
+  - L4: opus · high · test-first yes · runtime: `/look.html` at 1280 and 375 px · 4 NOTEs · time lost: none
+  - S3: opus · high · test-first yes · runtime: real export opened in Word (31 pages, 113 tables), a widowed label fixed · 5 NOTEs · time lost: none
+  - W7: sonnet · medium · test-first yes · runtime: real API at 1280 and 375 px (HOLD, 14 blockers) · merged W8 and took over 3 shared tests (gate 1) · 4 NOTEs · time lost: a few minutes
+  - W8: sonnet · medium · test-first yes · runtime: real API, profile saved and kept after a reload · edited 3 shared tests outside its list (W7 then owned them) · 4 NOTEs · time lost: none
+  - E2: opus · medium · specs proven red by breaking one expectation each · runtime: 640 writes through the fixed proxy, dashboard in a browser · wave fix 2eceef5 (dev proxy keep-alive; 2 of 2 e2e runs failed before, 3 of 3 passed after) · stopped by the human, then resumed in a new agent; one stall (retried once), one usage-limit pause · 5 NOTEs · time lost: ~15 min
+  - Stalls: one (E2, retried once, then completed).
+- **Agent context at hand-back:** about 1,450,000 tokens. This is the sum of each agent's reported `subagent_tokens`, i.e. each agent's final context size, not tokens billed.
+- **Incidents:**
+  - After PR #10 merged, the human's running app crashed with ERR_MODULE_NOT_FOUND (`docx`), because the parent checkout wasn't re-installed after a lockfile change. The orchestrator re-installed and restarted it; data was intact.
+  - GitHub outage on 2026-11-25: PR #12's merge failed 13 times (502/GraphQL), then succeeded on attempt 14.
+- **For plan complete:**
+  - All of the plan's Verification is covered by `e2e/smoke.spec.ts` and `e2e/look.spec.ts` (11 tests), which run in CI on ubuntu and windows.
+  - `pnpm typecheck` doesn't cover the root tsconfig (`e2e/`); `tsc -p tsconfig.json` passes.
+  - `pod-docs/features.md` still needs its rows.
