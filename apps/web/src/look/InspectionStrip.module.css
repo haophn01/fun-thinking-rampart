@@ -1,0 +1,44 @@
+/* The outer border is top and left; each entry draws its right and bottom, so any column
+   count reads as a grid of boxed cells. */
+.strip {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+  border-left: var(--rp-rule) solid var(--rp-ink);
+  background: var(--rp-sheet);
+}
+
+.entry {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 6px 10px;
+  border-right: var(--rp-rule) solid var(--rp-ink);
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+  min-width: 0;
+}
+
+.label {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  color: var(--rp-graphite);
+  background: var(--rp-sheet);
+}
+
+.value {
+  margin: 0;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  font-weight: 700;
+  color: var(--rp-ink);
+  background: var(--rp-sheet);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

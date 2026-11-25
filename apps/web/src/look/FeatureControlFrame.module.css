@@ -1,0 +1,41 @@
+/* The frame wraps on narrow screens. Each cell draws its own box and overlaps its neighbours'
+   edges by one rule, so borders collapse and a wrapped row ends where its cells end. */
+.frame {
+  display: flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0 var(--rp-rule) var(--rp-rule) 0;
+}
+
+.cell,
+.result {
+  margin: 0 calc(-1 * var(--rp-rule)) calc(-1 * var(--rp-rule)) 0;
+  padding: 4px 10px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.cell {
+  color: var(--rp-ink);
+  background: var(--rp-sheet);
+}
+
+.frame[data-status='in_tol'] .result {
+  color: var(--rp-sheet);
+  background: var(--rp-blue);
+}
+
+.frame[data-status='out_of_tol'] .result {
+  color: var(--rp-sheet);
+  background: var(--rp-red);
+}
+
+.frame[data-status='no_reading'] .result {
+  color: var(--rp-graphite);
+  background: var(--rp-sheet);
+}

@@ -1,11 +1,17 @@
-import type { ObjectiveStatus } from '@rampart/rules';
+import { catalogKey, loadCatalog } from '@rampart/catalog';
+import { scoreFloor, scoreMax, type ObjectiveStatus } from '@rampart/rules';
+import { REGULATION } from '@rampart/rules/poam';
 import { useState } from 'react';
 import { Alert } from './Alert';
 import { Button } from './Button';
 import { Checkbox } from './Checkbox';
+import { DimensionRuler } from './DimensionRuler';
+import { FeatureControlFrame } from './FeatureControlFrame';
 import { BODY_TEXT_PAIRS, contrastRatio, LARGE_TEXT_PAIRS, type TextPair } from './contrast';
 import { FileField } from './FileField';
 import { GraduatedBar } from './GraduatedBar';
+import { InspectionStamp, type StampVerdict } from './InspectionStamp';
+import { InspectionStrip } from './InspectionStrip';
 import { RadioGroup, type RadioOption } from './RadioGroup';
 import { SectionLabel } from './SectionLabel';
 import { Select } from './Select';
@@ -35,6 +41,58 @@ const TYPE_OPTIONS: readonly RadioOption[] = [
   { value: 'self', label: 'Self-assessment' },
   { value: 'c3pao', label: 'C3PAO certification' },
 ];
+
+// The ruler's scale comes from the catalog's scoring and the Conditional line from REGULATION.
+const catalog = loadCatalog();
+const SCALE = {
+  floor: scoreFloor(catalog),
+  max: scoreMax(catalog),
+  threshold: REGULATION.conditionalMinScore.value,
+};
+const READINGS: readonly {
+  title: string;
+  value: number | null;
+  verdict: StampVerdict;
+  detail: string;
+}[] = [
+  { title: 'HOLD at 72', value: 72, verdict: 'hold', detail: '2 BLOCKERS' },
+  { title: 'ACCEPT at 107', value: 107, verdict: 'accept', detail: 'CONDITIONAL' },
+  { title: 'Incomplete (no SSP)', value: null, verdict: 'hold', detail: '1 BLOCKER' },
+];
+const STRIP = [
+  { label: 'IR', value: 'IR-3F9A0C21' },
+  { label: 'Part', value: 'Engineering enclave' },
+  { label: 'Spec', value: catalogKey(catalog) },
+  {
+    label: 'Characteristics',
+    value: String(catalog.requirements.flatMap((r) => r.objectives).length),
+  },
+  { label: 'Inspector', value: 'Ada Lovelace' },
+  { label: 'Date', value: '2026-11-24' },
+];
+
+function Inspection() {
+  return (
+    <div className={styles.stack}>
+      {READINGS.map((reading) => (
+        // Stretch past the stack's start alignment, so the ruler gets the full width.
+        <div
+          key={reading.title}
+          className={[styles.sheet, styles.stack].filter(Boolean).join(' ')}
+          style={{ justifySelf: 'stretch' }}
+        >
+          <p className={styles.meta}>{reading.title}</p>
+          <DimensionRuler value={reading.value} {...SCALE} />
+          <div className={styles.row}>
+            <FeatureControlFrame measured={reading.value} lsl={SCALE.threshold} usl={SCALE.max} />
+            <InspectionStamp verdict={reading.verdict} detail={reading.detail} />
+          </div>
+        </div>
+      ))}
+      <InspectionStrip entries={STRIP} />
+    </div>
+  );
+}
 
 const TEXT_CLASS: Record<keyof typeof TEXT_SIZES_PX, string | undefined> = {
   'display-1': styles.display1,
@@ -331,6 +389,13 @@ export function Specimen() {
         <table className={styles.pairs} aria-label="Large text pairs">
           <tbody>{pairRows(LARGE_TEXT_PAIRS, styles.display3)}</tbody>
         </table>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionHead}>
+          <SectionLabel number={7}>Inspection</SectionLabel>
+        </h2>
+        <Inspection />
       </section>
     </main>
   );
