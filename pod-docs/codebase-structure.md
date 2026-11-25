@@ -44,8 +44,10 @@ Rampart (a placeholder name) is a self-hosted CMMC Level 2 readiness platform: o
 
 `.github/workflows/pod-ci.yml`, on `pull_request` and on `push` to `main`, with `permissions: contents: read, pull-requests: read`:
 
-- **verify** (matrix `ubuntu-latest`, `windows-latest`): checkout, setup-node 24, `corepack enable`, `pnpm install --frozen-lockfile`, `pnpm verify`.
+- **verify** (matrix `ubuntu-latest`, `windows-latest`): checkout, setup-node 24 (`package-manager-cache: false`, since its default cache calls pnpm before `corepack enable`), `corepack enable`, `pnpm install --frozen-lockfile`, `pnpm verify`.
 - **secrets** (ubuntu): checkout with `fetch-depth: 0`, then `gitleaks/gitleaks-action@v2` with `GITHUB_TOKEN`.
+- **e2e** (matrix `ubuntu-latest`, `windows-latest`, `fail-fast: false`, 20-minute timeout): the same setup as verify, then `pnpm exec playwright install --with-deps chromium`, `pnpm e2e`, and on failure uploads `playwright-report/` and `test-results/` as an artifact. A job of its own, so the browser download never slows verify.
+- `tests/repo/ci-workflow.test.ts` pins all three jobs; change the test with the workflow.
 
 ## Key docs
 

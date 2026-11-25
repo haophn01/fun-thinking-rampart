@@ -7,11 +7,13 @@ interface Step {
   name?: string;
   uses?: string;
   run?: string;
+  if?: string;
   with?: Record<string, unknown>;
   env?: Record<string, unknown>;
 }
 interface Job {
   'runs-on'?: string;
+  'timeout-minutes'?: number;
   strategy?: { 'fail-fast'?: boolean; matrix?: { os?: string[] } };
   steps?: Step[];
 }
@@ -79,6 +81,33 @@ describe('pod-ci workflow', () => {
       cacheOff || corepackFirst,
       'corepack before setup-node, or package-manager-cache: false',
     ).toBe(true);
+  });
+
+  it('e2e job installs chromium and runs pnpm e2e on both OSes', () => {
+    expect(Object.keys(loadWorkflow().jobs ?? {})).toEqual(['verify', 'secrets', 'e2e']);
+    const e2e = job('e2e');
+    expect(e2e.strategy?.matrix?.os).toEqual(['ubuntu-latest', 'windows-latest']);
+    expect(e2e.strategy?.['fail-fast']).toBe(false);
+    expect(e2e['runs-on']).toBe('${{ matrix.os }}');
+    expect(e2e['timeout-minutes']).toBe(20);
+    expect(actions(e2e.steps)).toEqual([
+      'actions/checkout',
+      'actions/setup-node',
+      'corepack enable',
+      'pnpm install --frozen-lockfile',
+      'pnpm exec playwright install --with-deps chromium',
+      'pnpm e2e',
+      'actions/upload-artifact',
+    ]);
+    const steps = e2e.steps ?? [];
+    const setupNode = steps.find((step) => step.uses?.startsWith('actions/setup-node@'));
+    expect(String(setupNode?.with?.['node-version'])).toBe('24');
+    // Same trap as verify: setup-node v5 would call pnpm before corepack enable.
+    expect(setupNode?.with?.['package-manager-cache']).toBe(false);
+    expect(setupNode?.with?.cache).toBeUndefined();
+    const upload = steps.at(-1);
+    expect(upload?.if).toBe('failure()');
+    expect(upload?.with?.path).toEqual(expect.stringContaining('playwright-report'));
   });
 
   it('secrets job runs gitleaks v2 with fetch-depth 0', () => {
