@@ -23,6 +23,7 @@ export const AUDIT_ACTIONS = [
   'policy.updated',
   'policy.links_updated',
   'policy.version_added',
+  'system_profile.updated',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -35,6 +36,8 @@ export const AUDIT_ENTITY_TYPES = [
   'poam_item',
   'evidence_item',
   'policy',
+  /** The entity ID is the assessment ID: one profile per assessment. */
+  'system_profile',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

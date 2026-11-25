@@ -9,6 +9,8 @@ import { registerAuthRoutes } from '../auth/routes';
 import { registerEvidenceRoutes } from '../evidence/routes';
 import { registerPoamRoutes } from '../poam/routes';
 import { registerPolicyRoutes } from '../policies/routes';
+import { registerSspRoutes } from '../ssp/routes';
+import { registerSystemProfileRoutes } from '../system-profile/routes';
 import { registerUserRoutes } from '../users/routes';
 
 /** What every api route needs. */
@@ -37,5 +39,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiDeps): void {
     registerPoamRoutes(api, deps);
     registerEvidenceRoutes(api, deps);
     registerPolicyRoutes(api, deps);
+    registerSystemProfileRoutes(api, deps);
+    registerSspRoutes(api, deps);
   });
 }
