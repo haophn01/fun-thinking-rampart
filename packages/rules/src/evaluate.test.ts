@@ -224,6 +224,47 @@ describe('applyWhatIf', () => {
     expect(evaluateAssessment(real, next).score.kind).toBe('incomplete');
   });
 
+  it('what-if keeps open POA&M list', () => {
+    const covered = 'AC.L2-3.1.10';
+    const uncovered = 'AU.L2-3.3.3';
+    const list = [covered];
+    const base: AssessmentInput = {
+      ...inputOf(real, { [covered]: 'not_met' }),
+      openPoamRequirementIds: list,
+    };
+    expect(evaluateAssessment(real, base).conditional).toEqual({
+      status: 'conditional',
+      blockers: [],
+    });
+
+    // The list survives a what-if as an equal copy, not the same array.
+    const next = applyWhatIf(real, base, {
+      objectiveStatuses: Object.fromEntries(
+        objectivesOf(real, uncovered).map((id) => [id, 'not_met']),
+      ),
+    });
+    expect(next.openPoamRequirementIds).toEqual([covered]);
+    expect(next.openPoamRequirementIds).not.toBe(list);
+    expect(applyWhatIf(real, base, {}).openPoamRequirementIds).toEqual([covered]);
+
+    // Turning a requirement Not Met with no item shows poam_missing, in the what-if only.
+    expect(evaluateAssessment(real, next).conditional).toEqual({
+      status: 'not_eligible',
+      blockers: [
+        {
+          code: 'poam_missing',
+          requirementId: uncovered,
+          citation: REGULATION.poamRequiredForNotMet.citation,
+        },
+      ],
+    });
+    expect(list).toEqual([covered]);
+
+    // An input without the list gets none back: the key stays absent.
+    const without = applyWhatIf(real, inputOf(real), {});
+    expect('openPoamRequirementIds' in without).toBe(false);
+  });
+
   it('rejects invalid changes', () => {
     const base = inputOf(fixture);
     const snapshot = structuredClone(base);

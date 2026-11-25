@@ -13,7 +13,8 @@ const LEVELS: readonly string[] = ['none', 'partial'] satisfies ImplementationLe
 /**
  * Checks the input against the catalog and throws RulesInputError on the first problem:
  * an objective not in the catalog, an objective listed twice, or an implementation level
- * on an unknown requirement or on one without partial credit (32 CFR 170.24(c)(2)).
+ * on an unknown requirement or on one without partial credit (32 CFR 170.24(c)(2)), or an open
+ * POA&M requirement ID that is not in the catalog.
  */
 export function validateInput(catalog: Catalog, input: AssessmentInput): ValidatedInput {
   const objectiveIds = new Set<ObjectiveId>();
@@ -59,6 +60,15 @@ export function validateInput(catalog: Catalog, input: AssessmentInput): Validat
       );
     }
     levels.set(requirementId, level);
+  }
+
+  for (const requirementId of input.openPoamRequirementIds ?? []) {
+    if (!requirements.has(requirementId)) {
+      throw new RulesInputError(
+        'unknown_requirement',
+        `Open POA&M requirement ${requirementId} is not in the catalog`,
+      );
+    }
   }
 
   return { statuses, levels };

@@ -40,11 +40,14 @@ export type RequirementState = z.infer<typeof requirementStateSchema>;
 /**
  * `GET /api/assessment`. Both lists are in catalog order and hold only stored rows: a missing
  * objective result means not assessed, and a missing requirement state means empty.
+ * `openPoamRequirementIds` lists the requirements with an open POA&M item, in catalog order: the
+ * evaluation's input, so a client can recompute it. The api always sends it.
  */
 export const assessmentViewSchema = z.object({
   assessment: assessmentSchema,
   objectiveResults: z.array(objectiveResultSchema),
   requirementStates: z.array(requirementStateSchema),
+  openPoamRequirementIds: z.array(z.string()).optional(),
   evaluation: evaluationSchema,
   closeout: closeoutClockSchema.nullable(),
 });
