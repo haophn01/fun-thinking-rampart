@@ -219,7 +219,7 @@ describe('auth forms', () => {
         down ? Promise.reject(new TypeError('Failed to fetch')) : json(204),
     });
     // A page with no API calls: a data page would add its own error alert to this test's.
-    renderApp('/ssp');
+    renderApp('/');
     await screen.findByRole('button', { name: 'Sign out' });
     const banner = screen.getByRole('banner');
     const signOut = () => within(banner).getByRole('button', { name: 'Sign out' });
