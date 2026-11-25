@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan report: Rampart, a CMMC L2 readiness platform</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fff; --fg: #1b1b1f; --muted: #5d5d66; --line: #d9d9e0; --soft: #f4f4f7;
+  --accent: #E10600; --ok: #1d7a3e; --bad: #b42318; --warn: #a15c07;
+  --display: "Space Grotesk", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #131316; --fg: #ececf1; --muted: #a2a2ad; --line: #34343c; --soft: #1d1d22;
+          --accent: #8da2ff; --ok: #5cc98a; --bad: #ff8a80; --warn: #f0b45c; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 system-ui, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.25; }
+h1 { font-size: 1.9rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.4rem; margin: 2.5rem 0 .75rem; padding-top: .5rem; border-top: 1px solid var(--line); }
+h3 { font-size: 1.1rem; margin: 1.25rem 0 .5rem; }
+a { color: var(--accent); }
+code, pre { font: 15px/1.45 ui-monospace, Consolas, monospace; }
+pre { background: var(--soft); padding: .75rem; overflow-x: auto; border-radius: 6px; }
+.meta { color: var(--muted); margin: 0 0 1rem; }
+nav.toc { background: var(--soft); border-radius: 8px; padding: .75rem 1rem; }
+nav.toc ol { margin: 0; padding-left: 1.25rem; columns: 2 14rem; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
+th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; vertical-align: top; }
+th { background: var(--soft); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin: 1rem 0 .25rem; }
+.stat { background: var(--soft); border-radius: 8px; padding: .5rem .75rem; }
+.stat b { display: block; font-size: 1.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat span { color: var(--muted); font-size: .9rem; }
+.note { color: var(--muted); font-size: .9rem; margin: 0 0 1rem; }
+.pill { display: inline-block; padding: 0 .5rem; border-radius: 99px; font-size: .9rem; border: 1px solid currentColor; white-space: nowrap; }
+.ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .muted { color: var(--muted); }
+.lead { font-size: 1.1rem; font-weight: 600; margin: 0 0 .75rem; }
+details { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .9rem; margin: .5rem 0; }
+details > summary { cursor: pointer; font-weight: 600; }
+details[open] > summary { margin-bottom: .5rem; }
+table.decisions td:first-child { font-weight: 600; min-width: 12rem; }
+.shots { display: grid; grid-template-columns: 3fr 1fr; gap: .75rem; align-items: start; }
+.shots figure { margin: 0; } .shots img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+figcaption { color: var(--muted); font-size: .9rem; }
+.small { display: block; color: var(--muted); font-size: .9rem; }
+table.risks td:first-child { font-weight: 600; }
+pre.mermaid { background: var(--soft); text-align: center; }
+@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { body { font-size: 16px; } .shots { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Rampart: a CMMC Level 2 readiness platform</h1>
+<p class="meta">Plan <code>cmmc-l2-grc</code> · final PR <a href="https://github.com/haophn01/fun-thinking-rampart/pull/13">#13, verdict pass (round 2)</a> · written 2026-11-25 by pod:reporter</p>
+
+<nav class="toc" aria-label="Contents"><ol>
+  <li><a href="#glance">At a glance</a></li>
+  <li><a href="#features">Key features</a></li>
+  <li><a href="#proof">Proof</a></li>
+  <li><a href="#risks">Risks and undo</a></li>
+  <li><a href="#fit">How it fits together, as built</a></li>
+  <li><a href="#decisions">Key decisions</a></li>
+  <li><a href="#left">What's left</a></li>
+</ol></nav>
+
+<section id="glance">
+<h2>At a glance</h2>
+<p><b>Goal:</b> a self-hosted app where one defense contractor assesses all 320 NIST 800-171A objectives and gets a correct SPRS score, a rules-checked POA&amp;M, linked evidence and policies, and an exported SSP .docx.</p>
+<p><b>Shipped:</b></p>
+<ul>
+  <li>Local accounts (admin, contributor), CSRF-protected writes, and an append-only audit log.</li>
+  <li>An assessment workspace with a live SPRS score and a what-if mode that saves nothing.</li>
+  <li>A POA&amp;M that refuses what 32 CFR 170.21 refuses, with a 180-day closeout clock.</li>
+  <li>Evidence with SHA-256 versions and a CUI flag that refuses files; policies linked to requirements.</li>
+  <li>A system profile, the SSP as a .docx, and a dashboard that stamps HOLD or ACCEPT.</li>
+</ul>
+<div class="stats">
+  <div class="stat"><b>4 · 12 · 37</b><span>sprints · waves · slices</span></div>
+  <div class="stat"><b>14</b><span>PRs</span></div>
+  <div class="stat"><b>362 · +58,644 −2</b><span>files · lines changed</span></div>
+  <div class="stat"><b>~35 h</b><span>wall time</span></div>
+  <div class="stat"><b>~6.0M</b><span>agent context</span></div>
+  <div class="stat"><b>pass</b><span>review, 2 rounds</span></div>
+</div>
+<p class="note">Wall time is first to last commit, pauses included. Agent context sums final context sizes, not tokens billed.</p>
+<h3>Look here first</h3>
+<ol>
+  <li><code>packages/rules/src/poam/regulation.ts</code>: every regulatory number (88, 180 days, the six barred requirements, the point limits) is typed here from the Cornell text of 32 CFR 170. A wrong value means a wrong score.</li>
+  <li><code>apps/api/src/auth/guard.ts</code>: the deny-by-default sign-in and CSRF gate. A route registered outside <code>registerApiRoutes</code> skips it.</li>
+  <li><code>apps/api/db/migrations/0001</code> to <code>0004</code>: four migrations, including triggers that make the audit table append-only. This is why the human merges #13.</li>
+  <li><code>apps/api/storage/local.ts</code> and <code>evidence/repository.ts</code>: the CUI refusal and the file store. Least checked against real use: V1 is not approved for CUI.</li>
+  <li><code>apps/api/ssp/model.ts</code>: the SSP outline has no official template behind it, and nobody but the engineer has opened the .docx in Word.</li>
+</ol>
+</section>
+
+<section id="features">
+<h2>Key features</h2>
+<p class="lead">A user can go from an empty install to an assessed baseline, a stamped dashboard and an SSP; the screenshots below are a seeded demo assessment.</p>
+<div class="scroll"><table>
+  <tr><th>Feature</th><th>What changed</th><th>Shown by</th></tr>
+  <tr><td><a href="../feature-details/setup-and-sign-in.md">Setup and sign-in</a></td><td>First visit creates the admin; every route needs a session</td><td>result: wrong password refused, cookie unreadable by the page</td></tr>
+  <tr><td><a href="../feature-details/objective-status-and-live-score.md">Objective status, live score</a></td><td>320 objectives, score updates on save</td><td>screenshot below</td></tr>
+  <tr><td><a href="../feature-details/what-if.md">What-if</a></td><td>Try changes, see the score, save nothing</td><td>screenshot below</td></tr>
+  <tr><td><a href="../feature-details/dashboard-ruler-frame-and-stamp.md">Dashboard stamp</a></td><td>Ruler, frame, HOLD or ACCEPT, blockers</td><td>screenshots below</td></tr>
+  <tr><td><a href="../feature-details/poam.md">POA&amp;M</a></td><td>Rule-checked items, countdown, closeout</td><td>screenshot below</td></tr>
+  <tr><td><a href="../feature-details/evidence.md">Evidence</a></td><td>Versioned files with SHA-256; CUI items hold a reference</td><td>screenshot below</td></tr>
+  <tr><td><a href="../feature-details/policies.md">Policies</a></td><td>Versioned files linked to requirements</td><td>screenshot below</td></tr>
+  <tr><td><a href="../feature-details/system-profile.md">System profile</a> and <a href="../feature-details/ssp-export.md">SSP export</a></td><td>13 profile fields; Word export</td><td>screenshot below</td></tr>
+  <tr><td><a href="../feature-details/audit-log.md">Audit log</a> and <a href="../feature-details/assessment-settings.md">settings</a></td><td>Append-only log; type and Conditional Status Date</td><td>screenshot below</td></tr>
+</table></div>
+
+<h3>Dashboard: HOLD at 72 (3.1.20 Not Met, 11 blockers)</h3>
+<div class="shots">
+  <figure><img alt="Dashboard at 72 with a red HOLD stamp, OUT OF TOL frame and blockers listed" src="cmmc-l2-grc/dashboard-hold-1200.jpg"><figcaption>Desktop</figcaption></figure>
+  <figure><img alt="The same dashboard on a phone" src="cmmc-l2-grc/dashboard-hold-375.jpg"><figcaption>375 px</figcaption></figure>
+</div>
+<h3>Dashboard: ACCEPT at 106 (every Not Met item on an open POA&amp;M)</h3>
+<div class="shots">
+  <figure><img alt="Dashboard at 106 with an ACCEPT stamp and IN TOL frame" src="cmmc-l2-grc/dashboard-accept-1200.jpg"><figcaption>Desktop</figcaption></figure>
+  <figure><img alt="The accepted dashboard on a phone" src="cmmc-l2-grc/dashboard-accept-375.jpg"><figcaption>375 px</figcaption></figure>
+</div>
+<h3>Assessment with what-if (+1 from fixing 3.1.20)</h3>
+<div class="shots">
+  <figure><img alt="Assessment page in what-if mode showing a score of 73 and a change of plus 1" src="cmmc-l2-grc/whatif-1200.jpg"><figcaption>Desktop</figcaption></figure>
+  <figure><img alt="What-if on a phone" src="cmmc-l2-grc/whatif-375.jpg"><figcaption>375 px</figcaption></figure>
+</div>
+<details><summary>More screens: POA&amp;M, Evidence, Policies, SSP, Settings</summary>
+<h3>POA&amp;M</h3>
+<div class="shots">
+  <figure><img alt="POA&amp;M page with four open items and the closeout clock" src="cmmc-l2-grc/poam-accept-1200.jpg"><figcaption>Desktop</figcaption></figure>
+  <figure><img alt="POA&amp;M on a phone" src="cmmc-l2-grc/poam-accept-375.jpg"><figcaption>375 px</figcaption></figure>
+</div>
+<h3>Evidence</h3>
+<div class="shots">
+  <figure><img alt="Evidence page with a file item and a CUI reference item" src="cmmc-l2-grc/evidence-1200.jpg"><figcaption>Desktop</figcaption></figure>
+  <figure><img alt="Evidence on a phone" src="cmmc-l2-grc/evidence-375.jpg"><figcaption>375 px</figcaption></figure>
+</div>
+<h3>Policies</h3>
+<div class="shots">
+  <figure><img alt="Policies page with one linked policy" src="cmmc-l2-grc/policies-1200.jpg"><figcaption>Desktop</figcaption></figure>
+  <figure><img alt="Policies on a phone" src="cmmc-l2-grc/policies-375.jpg"><figcaption>375 px</figcaption></figure>
+</div>
+<h3>SSP</h3>
+<div class="shots">
+  <figure><img alt="SSP page with the system profile form and export link" src="cmmc-l2-grc/ssp-1200.jpg"><figcaption>Desktop</figcaption></figure>
+  <figure><img alt="SSP on a phone" src="cmmc-l2-grc/ssp-375.jpg"><figcaption>375 px</figcaption></figure>
+</div>
+<h3>Settings</h3>
+<div class="shots">
+  <figure><img alt="Settings page with assessment type, users and audit log" src="cmmc-l2-grc/settings-accept-1200.jpg"><figcaption>Desktop</figcaption></figure>
+  <figure><img alt="Settings on a phone" src="cmmc-l2-grc/settings-accept-375.jpg"><figcaption>375 px</figcaption></figure>
+</div>
+</details>
+</section>
+
+<section id="proof">
+<h2>Proof</h2>
+<p class="lead">5 of 6 rows are met; the .docx has not been opened in Word by anyone but its engineer.</p>
+<div class="scroll"><table>
+  <tr><th>Criterion or feature</th><th>Result</th><th>Checked by</th><th>How</th></tr>
+  <tr><td>CI green on the final PR</td><td><span class="pill ok">met</span></td><td>this report</td><td>all 5 checks on #13 read as success (verify and e2e on two systems, gitleaks)</td></tr>
+  <tr><td>SSP .docx opens in Word or LibreOffice</td><td><span class="pill warn">not checked</span></td><td>engineer's tests</td><td>engineer opened it once (31 pages); reviewer did not</td></tr>
+  <tr><td>Catalog counts and point values</td><td><span class="pill ok">met</span></td><td>reviewer</td><td>all 110 requirements checked against 32 CFR 170.24, 0 mismatches</td></tr>
+  <tr><td>Rule cases (110, -203, 88/87, barred, 180 days)</td><td><span class="pill ok">met</span></td><td>reviewer</td><td>704 then 707 tests; 46 mutations, 43 caught, 1 equivalent</td></tr>
+  <tr><td>End-to-end smoke path (steps 1 to 6)</td><td><span class="pill ok">met</span></td><td>reviewer</td><td>11 e2e tests pass; 11 features.md rows driven in a browser</td></tr>
+  <tr><td>Phone layout, no horizontal scroll</td><td><span class="pill ok">met</span></td><td>this report</td><td>page width equalled 375 on all 7 screens</td></tr>
+</table></div>
+<h3>Not checked by this report</h3>
+<ul>
+  <li>The six palette tokens, 16 px text floor and 4.5:1 contrast: left to <code>e2e/look.spec.ts</code> and the reviewer; I only looked at the screens.</li>
+  <li>The reviewer's round-1 and round-2 comments were read, but I did not re-run <code>pnpm verify</code> or the e2e suite.</li>
+  <li>Review round 1 found 3 FIX items (a binary-looking <code>PoamForm.tsx</code>, a placeholder in the PR body, hollow what-if Exit tests); PR #14 fixed them and round 2 confirmed.</li>
+</ul>
+</section>
+
+<section id="risks">
+<h2>Risks and undo</h2>
+<p class="lead">Sign-in and the four migrations are one-way doors, but all are additive; reverting the merge leaves tables unused.</p>
+<div class="scroll"><table class="risks">
+  <tr><th>Risk</th><th>Undo</th></tr>
+  <tr><td>Auth turned on for every route<span class="small"><code>apps/api/src/auth/</code>, PR #5</span></td><td>Revert PR #5's merge; user and session rows stay unused.</td></tr>
+  <tr><td>Four additive migrations<span class="small"><code>apps/api/db/migrations/0001</code> to <code>0004</code></span></td><td>Revert #13's merge commit; the local database keeps its tables.</td></tr>
+  <tr><td>Audit table is append-only by trigger<span class="small"><code>0002_audit_append_only.sql</code></span></td><td>Drop the two triggers in a new migration; never edit 0002.</td></tr>
+  <tr><td>Uploaded files, no CUI check<span class="small"><code>apps/api/storage/local.ts</code></span></td><td>Delete the folder at <code>STORAGE_PATH</code>; V1 is not approved for CUI.</td></tr>
+  <tr><td>Public API is new and unversioned<span class="small"><code>apps/api/src/contract/</code></span></td><td>Nothing outside this repo calls it yet; change it with the web app.</td></tr>
+  <tr><td>Dev server serves the HTML with no CSP<span class="small"><code>apps/web/package.json</code></span></td><td>Don't host it; needs a production build behind a header-setting server.</td></tr>
+</table></div>
+</section>
+
+<section id="fit">
+<h2>How it fits together, as built</h2>
+<p class="lead">The code matches the plan's parts; the web app also imports the API contract, and the SSP route reads more than the catalog.</p>
+<pre class="mermaid">
+flowchart LR
+  W["apps/web pages"] -- "HTTP JSON" --> RT["api/src/routes/index.ts"]
+  W -- "types and zod schemas" --> CT["api/src/contract"]
+  W -- "evaluateAssessment for what-if" --> RU["rules/evaluate.ts"]
+  RT -- "deny-by-default guard" --> GD["auth/guard.ts"]
+  RT -- "route handlers" --> RP["*/repository.ts"]
+  RP -- "evaluate, eligibility" --> RU
+  RU -- "REGULATION data" --> RG["rules/poam/regulation.ts"]
+  RU -- "points, objectives" --> CA["catalog/load.ts"]
+  RP -- "queries, recordAudit" --> DB["db/schema.ts"]
+  RP -- "put, get by sha256" --> ST["storage/local.ts"]
+  RT -- "SSP request" --> SS["ssp/model.ts, render.ts"]
+  SS -- "requirement text" --> CA
+</pre>
+<h3>Differences from the plan</h3>
+<ul>
+  <li>The web app imports <code>@rampart/api/contract</code> (browser-safe schemas and constants). The plan's diagram shows only HTTP; this is how the zod schemas are shared.</li>
+  <li>The dashboard also imports <code>REGULATION</code> from rules, to show the 88 line from data rather than a literal.</li>
+  <li>The SSP route builds its outline from the assessment, POA&amp;M, policies, evidence and profile repositories as well as the catalog; the plan drew only catalog.</li>
+  <li>Added after the plan: <code>auth/guard.ts</code> (deny-by-default) and <code>audit/record.ts</code>, called inside every write's transaction.</li>
+  <li>The sprint scope added a <code>poam_missing</code> rule (REGULATION v1.2.0): see the decisions table.</li>
+</ul>
+</section>
+
+<section id="decisions">
+<h2>Key decisions</h2>
+<p class="lead">Humans set the baseline, the catalog source, CI and the look; agents settled the regulation's numbers and five small defaults.</p>
+<div class="scroll"><table class="decisions">
+  <tr><th>Decision</th><th>By</th><th>Why</th><th>Instead of</th><th>Consequence</th></tr>
+  <tr><td><a href="../decisions.md#2026-11-23--sprs-point-values-from-32-cfr-17024c2">SPRS points 44 at 5, 14 at 3, 51 at 1</a></td><td>agent</td><td>The research's split gave a floor of -196, not -203</td><td>42 / 14 / 54</td><td>Missing SSP gives "incomplete", not a score</td></tr>
+  <tr><td><a href="../decisions.md#2026-11-25--a-not-met-requirement-needs-an-open-poam-item-before-accept">ACCEPT needs an open POA&amp;M per Not Met item</a></td><td>agent</td><td>32 CFR 170.24(c)(2)(i)(B)(6)</td><td>Score of 88 alone</td><td>New <code>poam_missing</code> blocker</td></tr>
+  <tr><td><a href="../decisions.md#2026-11-23--merge-target-default-branch">Merge the plan PR straight to <code>main</code></a></td><td>human</td><td>Simpler for one repo</td><td>A staging branch</td><td>The human still merges #13 (migration gate)</td></tr>
+  <tr><td>Catalog built from the NIST PDFs</td><td>human</td><td>They are the normative text</td><td>Typing from memory</td><td>Converter script and recorded checksums</td></tr>
+  <tr><td>Look C, Inspection, with C's ruler</td><td>human</td><td>Liked the manufacturing feel, fewer colors</td><td>The Shop Floor variant</td><td>Six colors only, enforced by e2e</td></tr>
+  <tr><td>CI required from the first slice</td><td>human</td><td>"Make no mistake"</td><td>Adding it later</td><td>Verify, e2e and gitleaks gate every PR</td></tr>
+  <tr><td><a href="../decisions.md#2026-11-25--today-is-the-utc-date-agent-default--override-anytime">"Today" is the UTC date</a></td><td>agent</td><td>Contract documents UTC days</td><td>A time-zone setting</td><td>Countdowns can be a day off in the US evening</td></tr>
+  <tr><td><a href="../decisions.md#2026-11-25--objective-ids-for-single-statement-requirements-agent-default--override-anytime">Objective <code>[a]</code> IDs for 23 single-statement requirements</a></td><td>agent</td><td>Matches the CMMC guide; keeps 320</td><td>Unlettered IDs</td><td>Changing it needs a catalog bump and data migration</td></tr>
+  <tr><td>No real CUI in V1</td><td>human</td><td>No approved host</td><td>Encrypted storage now</td><td>Flagged items store a reference only</td></tr>
+</table></div>
+</section>
+
+<section id="left">
+<h2>What's left</h2>
+<p class="lead">1 to do now, 1 before hosting, and a handful of someday cleanups.</p>
+<h3>Fix next</h3>
+<ul>
+  <li>The human merges PR #13 (gate 6, migrations); undo is a revert of the merge commit.</li>
+  <li>Run the queued SSP template research and compare it to the exported .docx.</li>
+  <li>Decide on "today" as the UTC date; a time-zone fix needs a setting or the browser offset.</li>
+</ul>
+<h3>Before hosting</h3>
+<ul>
+  <li>Serve a production build with CSP and security headers; <code>pnpm start</code> uses the Vite dev server and helmet covers only <code>/api</code>.</li>
+  <li>Parked ideas: encrypted CUI storage, M365 app deployment (<code>pod-docs/ideas/</code>).</li>
+</ul>
+<h3>Someday</h3>
+<ul>
+  <li>Merge duplicate code: three Conditional-status label copies, two <code>formatSize</code> (KiB vs KB), repeated <code>actorOf</code> and <code>utcDate</code>.</li>
+  <li>Delete the unreachable <code>PlaceholderPage</code> in <code>apps/web/src/App.tsx</code>.</li>
+  <li>Add <code>with { type: 'json' }</code> to the catalog import so the Playwright resolve hook can go.</li>
+  <li>Next plans: OSCAL export, evidence integrations and SSO, Rev 3, SPRS submission.</li>
+</ul>
+</section>
+
+
+</main>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+</script>
+</body>
+</html>

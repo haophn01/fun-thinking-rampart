@@ -1,6 +1,6 @@
 # Plan: CMMC L2 readiness platform (V1, workflow first)
 
-_Generated: 2026-11-23 · Status: active · Grilled-with: pod_
+_Generated: 2026-11-23 · Status: archived · Grilled-with: pod_
 
 Port base: 3200
 <!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=4 waves=12 -->
