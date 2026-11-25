@@ -1,0 +1,32 @@
+/* Red ink on its own Sheet face, so the 16 px detail is a body pair (red on Sheet) on any page
+   background. No opacity: it would drop the ink below the contrast rule. */
+.stamp {
+  display: inline-grid;
+  justify-items: center;
+  padding: 6px 14px;
+  border: 2.5px solid var(--rp-red);
+  border-radius: 50% / 40%;
+  transform: rotate(-7deg);
+  color: var(--rp-red);
+  background: var(--rp-sheet);
+  text-align: center;
+}
+
+.word {
+  font-family: var(--rp-font-display);
+  font-size: var(--rp-text-display-3);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: var(--rp-red);
+  background: var(--rp-sheet);
+}
+
+.detail {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--rp-red);
+  background: var(--rp-sheet);
+}

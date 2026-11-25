@@ -13,3 +13,21 @@ export { GraduatedBar, clampPercent, type GraduatedBarProps } from './GraduatedB
 export { SectionLabel, type SectionLabelProps } from './SectionLabel';
 export { Checkbox, type CheckboxProps } from './Checkbox';
 export { FileField, type FileFieldProps } from './FileField';
+export {
+  DimensionRuler,
+  formatMeasure,
+  rulerPercent,
+  type DimensionRulerProps,
+} from './DimensionRuler';
+export {
+  FeatureControlFrame,
+  toleranceStatus,
+  type FeatureControlFrameProps,
+  type ToleranceStatus,
+} from './FeatureControlFrame';
+export { InspectionStamp, type InspectionStampProps, type StampVerdict } from './InspectionStamp';
+export {
+  InspectionStrip,
+  type InspectionEntry,
+  type InspectionStripProps,
+} from './InspectionStrip';
