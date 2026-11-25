@@ -1,8 +1,7 @@
 # Sprint: POA&M, evidence and policies
 
-_From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: poam-evidence · Status: active · Generated: 2026-11-24_
+_From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: poam-evidence · Status: archived · Generated: 2026-11-24_
 
-<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=2 waves=9 -->
 
 ## Status board
 
@@ -16,9 +15,9 @@ _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: poam-evidence · Status: acti
 | 2 | A4 | POA&M API: eligibility, milestones, countdown, closeout | poam-evidence-a4 | merged | done | high | K2, E1, D2 |
 | 2 | A5 | Evidence API: items, file versions, CUI references, objective links | poam-evidence-a5 | merged | done | medium | K2, E1, D2 |
 | 2 | A6 | Policies API: items, file versions, requirement links | poam-evidence-a6 | merged | done | medium | K2, E1, D2 |
-| 3 | W4 | POA&M page | poam-evidence-w4 | — | pending | — | K2, L3, A4 |
-| 3 | W5 | Evidence page with the CUI banner | poam-evidence-w5 | — | pending | — | K2, L3, A5 |
-| 3 | W6 | Policies page | poam-evidence-w6 | — | pending | — | K2, L3, A6 |
+| 3 | W4 | POA&M page | poam-evidence-w4 | merged | done | high | K2, L3, A4 |
+| 3 | W5 | Evidence page with the CUI banner | poam-evidence-w5 | merged | done | medium | K2, L3, A5 |
+| 3 | W6 | Policies page | poam-evidence-w6 | merged | done | medium | K2, L3, A6 |
 
 Plan branch `cmmc-l2-grc`; wave heads `poam-evidence-w1`, `poam-evidence-w2`, `poam-evidence-w3`. Merge target `main`.
 
@@ -421,3 +420,39 @@ export function createMemoryStore(): FileStore & { keys(): string[]; corrupt(key
 - **Depends on:** K2, L3, A6
 - **One-way door:** none
 - **Model:** sonnet
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date (`main` has no new commits).
+- **Slices shipped:** K2, E1, D2, R5, L3, A4, A5, A6, W4, W5, W6, plus the wave 2 fix W2-fix (PRs #7, #8 and #9 into `cmmc-l2-grc`).
+- **Queue entries:** resolved 1, deferred 5.
+  - Resolved: R2 `poamNotMetOnly` (R5).
+  - Deferred, PENDING → human:
+    - C1 `[a]` IDs
+    - C1 3.3.2 wording
+    - L2 Not met radio fill
+    - W1 self-reset warning
+  - Deferred, PENDING → sprint-planner: K2 `x-csrf-token` log redaction (now).
+- **Slice log:**
+  - K2: opus · medium · test-first yes · runtime: `apiUpload` from the live page · 9 NOTEs · time lost: a usage-limit pause, then resumed
+  - E1: opus · medium · test-first yes · runtime: built server, blank `STORAGE_PATH` refused · 5 NOTEs · time lost: a usage-limit pause
+  - D2: opus · high · test-first yes · runtime: a real 0002 DB upgraded with all rows kept · 5 NOTEs · time lost: a usage-limit pause, plus GitHub 500s on push
+  - R5: opus · medium · test-first yes · runtime: package export plus the real API · 0 NOTEs · time lost: a usage-limit pause
+  - L3: opus · medium · test-first yes · runtime: `/look.html` at 1280 and 375 px, the three pages mounted · 5 NOTEs · time lost: a usage-limit pause
+  - A4: opus · high · test-first yes (plus a mutation check) · runtime: HTTP plus a restart · 4 NOTEs · time lost: none
+  - A5: opus · medium · test-first yes · runtime: HTTP plus a restart · 4 NOTEs · left 2 stray files in the parent checkout (the human deleted them) · time lost: none
+  - A6: opus · medium · test-first yes (one test written after the code) · runtime: HTTP plus a restart · 4 NOTEs · time lost: none
+  - W2-fix: opus · medium · flaky UI tests fixed (a passive effect racing `findBy`; `usePageTitle` now uses `useLayoutEffect`; held responses wait for the request). Before the fix 3 of 10 runs failed, after it 0 of 50 · time lost: none
+  - W4: sonnet · high · test-first yes · runtime: real API at 1280 and 375 px, plus closeout · BLOCKED on the unowned `auth/forms.test.tsx` (sign out used `/poam`), resolved under the gate 1 exception · 3 NOTEs · time lost: none
+  - W5: sonnet · medium · test-first yes · runtime: real PDF upload and download, CUI reference · 4 NOTEs · time lost: none
+  - W6: sonnet · medium · test-first yes · runtime: real .docx upload and download, links · 4 NOTEs · time lost: none
+  - Stalls: none. The whole of wave 1 was paused by a usage limit and resumed with its work intact.
+- **Agent context at hand-back:** about 1,800,000 tokens (the sum of each agent's reported `subagent_tokens`, i.e. its final context size, not tokens billed).
+- **For the next sprint:**
+  - The POA&M view (`GET /api/poam`) lists Not Met requirements without an open item. Whether that becomes a Conditional blocker on the dashboard (ACCEPT / HOLD) is a decision for `ssp-dashboard`.
+  - Uploads: `readUpload` and `sendFile`, and `deps.store` (content-addressed SHA-256).
+  - `usePageTitle` uses `useLayoutEffect`.
+  - UI tests must wait for a request before answering it, and keep `testTimeout` above 5 s.
+  - Any test that uses an API-backed page as a throwaway route must mock its call.
+  - `/ssp` and `/` (the dashboard) are still placeholders.
+  - The local pnpm needs the scratchpad shims or `corepack pnpm`. Windows reserves ports 3057–3156.
