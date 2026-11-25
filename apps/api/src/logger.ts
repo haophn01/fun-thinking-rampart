@@ -7,6 +7,8 @@ export const REDACT_PATHS = [
   'req.headers.cookie',
   'req.headers.authorization',
   'req.headers["proxy-authorization"]',
+  // Bound to the session, so not a credential alone, but it never belongs in a log.
+  'req.headers["x-csrf-token"]',
   'res.headers["set-cookie"]',
 ];
 
