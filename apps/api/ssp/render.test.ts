@@ -97,6 +97,15 @@ describe('renderSspDocx', () => {
     }
     expect(xml).toContain('<w:tbl>');
     expect(xml).toContain('<w:tblHeader/>');
+    // A label on its own line stays on the page of what follows it; a one-line field doesn't need to.
+    const keptWithNext = [...xml.matchAll(/<w:p>(?:(?!<\/w:p>)[\s\S])*<\/w:p>/g)]
+      .filter(([p]) => p.includes('<w:keepNext/>'))
+      .map(([p]) => [...p.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((t) => t[1]).join(''));
+    expect(keptWithNext.filter((text) => text.endsWith(':'))).toEqual([
+      'Implementation statement:',
+      'Policies:',
+    ]);
+    expect(keptWithNext).not.toContain('Status: Met');
     expect(docxText(bytes).split('\n')).toEqual([
       'System Security Plan',
       'Enclave One',

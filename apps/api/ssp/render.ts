@@ -69,8 +69,10 @@ function plain(text: string): Paragraph {
   return new Paragraph({ children: [run(text)] });
 }
 
+/** `Label: value`, or `Label:` alone, kept on the page of the lines that follow it. */
 function labelled(label: string, value?: string): Paragraph {
   return new Paragraph({
+    keepNext: value === undefined,
     children: [
       run(value === undefined ? `${label}:` : `${label}: `, { bold: true }),
       ...(value === undefined ? [] : [run(value)]),
