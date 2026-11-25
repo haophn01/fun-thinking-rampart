@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>SSP templates: reference folder research</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;max-width:1000px;margin:24px auto;padding:0 16px;color:#1d2330;background:#f6f7f9}
+h1{font-size:24px}h2{margin-top:32px;border-bottom:2px solid #cfd5e0;padding-bottom:4px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{background:#fff;border:1px solid #cfd5e0;border-radius:8px;padding:12px;font-size:14px}
+.card h3{margin:0 0 6px;font-size:15px}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;margin-right:4px}
+.g{background:#d6f0dc}.y{background:#fdf0c4}.r{background:#f8d7d7}.b{background:#dde6fb}
+.opts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}
+.opts div{background:#eef1f7;border-radius:6px;padding:6px;font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}td,th{border:1px solid #cfd5e0;padding:5px;text-align:left;vertical-align:top}
+.note{background:#fff8dc;border:1px solid #e6d58a;padding:8px;border-radius:6px;font-size:14px}
+</style></head><body>
+<h1>SSP templates: what to keep, and what the export is missing</h1>
+<p>Generated 2026-11-25 · standard depth · 8 searches · 17 pages read. Baseline: NIST SP 800-171 Rev 2 (<a href="https://www.law.cornell.edu/cfr/text/32/170.14">32 CFR 170.14</a>).</p>
+<div class="note"><b>Limit:</b> the tooling could not open .docx or PDF files. NIST's own template structure is <b>not verified</b>. Open it once and diff it against the export. Redistribution calls below are my judgment, not legal advice.</div>
+
+<h2>Coverage of the current export (0 to 10 expectation score, my ranking)</h2>
+<svg width="900" height="270" role="img" aria-label="Gap ranking">
+<style>text{font:12px Segoe UI,Arial}</style>
+<g>
+<text x="0" y="18">1 Asset inventory + treatment</text><rect x="260" y="6" width="600" height="16" fill="#e46a6a"/>
+<text x="0" y="46">2 Network diagram + CUI data flows</text><rect x="260" y="34" width="560" height="16" fill="#e46a6a"/>
+<text x="0" y="74">3 External service providers / CRM</text><rect x="260" y="62" width="520" height="16" fill="#e46a6a"/>
+<text x="0" y="102">4 Review cadence + revision history</text><rect x="260" y="90" width="480" height="16" fill="#e8a24a"/>
+<text x="0" y="130">5 CUI description</text><rect x="260" y="118" width="420" height="16" fill="#e8a24a"/>
+<text x="0" y="158">6 Roles and responsibilities</text><rect x="260" y="146" width="380" height="16" fill="#e8a24a"/>
+<text x="0" y="186">7 N/A rationale per requirement</text><rect x="260" y="174" width="340" height="16" fill="#e8a24a"/>
+<text x="0" y="214">8 Per-objective (800-171A) detail</text><rect x="260" y="202" width="260" height="16" fill="#7aa2e3"/>
+<text x="0" y="242">9 Out-of-scope justification</text><rect x="260" y="230" width="220" height="16" fill="#7aa2e3"/>
+</g></svg>
+<p>Longer bar = matters more to a C3PAO or self-assessment. Items 1 to 3 come from <a href="https://www.law.cornell.edu/cfr/text/32/170.19">32 CFR 170.19</a>; 4 to 7 from <a href="https://redriver.com/cybersecurity/cmmc-system-security-plan-ssp">Red River</a>, <a href="https://ndisac.org/dibscc/?p=5842">NDISAC</a> and <a href="https://gtlaw.com/en/insights/2025/10/preparing-for-a-cmmc-audit-the-system-security-plan">GT Law</a>. Item 8 is an inference.</p>
+<p><b>Also:</b> the SSP requirement 3.12.4 cannot go on a POA&amp;M (<a href="https://www.law.cornell.edu/cfr/text/32/170.21">170.21</a>).</p>
+
+<h2>What exists</h2>
+<div class="grid">
+<div class="card"><h3>NIST CUI SSP template (Rev 2)</h3><span class="tag g">closest</span><span class="tag y">withdrawn pub, file still hosted</span>
+<p>.docx, Jan 2021. NIST sets no required format. Internal sections not verified.</p><a href="https://csrc.nist.gov/files/pubs/sp/800/171/r2/upd1/final/docs/cui-ssp-template-final.docx">download</a> · <a href="https://csrc.nist.gov/pubs/sp/800/171/r2/upd1/final">page</a></div>
+<div class="card"><h3>NIST CUI POA&amp;M template</h3><span class="tag g">matches export section 4</span><p>.docx on the same page.</p><a href="https://csrc.nist.gov/pubs/sp/800/171/r2/upd1/final">page</a></div>
+<div class="card"><h3>800-171A assessment procedures</h3><span class="tag g">320 objectives</span><span class="tag y">withdrawn May 2024</span><p>XLSX and CSV. Still the CMMC basis (170.14(d)).</p><a href="https://csrc.nist.gov/pubs/sp/800/171/a/final">page</a></div>
+<div class="card"><h3>NIST 800-171 Rev 3</h3><span class="tag y">no SSP template listed</span><p>Final May 2024. SSP requirement is 03.15.02. Not the CMMC baseline.</p><a href="https://csrc.nist.gov/pubs/sp/800/171/r3/final">page</a></div>
+<div class="card"><h3>OSCAL SSP model v1.2.3</h3><span class="tag b">machine format</span><p>Required: metadata, import-profile, system-characteristics (incl. authorization-boundary), system-implementation (users, components), control-implementation. Back-matter not read.</p><a href="https://pages.nist.gov/OSCAL-Reference/models/v1.1.3/system-security-plan/json-outline/">outline</a></div>
+<div class="card"><h3>Hive Systems</h3><span class="tag y">Rev 3 draft</span><span class="tag r">no terms</span><p>System info plus Appendix A of 110 controls.</p><a href="https://www.hivesystems.com/blog/approachablecmmc">page</a></div>
+<div class="card"><h3>Security Scientist</h3><span class="tag y">Rev 3</span><span class="tag r">email gate, no terms</span><p>Word. Identification, boundary, environment, requirement table, POA&amp;M reference, roles.</p><a href="https://www.securityscientist.net/blog/nist-800-171-system-security-plan-ssp-template/">page</a></div>
+<div class="card"><h3>Secureframe</h3><span class="tag r">no terms, no date</span><p>Customizable template with two access-control examples.</p><a href="https://secureframe.com/compliance-resources/cmmc-ssp-template.md">page</a></div>
+<div class="card"><h3>DoD Assessment and Scoping Guides L2</h3><span class="tag y">not read</span><p>Assessment Guide fetch gave HTTP 403. Download by hand.</p><a href="https://dodcio.defense.gov/Portals/0/Documents/CMMC/AssessmentGuideL2.pdf">Assessment Guide</a> · <a href="https://dodcio.defense.gov/Portals/0/Documents/CMMC/ScopingGuideL2.pdf">Scoping Guide</a></div>
+</div>
+
+<h2>Missing from the export vs. in the export only</h2>
+<table><tr><th>Missing (assessors expect)</th><th>Only in the export</th></tr>
+<tr><td>Asset inventory and treatment by 5 categories; network diagram; data flows; ESP and responsibility matrix; update cadence; revision history; CUI description; roles; N/A rationale; per-objective detail</td>
+<td>SPRS score, conditional status and dates, points, evidence and policy titles, CAGE code. Sources only ask that SSP, POA&amp;M and score agree. Unverified against the NIST file.</td></tr></table>
+
+<h2>Proposed templates/ folder</h2>
+<table><tr><th>File</th><th>Purpose</th><th>Commit?</th></tr>
+<tr><td>official/nist-cui-ssp-template-final.docx</td><td>Structure to diff against</td><td><span class="tag g">yes (verify terms)</span></td></tr>
+<tr><td>official/nist-cui-plan-of-action-template-final.docx</td><td>POA&amp;M layout</td><td><span class="tag g">yes (verify terms)</span></td></tr>
+<tr><td>official/sp800-171r2-security-reqs.xlsx</td><td>110 requirement text</td><td><span class="tag g">yes (verify terms)</span></td></tr>
+<tr><td>official/sp800-171A-assessment-procedures.xlsx</td><td>320 objectives</td><td><span class="tag g">yes (verify terms)</span></td></tr>
+<tr><td>official/NIST.SP.800-171r3.pdf and sp800-171r2-to-r3-analysis.xlsx</td><td>Future migration</td><td><span class="tag g">yes (verify terms)</span></td></tr>
+<tr><td>cmmc/AssessmentGuideL2.pdf, ScopingGuideL2.pdf</td><td>Objectives, asset categories</td><td><span class="tag y">likely yes, download by hand</span></td></tr>
+<tr><td>oscal/ notes (your own)</td><td>Field list</td><td><span class="tag b">link only</span></td></tr>
+<tr><td>vendor/ (Hive, Security Scientist, Secureframe)</td><td>Structure comparison</td><td><span class="tag r">link only, no terms</span></td></tr>
+<tr><td>SOURCES.md</td><td>URLs and last-checked dates</td><td><span class="tag g">yes</span></td></tr></table>
+<p>Full URLs are in the markdown report.</p>
+
+<h2>Questions</h2>
+<div class="card"><h3>Which baseline first?</h3><div class="opts"><div>Rev 2 only</div><div>Rev 2 plus Rev 3 mapping</div><div>Both with a switch</div></div></div>
+<div class="card"><h3>Asset inventory in the SSP?</h3><div class="opts"><div>Free-text section</div><div>Structured table in app</div><div>CSV import</div></div></div>
+<div class="card"><h3>Diagrams?</h3><div class="opts"><div>Reference by file and date</div><div>Embed in .docx</div><div>Link to evidence</div></div></div>
+<div class="card"><h3>Document control?</h3><div class="opts"><div>Revision table</div><div>Plus approvals</div><div>Plus review reminders</div></div></div>
+<div class="card"><h3>Per-objective detail?</h3><div class="opts"><div>None</div><div>Appendix</div><div>Inline</div></div></div>
+<div class="card"><h3>OSCAL export?</h3><div class="opts"><div>No</div><div>Later</div><div>Now</div></div></div>
+<div class="card"><h3>Who checks the NIST template structure?</h3><div class="opts"><div>Human diffs it</div><div>Rerun with a .docx reader</div><div>Skip</div></div></div>
+<div class="card"><h3>Keep SPRS and conditional fields in the SSP?</h3><div class="opts"><div>Keep</div><div>Appendix</div><div>Separate readiness report</div></div></div>
+
+<h2>Suspect pages</h2>
+<p>Security Scientist's page contained text asking for a book recommendation. Ignored.</p>
+</body></html>
