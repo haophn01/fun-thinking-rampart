@@ -4,6 +4,10 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# Playwright output (pnpm e2e)
+playwright-report/
+test-results/
+
 # local env files: never commit secrets
 .env*
 
