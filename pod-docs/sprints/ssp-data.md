@@ -2,15 +2,15 @@
 
 _From plan: pod-docs/plans/ssp-export-v2.md · Slug: ssp-data · Status: active · Generated: 2026-11-25_
 
-<!-- autopilot-run: started=2026-11-25T10:00:00-08:00 sprints=0 waves=1 -->
+<!-- autopilot-run: started=2026-11-25T10:00:00-08:00 sprints=0 waves=2 -->
 
 ## Status board
 
 | Wave | Slice | Title | Branch | PR | Status | Confidence | Depends on |
 |------|-------|-------|--------|----|--------|------------|------------|
-| 1 | K3 | Contract: SSP data schemas, requirement fields, audit actions, `provider_in_use` | ssp-data-k3 | — | pending | — | — |
-| 1 | D3 | DB: migration 0005, schema, `ssp-data` module scaffold, brief | ssp-data-d3 | — | pending | — | — |
-| 1 | T1 | `templates/` reference folder and SOURCES.md | ssp-data-t1 | — | pending | — | — |
+| 1 | K3 | Contract: SSP data schemas, requirement fields, audit actions, `provider_in_use` | ssp-data-k3 | #15 | done | d34fb5b | — |
+| 1 | D3 | DB: migration 0005, schema, `ssp-data` module scaffold, brief | ssp-data-d3 | #15 | done | d34fb5b | — |
+| 1 | T1 | `templates/` reference folder and SOURCES.md | ssp-data-t1 | #15 | done | d34fb5b | — |
 | 2 | A7 | API: SSP profile (identification, CUI, environment, review) and roles | ssp-data-a7 | — | pending | — | K3, D3 |
 | 2 | A8 | API: assets and diagram links | ssp-data-a8 | — | pending | — | K3, D3 |
 | 2 | A9 | API: service providers and the responsibility matrix | ssp-data-a9 | — | pending | — | K3, D3 |
