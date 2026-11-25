@@ -16,3 +16,5 @@ export * from './files';
 export * from './poam';
 export * from './evidence';
 export * from './policies';
+export * from './system-profile';
+export * from './ssp';
