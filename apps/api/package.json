@@ -21,6 +21,7 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.19.2",
     "drizzle-kit": "^0.31.11",
+    "fflate": "^0.8.3",
     "tsup": "^9.0.0",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3"
@@ -32,6 +33,7 @@
     "@rampart/catalog": "workspace:*",
     "@rampart/rules": "workspace:*",
     "better-sqlite3": "^12.11.1",
+    "docx": "^9.16.0",
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.8",
     "pino": "^10.4.0",
