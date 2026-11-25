@@ -222,8 +222,12 @@ describe('AuditLog', () => {
         'poam_item.closed',
         'evidence.version_added',
         'policy.links_updated',
+        'system_profile.updated',
       ]),
     );
+    expect(AUDIT_ENTITY_TYPES).toEqual(expect.arrayContaining(['system_profile']));
+    expect(actions['system_profile.updated']).toBe('System profile changed');
+    expect(entities.system_profile).toBe('System profile');
 
     // The entity filter offers every type by its label.
     fakeApi({ ...BASE, 'GET /api/audit': () => json(200, { events: [], nextBefore: null }) });
