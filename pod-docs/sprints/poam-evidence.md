@@ -2,7 +2,7 @@
 
 _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: poam-evidence · Status: active · Generated: 2026-11-24_
 
-<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=2 waves=8 -->
+<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=2 waves=9 -->
 
 ## Status board
 
@@ -13,9 +13,9 @@ _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: poam-evidence · Status: acti
 | 1 | D2 | DB: POA&M items, evidence, policies, links | poam-evidence-d2 | merged | done | high | — |
 | 1 | R5 | Rules: cited `poamNotMetOnly` on `Regulation` | poam-evidence-r5 | merged | done | medium | — |
 | 1 | L3 | Look: Checkbox, FileField; mount the three page modules | poam-evidence-l3 | merged | done | medium | — |
-| 2 | A4 | POA&M API: eligibility, milestones, countdown, closeout | poam-evidence-a4 | — | pending | — | K2, E1, D2 |
-| 2 | A5 | Evidence API: items, file versions, CUI references, objective links | poam-evidence-a5 | — | pending | — | K2, E1, D2 |
-| 2 | A6 | Policies API: items, file versions, requirement links | poam-evidence-a6 | — | pending | — | K2, E1, D2 |
+| 2 | A4 | POA&M API: eligibility, milestones, countdown, closeout | poam-evidence-a4 | merged | done | high | K2, E1, D2 |
+| 2 | A5 | Evidence API: items, file versions, CUI references, objective links | poam-evidence-a5 | merged | done | medium | K2, E1, D2 |
+| 2 | A6 | Policies API: items, file versions, requirement links | poam-evidence-a6 | merged | done | medium | K2, E1, D2 |
 | 3 | W4 | POA&M page | poam-evidence-w4 | — | pending | — | K2, L3, A4 |
 | 3 | W5 | Evidence page with the CUI banner | poam-evidence-w5 | — | pending | — | K2, L3, A5 |
 | 3 | W6 | Policies page | poam-evidence-w6 | — | pending | — | K2, L3, A6 |
