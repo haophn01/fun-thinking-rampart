@@ -14,23 +14,30 @@ keep a rules-checked POA&M. "Rampart" is a placeholder name; the code spells it 
 You need Node 24 or later. pnpm comes from corepack, pinned by the `packageManager` field in
 `package.json`, so everyone runs the same version.
 
+From a clean clone, one command installs, migrates and starts the app (PowerShell or bash):
+
 ```sh
-corepack enable
-pnpm install
-pnpm dev
+corepack pnpm start
 ```
 
+It runs `pnpm install --frozen-lockfile`, then `pnpm db:migrate`, then `pnpm dev`, and stops at
+the first step that fails with that step's exit code. Open http://127.0.0.1:3000: a new database
+shows Setup, where you create the first admin. Stop it with Ctrl+C. `corepack pnpm` needs no
+`corepack enable`, so it works even where that command fails.
+
 `pnpm dev` starts the api on http://127.0.0.1:3001 and the web app on http://127.0.0.1:3000. Both
-bind to `127.0.0.1` only. Change the ports with `API_PORT` and `WEB_PORT`:
+bind to `127.0.0.1` only. Change the ports with `API_PORT` and `WEB_PORT` (`pnpm start` passes them
+through):
 
 ```sh
 API_PORT=3011 WEB_PORT=3010 pnpm dev                 # bash
 $env:API_PORT=3011; $env:WEB_PORT=3010; pnpm dev     # PowerShell
 ```
 
-If `corepack enable` fails with `EPERM` (Node is installed in a folder you can't write to), either
-run it from an elevated shell, or put the shims in a folder of your own that is on your `PATH`:
-`corepack enable --install-directory <folder> pnpm`.
+To type plain `pnpm …`, run `corepack enable` once. If it fails with `EPERM` (Node is installed in
+a folder you can't write to), either run it from an elevated shell, put the shims in a folder of
+your own that is on your `PATH` (`corepack enable --install-directory <folder> pnpm`), or keep
+prefixing commands with `corepack`.
 
 ### End-to-end tests
 
@@ -53,6 +60,7 @@ Run these from the repo root.
 
 | Script            | What it does                                                               |
 | ----------------- | -------------------------------------------------------------------------- |
+| `pnpm start`      | Frozen install, then `db:migrate`, then `dev` (`scripts/start.ts`)         |
 | `pnpm dev`        | Runs the api (`tsx watch`) and the web app (Vite) in parallel              |
 | `pnpm lint`       | `eslint .`, then `prettier --check .`                                      |
 | `pnpm format`     | `prettier --write .`                                                       |
