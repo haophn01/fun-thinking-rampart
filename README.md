@@ -54,6 +54,24 @@ temporary folder (`E2E_RUN_DIR`), so it never touches `apps/api/data`. A failing
 trace and screenshot in `test-results/`, and the HTML report goes to `playwright-report/`. Vitest
 never collects `e2e/`, so `pnpm verify` needs no browser.
 
+The specs, in the order Playwright runs them (file name order):
+
+- `look.spec.ts` checks the Look, signed in, on every route in the nav (plus a requirement's
+  detail and the phone menu) at 1280 and 375 px: no visible text under 16 px, only the six palette
+  colours (or transparent) for text, backgrounds and borders, every text pair at 4.5:1 (3:1 for
+  large text), and no horizontal scroll at 375 px. Because it runs first and the other specs need a
+  fresh install, it starts a second api of its own on `E2E_API_PORT + 2` (3293 by default;
+  `E2E_LOOK_API_PORT` overrides it) with its own database in the run folder, fills every page
+  through that api, and routes the browser's `/api` calls to it. The pages still come from the
+  run's web app.
+- `shell.spec.ts` checks that a fresh install shows Setup.
+- `smoke.spec.ts` walks the plan's Verification path: create the admin, reach 72 with
+  AC.L2-3.1.20 Not Met (HOLD, its blocker, and the POA&M refusal), fix it and reach ACCEPT with
+  eligible POA&M items, upload evidence and see its SHA-256 (a CUI item refuses a file), upload and
+  link a policy, fill the system profile and export the SSP (its text holds the profile and every
+  requirement's status and statement), then read the audit log. Scores are planned from the
+  catalog's points, never typed in.
+
 ## Scripts
 
 Run these from the repo root.
@@ -142,6 +160,9 @@ JSON body. Request bodies are strict: an unknown key gives 400.
 | `PATCH /api/assessment`                             | admin    | `{ type?, conditionalStatusDate? }`; a `null` date clears it. Answers with the whole view                                                           |
 | `PUT /api/assessment/objectives/:objectiveId`       | any user | `{ status, note }`, with `status` exactly `met`, `not_met`, `na` or `not_assessed`. URL-encode the ID (`3.1.1%5Ba%5D`). Answers with the evaluation |
 | `PATCH /api/assessment/requirements/:requirementId` | any user | `{ implementationStatement?, implementationLevel?, ownerId? }`; `null` unsets. Answers with the evaluation                                          |
+| `GET /api/system-profile`                           | any user | `{ profile }`: the SSP's system characteristics, every field `null` until the first save                                                            |
+| `PATCH /api/system-profile`                         | any user | Any of the profile fields; blank becomes `null`, a CAGE code is 5 letters or digits, `{}` gives 400. Answers with `{ profile }`                     |
+| `GET /api/ssp/export`                               | any user | The System Security Plan as a `.docx` download, `SSP-<system identifier>-<UTC date>.docx`. Writes nothing                                           |
 
 - **One evaluation:** every response's `evaluation` is `evaluateAssessment` from `@rampart/rules`
   over the stored rows, the same function the web app runs for its live and what-if scores. A
@@ -155,15 +176,33 @@ JSON body. Request bodies are strict: an unknown key gives 400.
   recorded, and a write that changes nothing answers 200 and records nothing.
 - Unknown objectives and requirements give 404; with no assessment row (before setup) every
   assessment route gives 404.
+- **Conditional status** needs a score of at least 88 and an open POA&M item for every Not Met
+  requirement (32 CFR 170.24(c)(2)(i)(B)(6)); a Not Met requirement with no open item is a
+  `poam_missing` blocker.
+- **SSP export:** the document has the system profile, an assessment summary (SPRS score,
+  Conditional status, counts), every requirement in catalog order with its status, points, owner,
+  implementation statement, objectives, linked policies and evidence and its open POA&M item, then
+  the whole POA&M. Fill the profile on the SSP page or with `PATCH /api/system-profile`.
+
+## The dashboard
+
+The Dashboard (`/`) reads the saved assessment. It shows the SPRS score on a ruler from the lowest
+possible score to 110 with the Conditional line at 88, a feature control frame (`IN TOL` at 88 or
+more), and the inspector's stamp: **ACCEPT** when Conditional or Final status is reachable,
+otherwise **HOLD** with the number of blockers. Beside it are the Conditional check (each blocker
+with its citation, the open POA&M count and the 180-day closeout clock), objective counts, family
+progress and a "Needs attention" list, and under them the inspection strip. The SSP page (`/ssp`)
+holds the system profile form, how ready the SSP is, and the **Export SSP (.docx)** link.
 
 ## Parts
 
-| Package            | Folder             | What it does                                                                                            |
-| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------- |
-| `@rampart/catalog` | `packages/catalog` | The NIST SP 800-171 Rev 2 catalog as versioned data: families, requirements, objectives and SPRS points |
-| `@rampart/rules`   | `packages/rules`   | Pure functions: requirement status, SPRS score, POA&M eligibility, Conditional check, 180-day clock     |
-| `@rampart/api`     | `apps/api`         | Fastify HTTP API on `/api`, the only writer of the SQLite database; also owns the shared contract       |
-| `@rampart/web`     | `apps/web`         | React app built with Vite                                                                               |
+| Package            | Folder             | What it does                                                                                                              |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `@rampart/catalog` | `packages/catalog` | The NIST SP 800-171 Rev 2 catalog as versioned data: families, requirements, objectives and SPRS points                   |
+| `@rampart/rules`   | `packages/rules`   | Pure functions: requirement status, SPRS score, POA&M eligibility, Conditional check, 180-day clock                       |
+| `@rampart/api`     | `apps/api`         | Fastify HTTP API on `/api`, the only writer of the SQLite database; also owns the shared contract                         |
+| (part of the api)  | `apps/api/ssp`     | Builds the SSP: a pure outline from the catalog, profile, assessment, POA&M, policies and evidence, rendered as a `.docx` |
+| `@rampart/web`     | `apps/web`         | React app built with Vite                                                                                                 |
 
 ## How they connect
 
