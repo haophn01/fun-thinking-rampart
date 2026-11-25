@@ -187,3 +187,44 @@ describe('view uses the shared evaluation', () => {
     expect(response.statusCode).toBe(401);
   });
 });
+
+describe('requirement fields', () => {
+  it('requirement fields always sent: both keys on the view and the write response, null when unset', async () => {
+    const h = createHarness();
+    harnesses.push(h);
+    const admin = await h.setupAdmin();
+
+    const statement = await admin.patch(requirement('AC.L2-3.1.1'), {
+      implementationStatement: 'We use SSO.',
+    });
+    expect(statement.statusCode, statement.body).toBe(200);
+    const written = JSON.parse(statement.body) as { requirementState: Record<string, unknown> };
+    expect(written.requirementState).toHaveProperty('plannedImplementation', null);
+    expect(written.requirementState).toHaveProperty('naRationale', null);
+
+    const planned = await admin.patch(requirement('AC.L2-3.1.2'), {
+      plannedImplementation: 'Soon',
+    });
+    expect(planned.statusCode, planned.body).toBe(200);
+
+    // A no-op on a requirement with no row still answers with both keys.
+    const noop = await admin.patch(requirement('AC.L2-3.1.3'), { implementationStatement: '  ' });
+    const noopState = (JSON.parse(noop.body) as { requirementState: Record<string, unknown> })
+      .requirementState;
+    expect(noopState).toHaveProperty('plannedImplementation', null);
+    expect(noopState).toHaveProperty('naRationale', null);
+
+    const raw = JSON.parse((await admin.get('/api/assessment')).body) as {
+      requirementStates: Record<string, unknown>[];
+    };
+    expect(raw.requirementStates).toHaveLength(2);
+    expect(raw.requirementStates[0]).toMatchObject({
+      plannedImplementation: null,
+      naRationale: null,
+    });
+    expect(raw.requirementStates[1]).toMatchObject({
+      plannedImplementation: 'Soon',
+      naRationale: null,
+    });
+  });
+});
