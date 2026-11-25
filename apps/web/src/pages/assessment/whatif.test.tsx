@@ -159,7 +159,7 @@ describe('what-if mode', () => {
   });
 
   it('Exit discards the changes', async () => {
-    fakeApi();
+    const api = fakeApi();
     mount(target);
     await ready(target);
     const before = score().textContent;
@@ -171,6 +171,16 @@ describe('what-if mode', () => {
     expect(screen.queryByText('What-if — not saved')).not.toBeInTheDocument();
     expect(within(status(first.id)).getByRole('radio', { name: 'Met' })).toBeChecked();
     expect(screen.getByRole('textbox', { name: 'Implementation statement' })).toBeEnabled();
+
+    // Trying changes again starts from the saved assessment, not the discarded changes.
+    await userEvent.click(screen.getByRole('button', { name: 'Try changes' }));
+    expect(screen.getByText('What-if — not saved')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'SPRS score' })).toHaveTextContent(
+      '0 requirements changed',
+    );
+    expect(score()).toHaveTextContent(savedText(api.savedScore));
+    expect(within(status(first.id)).getByRole('radio', { name: 'Met' })).toBeChecked();
+    expect(api.writes).toEqual([]);
   });
 
   it('leaving the page discards the changes', async () => {
@@ -186,7 +196,15 @@ describe('what-if mode', () => {
     expect(screen.queryByText('What-if — not saved')).not.toBeInTheDocument();
     expect(score()).toHaveTextContent(before);
     expect(within(status(first.id)).getByRole('radio', { name: 'Met' })).toBeChecked();
-    expect(api.writes).toEqual([]);
     expect(savedText(api.savedScore)).toBe(before);
+
+    // Trying changes on the new page starts from the saved assessment.
+    await userEvent.click(screen.getByRole('button', { name: 'Try changes' }));
+    expect(screen.getByRole('region', { name: 'SPRS score' })).toHaveTextContent(
+      '0 requirements changed',
+    );
+    expect(score()).toHaveTextContent(before);
+    expect(within(status(first.id)).getByRole('radio', { name: 'Met' })).toBeChecked();
+    expect(api.writes).toEqual([]);
   });
 });

@@ -116,6 +116,31 @@ describe('what-if state', () => {
     expect(result.current.active).toBe(false);
     expect(result.current.changes).toEqual({});
     expect(scoreOf(result.current.evaluation)).toBe(110);
+    // Starting again begins from the saved input, not the changes exit discarded.
+    act(() => {
+      result.current.start();
+    });
+    expect(result.current.active).toBe(true);
+    expect(result.current.changes).toEqual({});
+    expect(result.current.diff).toEqual({ scoreDelta: 0, changed: [] });
+    expect(scoreOf(result.current.evaluation)).toBe(110);
+  });
+
+  it('unmounting drops the changes; a new mount starts from the saved input', () => {
+    const first = renderHook(() => useWhatIf(allMet));
+    act(() => {
+      first.result.current.start();
+    });
+    act(() => {
+      first.result.current.setObjective('3.1.1[a]', 'not_met');
+    });
+    first.unmount();
+    const { result } = renderHook(() => useWhatIf(allMet));
+    act(() => {
+      result.current.start();
+    });
+    expect(result.current.changes).toEqual({});
+    expect(scoreOf(result.current.evaluation)).toBe(110);
   });
 
   it('follows a new saved input', () => {
