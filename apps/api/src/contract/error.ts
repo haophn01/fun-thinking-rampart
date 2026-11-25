@@ -24,6 +24,7 @@ export const ERROR_CODES = [
   'evidence_not_cui',
   'unsupported_file_type',
   'file_integrity_failed',
+  'provider_in_use',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -68,6 +69,11 @@ export const ERROR_STATUS = {
   unsupported_file_type: 415,
   /** A stored file is missing or its bytes no longer match the recorded SHA-256. */
   file_integrity_failed: 500,
+  /**
+   * Removing a service provider that a responsibility row still names; `details.requirementIds`
+   * lists those requirements in catalog order.
+   */
+  provider_in_use: 409,
 } as const satisfies Record<ErrorCode, number>;
 
 /**

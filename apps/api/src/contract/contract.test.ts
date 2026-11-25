@@ -89,6 +89,7 @@ describe('api contract', () => {
       'evidence_not_cui',
       'unsupported_file_type',
       'file_integrity_failed',
+      'provider_in_use',
     ]);
 
     const envelope = { error: { code: 'not_found', message: 'No route', requestId: 'abc' } };

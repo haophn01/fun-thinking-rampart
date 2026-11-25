@@ -4,3 +4,5 @@
 *.woff2 binary
 *.png binary
 *.sqlite binary
+*.docx binary
+*.xlsx binary
