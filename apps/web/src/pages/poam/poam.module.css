@@ -1,0 +1,175 @@
+.page {
+  display: grid;
+  gap: 32px;
+  max-width: 1200px;
+  min-width: 0;
+}
+
+.section {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+}
+
+.sectionHead {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.subHead {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.muted {
+  color: var(--rp-graphite);
+}
+
+.mono {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  overflow-wrap: anywhere;
+}
+
+.retry {
+  margin-top: 12px;
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One part card, as on an inspection drawing: Sheet, a 1.5 px Ink border, a mono ID on top. */
+.card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 16px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  background: var(--rp-sheet);
+  overflow-wrap: anywhere;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+.countdown {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  font-weight: 700;
+}
+
+/* An overdue count is marked with a Red block, never red body text. */
+.countdown[data-overdue='true'] {
+  padding: 0 8px;
+  background: var(--rp-red);
+  color: var(--rp-sheet);
+}
+
+.plan {
+  white-space: pre-wrap;
+}
+
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flag {
+  padding: 0 8px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+.milestoneList {
+  display: grid;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: var(--rp-rule) solid var(--rp-ink);
+}
+
+.closeout {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+}
+
+.reasons {
+  display: grid;
+  gap: 4px;
+}
+
+.citation {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  color: var(--rp-graphite);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  background: var(--rp-sheet);
+}
+
+.formTitle {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 700;
+}
+
+.milestones {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  padding: 0;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.milestoneRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px 16px;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .milestoneRow {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+}
