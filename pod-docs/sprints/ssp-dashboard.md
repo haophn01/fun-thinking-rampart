@@ -2,7 +2,7 @@
 
 _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: ssp-dashboard · Status: active · Generated: 2026-11-24_
 
-<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=3 waves=11 -->
+<!-- autopilot-run: started=2026-11-23T22:30:00-08:00 sprints=3 waves=12 -->
 
 ## Status board
 
@@ -12,9 +12,9 @@ _From plan: pod-docs/plans/cmmc-l2-grc.md · Slug: ssp-dashboard · Status: acti
 | 1 | R6 | Rules: a Not Met requirement needs an open POA&M item (contract change) | ssp-dashboard-r6 | merged | done | medium | — |
 | 1 | P1 | System profile: contract, migration, API; redact the CSRF header in logs | ssp-dashboard-p1 | merged | done | high | — |
 | 1 | L4 | Look: dimension-line ruler, feature control frame, stamp, IR strip; mount pages | ssp-dashboard-l4 | merged | done | high | — |
-| 2 | S3 | SSP export: .docx builder and `GET /api/ssp/export` | ssp-dashboard-s3 | — | pending | — | X1, P1 |
-| 2 | W7 | Readiness dashboard | ssp-dashboard-w7 | — | pending | — | R6, P1, L4 |
-| 2 | W8 | SSP page: system profile form and export | ssp-dashboard-w8 | — | pending | — | P1, L4 |
+| 2 | S3 | SSP export: .docx builder and `GET /api/ssp/export` | ssp-dashboard-s3 | merged | done | high | X1, P1 |
+| 2 | W7 | Readiness dashboard | ssp-dashboard-w7 | merged | done | medium | R6, P1, L4 |
+| 2 | W8 | SSP page: system profile form and export | ssp-dashboard-w8 | merged | done | medium | P1, L4 |
 | 3 | E2 | End-to-end smoke, Look checks, docs | ssp-dashboard-e2 | — | pending | — | X1, R6, P1, L4, S3, W7, W8 |
 
 Plan branch `cmmc-l2-grc`; wave heads `ssp-dashboard-w1`, `ssp-dashboard-w2`, `ssp-dashboard-w3`. Merge target `main`. This is the plan's last sprint: E2 proves the plan's **Verification** section.
