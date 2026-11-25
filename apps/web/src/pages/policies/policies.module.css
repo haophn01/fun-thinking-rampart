@@ -1,0 +1,172 @@
+.page {
+  display: grid;
+  gap: 32px;
+  max-width: 1200px;
+  min-width: 0;
+}
+
+.section {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+}
+
+.sectionHead {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.muted {
+  color: var(--rp-graphite);
+}
+
+.retry {
+  margin-top: 12px;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+/* One policy per card: a ruled sheet, like a drawing's parts list. */
+.item {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--rp-sheet);
+  border: var(--rp-rule) solid var(--rp-ink);
+}
+
+.head {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--rp-text-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.description {
+  color: var(--rp-graphite);
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+.latest {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 16px;
+  margin: 0;
+  min-width: 0;
+}
+
+.latest dt {
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.latest dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.fileName {
+  overflow-wrap: anywhere;
+}
+
+/* The full 64-character digest, never cut: it wraps anywhere instead. */
+.hash {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.versions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+}
+
+.version {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 8px 0;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+}
+
+.download {
+  color: var(--rp-ink);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.upload {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.links {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 16px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+}
+
+.sub {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  color: var(--rp-graphite);
+}
+
+.checks {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.create {
+  display: grid;
+  gap: 16px;
+  max-width: 640px;
+  min-width: 0;
+}
+
+.formHead {
+  font-size: var(--rp-text-body);
+  font-weight: 600;
+}
+
+@media (max-width: 767px) {
+  .item {
+    padding: 12px;
+  }
+
+  .latest {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
