@@ -1,16 +1,21 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   pnpmCommand,
+  pnpmShims,
   runStart,
   spawnRunner,
   startSteps,
+  withShimOnPath,
+  writePnpmShims,
   type Runner,
 } from '../../scripts/start.ts';
 
 const root = join(import.meta.dirname, '..', '..');
+const SHIMS = 'C:\\tmp\\rampart-pnpm';
 const NODE = 'C:\\node\\node.exe';
 const PNPM_CJS = 'C:\\corepack\\pnpm\\10.34.9\\bin\\pnpm.cjs';
 
@@ -45,6 +50,7 @@ describe('scripts/start.ts', () => {
       execPath: NODE,
       platform: 'win32',
       run,
+      shimDir: SHIMS,
       log: () => undefined,
     });
     expect(code).toBe(0);
@@ -63,6 +69,7 @@ describe('scripts/start.ts', () => {
         execPath: NODE,
         platform: 'linux',
         run: install.run,
+        shimDir: SHIMS,
         log: () => undefined,
       }),
     ).toBe(7);
@@ -76,6 +83,7 @@ describe('scripts/start.ts', () => {
         execPath: NODE,
         platform: 'linux',
         run: migrate.run,
+        shimDir: SHIMS,
         log: (line) => lines.push(line),
       }),
     ).toBe(3);
@@ -93,6 +101,7 @@ describe('scripts/start.ts', () => {
         execPath: NODE,
         platform: 'linux',
         run: dev.run,
+        shimDir: SHIMS,
         log: () => undefined,
       }),
     ).toBe(130);
@@ -105,6 +114,7 @@ describe('scripts/start.ts', () => {
         execPath: NODE,
         platform: 'linux',
         run: killed.run,
+        shimDir: SHIMS,
         log: () => undefined,
       }),
     ).toBe(1);
@@ -138,15 +148,84 @@ describe('scripts/start.ts', () => {
 
     const { calls, run } = fakeRunner();
     const env = { API_PORT: '3201', WEB_PORT: '3200', PATH: '/bin' };
-    await runStart({ env, execPath: NODE, platform: 'win32', run, log: () => undefined });
+    await runStart({
+      env,
+      execPath: NODE,
+      platform: 'win32',
+      run,
+      shimDir: SHIMS,
+      log: () => undefined,
+    });
     expect(calls).toHaveLength(3);
     for (const call of calls) {
       expect(call.command).toBe('corepack');
       expect(call.args[0]).toBe('pnpm');
       expect(call.shell).toBe(true);
-      expect(call.env).toMatchObject({ API_PORT: '3201', WEB_PORT: '3200', PATH: '/bin' });
+      // The ports pass through; PATH keeps what it had, behind the pnpm shim folder.
+      expect(call.env).toMatchObject({ API_PORT: '3201', WEB_PORT: '3200', PATH: `${SHIMS};/bin` });
     }
   });
+
+  it('puts a pnpm shim first on PATH for the scripts that call pnpm', async () => {
+    // `pnpm db:migrate` and `pnpm dev` run root scripts that call `pnpm` again. A user who typed
+    // `corepack pnpm start` has no `pnpm` on PATH, so the shim runs the same pnpm as the script.
+    expect(pnpmShims({ command: NODE, prefix: [PNPM_CJS], shell: false })).toEqual([
+      { name: 'pnpm.cmd', content: `@${NODE} ${PNPM_CJS} %*\r\n` },
+      { name: 'pnpm', content: `#!/bin/sh\nexec ${NODE} ${PNPM_CJS} "$@"\n` },
+    ]);
+    expect(pnpmShims({ command: 'corepack', prefix: ['pnpm'], shell: true })).toEqual([
+      { name: 'pnpm.cmd', content: '@corepack pnpm %*\r\n' },
+      { name: 'pnpm', content: '#!/bin/sh\nexec corepack pnpm "$@"\n' },
+    ]);
+    // Only a word that needs quotes gets them; cmd.exe mis-resolves a quoted bare batch name.
+    const spaced = 'C:\\Program Files\\nodejs\\node.exe';
+    expect(pnpmShims({ command: spaced, prefix: [PNPM_CJS], shell: false })[0]).toEqual({
+      name: 'pnpm.cmd',
+      content: `@"${spaced}" ${PNPM_CJS} %*\r\n`,
+    });
+
+    // Windows spells the key `Path`; replace that key rather than adding a second one.
+    expect(withShimOnPath({ Path: 'C:\\bin', X: '1' }, SHIMS, 'win32')).toEqual({
+      Path: `${SHIMS};C:\\bin`,
+      X: '1',
+    });
+    expect(withShimOnPath({ PATH: '/usr/bin' }, '/tmp/s', 'linux')).toEqual({
+      PATH: '/tmp/s:/usr/bin',
+    });
+    expect(withShimOnPath({}, '/tmp/s', 'linux')).toEqual({ PATH: '/tmp/s' });
+
+    const { calls, run } = fakeRunner();
+    await runStart({
+      env: { PATH: '/usr/bin' },
+      execPath: NODE,
+      platform: 'linux',
+      run,
+      shimDir: '/tmp/s',
+      log: () => undefined,
+    });
+    expect(calls.map((call) => call.env.PATH)).toEqual([
+      '/tmp/s:/usr/bin',
+      '/tmp/s:/usr/bin',
+      '/tmp/s:/usr/bin',
+    ]);
+  });
+
+  it('a nested pnpm call reaches pnpm through the written shim', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rampart-start-test-'));
+    try {
+      const pnpm = pnpmCommand(process.env, process.execPath, process.platform);
+      writePnpmShims(dir, pnpm);
+      // Strip any pnpm already on PATH down to the shim folder plus Node's own folder.
+      const base: NodeJS.ProcessEnv = Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'path'),
+      );
+      base.PATH = dirname(process.execPath);
+      const env = withShimOnPath(base, dir, process.platform);
+      expect(await spawnRunner('pnpm', ['--version'], { env, shell: true })).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 
   it('spawnRunner reports the child exit code and a spawn error', async () => {
     const env = { ...process.env };

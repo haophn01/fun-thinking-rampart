@@ -2,7 +2,9 @@
 // Installs from the lockfile, applies migrations, then runs both dev servers.
 // Node 24 runs this file directly (type stripping), so it uses `node:` imports only.
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export interface Step {
@@ -33,7 +35,14 @@ export interface StartOptions {
   execPath: string;
   platform: NodeJS.Platform;
   run: Runner;
+  /** A folder holding the pnpm shims from writePnpmShims(); it goes first on every step's PATH. */
+  shimDir: string;
   log: (line: string) => void;
+}
+
+export interface ShimFile {
+  name: string;
+  content: string;
 }
 
 /** The steps, in order. Each one must succeed before the next starts. */
@@ -64,14 +73,49 @@ export function pnpmCommand(
   return { command: 'corepack', prefix: ['pnpm'], shell: platform === 'win32' };
 }
 
+/**
+ * `pnpm` launchers for the scripts that call pnpm again (`db:migrate`, `dev`): a .cmd for Windows
+ * shells and a sh script for the rest. Both run the same pnpm as this script.
+ */
+export function pnpmShims(pnpm: PnpmCommand): ShimFile[] {
+  // Quote only words that need it: cmd.exe gives a batch file called by a quoted bare name
+  // (`"corepack"`) the wrong %~dp0, and npm's corepack.cmd finds corepack.js through it.
+  const words = [pnpm.command, ...pnpm.prefix]
+    .map((word) => (/[\s"&()^]/.test(word) ? `"${word}"` : word))
+    .join(' ');
+  return [
+    { name: 'pnpm.cmd', content: `@${words} %*\r\n` },
+    { name: 'pnpm', content: `#!/bin/sh\nexec ${words} "$@"\n` },
+  ];
+}
+
+/** A copy of env with dir first on PATH, keeping the key's existing spelling (`Path` on Windows). */
+export function withShimOnPath(
+  env: NodeJS.ProcessEnv,
+  dir: string,
+  platform: NodeJS.Platform,
+): NodeJS.ProcessEnv {
+  const key =
+    Object.keys(env).find((name) =>
+      platform === 'win32' ? name.toLowerCase() === 'path' : name === 'PATH',
+    ) ?? 'PATH';
+  const current = env[key];
+  const delimiter = platform === 'win32' ? ';' : ':';
+  return {
+    ...env,
+    [key]: current === undefined || current === '' ? dir : `${dir}${delimiter}${current}`,
+  };
+}
+
 /** Runs every step in order and returns the exit code: the first failure's, or dev's own. */
 export async function runStart(options: StartOptions): Promise<number> {
   const pnpm = pnpmCommand(options.env, options.execPath, options.platform);
+  const env = withShimOnPath(options.env, options.shimDir, options.platform);
   let code = 0;
   for (const step of startSteps()) {
     options.log(`> pnpm ${step.args.join(' ')}`);
     const exit = await options.run(pnpm.command, [...pnpm.prefix, ...step.args], {
-      env: options.env,
+      env,
       shell: pnpm.shell,
     });
     code = exit ?? 1;
@@ -100,17 +144,33 @@ export const spawnRunner: Runner = (command, args, options) =>
     });
   });
 
+/** Writes the shims from pnpmShims() into dir (the sh one executable). */
+export function writePnpmShims(dir: string, pnpm: PnpmCommand): void {
+  for (const shim of pnpmShims(pnpm)) {
+    writeFileSync(join(dir, shim.name), shim.content, { mode: 0o755 });
+  }
+}
+
 const invokedDirectly =
   process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
-  process.exitCode = await runStart({
-    env: process.env,
-    execPath: process.execPath,
-    platform: process.platform,
-    run: spawnRunner,
-    log: (line) => {
-      console.log(line);
-    },
-  });
+  // Ctrl+C reaches the children through the terminal; wait for them to stop, then clean up.
+  process.on('SIGINT', () => undefined);
+  const shimDir = mkdtempSync(join(tmpdir(), 'rampart-pnpm-'));
+  try {
+    writePnpmShims(shimDir, pnpmCommand(process.env, process.execPath, process.platform));
+    process.exitCode = await runStart({
+      env: process.env,
+      execPath: process.execPath,
+      platform: process.platform,
+      run: spawnRunner,
+      shimDir,
+      log: (line) => {
+        console.log(line);
+      },
+    });
+  } finally {
+    rmSync(shimDir, { recursive: true, force: true });
+  }
 }
