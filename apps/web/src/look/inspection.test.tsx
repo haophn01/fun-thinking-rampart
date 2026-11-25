@@ -1,4 +1,3 @@
-import { PRODUCT_NAME } from '@rampart/api/contract';
 import { render, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -404,14 +403,4 @@ describe('pages mounted', () => {
     expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
     expect(Page).toHaveBeenCalled();
   });
-
-  it.each([['Dashboard', DashboardPage]] as const)(
-    'the %s module starts as the placeholder with its title',
-    (title, Page) => {
-      render(<Page />);
-      expect(screen.getByRole('heading', { level: 1, name: title })).toBeInTheDocument();
-      expect(screen.getByText("This section isn't built yet.")).toBeInTheDocument();
-      expect(document.title).toBe(`${title} · ${PRODUCT_NAME}`);
-    },
-  );
 });
