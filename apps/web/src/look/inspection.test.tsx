@@ -1,8 +1,13 @@
+import { PRODUCT_NAME } from '@rampart/api/contract';
 import { render, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AuthedApp } from '../App';
+import { DashboardPage } from '../pages/dashboard/DashboardPage';
+import { SspPage } from '../pages/ssp/SspPage';
 import {
   BODY_TEXT_MIN,
   BODY_TEXT_PAIRS,
@@ -16,6 +21,21 @@ import { FeatureControlFrame } from './FeatureControlFrame';
 import { InspectionStamp } from './InspectionStamp';
 import { InspectionStrip } from './InspectionStrip';
 import { COLORS, type ColorToken } from './tokens';
+
+// The pages-mounted tests render the whole signed-in app; on a loaded machine that can pass
+// vitest's 5 s default, so give this file more room.
+vi.setConfig({ testTimeout: 15_000 });
+
+// Spy on the real page modules, so the test can tell that App mounts them rather than the
+// generic placeholder (both show the same h1).
+vi.mock('../pages/dashboard/DashboardPage', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../pages/dashboard/DashboardPage')>();
+  return { DashboardPage: vi.fn(mod.DashboardPage) };
+});
+vi.mock('../pages/ssp/SspPage', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../pages/ssp/SspPage')>();
+  return { SspPage: vi.fn(mod.SspPage) };
+});
 
 // The real scale: floor and max from the catalog's scoring, threshold from REGULATION.
 const FLOOR = -203;
@@ -342,5 +362,56 @@ describe('tokens and contrast', () => {
     const { problems, pairs } = cssProblems(readFileSync(join(LOOK_DIR, file), 'utf8'));
     expect(problems).toEqual([]);
     expect(pairs).toBeGreaterThan(0);
+  });
+});
+
+// ---- pages mounted -------------------------------------------------------------------------
+
+const ADMIN = { id: 'u-1', email: 'ada@example.com', displayName: 'Ada', role: 'admin' };
+
+describe('pages mounted', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((path: string) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(
+              path === '/api/session'
+                ? { setupRequired: false, user: ADMIN, csrfToken: 'csrf-1' }
+                : { status: 'ok', db: 'ok' },
+            ),
+          ),
+        ),
+      ),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it.each([
+    ['/', 'Dashboard', DashboardPage],
+    ['/ssp', 'SSP', SspPage],
+  ] as const)('%s renders its page module with the h1 %s', async (path, title, Page) => {
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <AuthedApp />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(Page).toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Dashboard', DashboardPage],
+    ['SSP', SspPage],
+  ] as const)('the %s module starts as the placeholder with its title', (title, Page) => {
+    render(<Page />);
+    expect(screen.getByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(screen.getByText("This section isn't built yet.")).toBeInTheDocument();
+    expect(document.title).toBe(`${title} · ${PRODUCT_NAME}`);
   });
 });
