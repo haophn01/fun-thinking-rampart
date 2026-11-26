@@ -254,40 +254,42 @@ export function RolesSection({ number }: { number: number }) {
           The SSP&apos;s privileged and admin count comes from this table.
         </p>
         {notice !== null && <Alert tone="error">{notice}</Alert>}
-        <SspTable
-          caption="System roles"
-          empty="No roles yet."
-          rows={view.roles}
-          rowKey={(role) => role.id}
-          columns={[
-            { header: 'Role', cell: (role) => role.title },
-            { header: 'Person', cell: (role) => role.person ?? '' },
-            { header: 'Responsibilities', cell: (role) => role.responsibilities ?? '' },
-            { header: 'Users', cell: (role) => String(role.userCount) },
-            { header: 'Privileged', cell: (role) => (role.privileged ? 'Yes' : 'No') },
-            {
-              header: 'Actions',
-              cell: (role) => (
-                <span className={styles.rowActions}>
-                  <Button
-                    onClick={() => {
-                      setNotice(null);
-                      setEditing(role);
-                    }}
-                  >
-                    Edit
-                  </Button>
-                  <RemoveButton
-                    name={role.title}
-                    onConfirm={() => {
-                      return remove(role);
-                    }}
-                  />
-                </span>
-              ),
-            },
-          ]}
-        />
+        <div className={styles.roles}>
+          <SspTable
+            caption="System roles"
+            empty="No roles yet."
+            rows={view.roles}
+            rowKey={(role) => role.id}
+            columns={[
+              { header: 'Role', cell: (role) => role.title },
+              { header: 'Person', cell: (role) => role.person ?? '' },
+              { header: 'Responsibilities', cell: (role) => role.responsibilities ?? '' },
+              { header: 'Users', cell: (role) => String(role.userCount) },
+              { header: 'Privileged', cell: (role) => (role.privileged ? 'Yes' : 'No') },
+              {
+                header: 'Actions',
+                cell: (role) => (
+                  <span className={styles.rowActions}>
+                    <Button
+                      onClick={() => {
+                        setNotice(null);
+                        setEditing(role);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <RemoveButton
+                      name={role.title}
+                      onConfirm={() => {
+                        return remove(role);
+                      }}
+                    />
+                  </span>
+                ),
+              },
+            ]}
+          />
+        </div>
         <div className={styles.formBlock}>
           <RoleForm
             // A fresh form per role being edited, and per add, so a draft never leaks across.

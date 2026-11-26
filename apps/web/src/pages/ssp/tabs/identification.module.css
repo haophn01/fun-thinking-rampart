@@ -39,3 +39,11 @@
   align-items: flex-start;
   gap: 8px 12px;
 }
+
+/* At phone width the kit's table is a block, and its caption would shrink to one letter per line. */
+@media (max-width: 767px) {
+  .roles caption {
+    display: block;
+    width: 100%;
+  }
+}
