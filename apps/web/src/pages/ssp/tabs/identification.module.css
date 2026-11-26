@@ -1,0 +1,41 @@
+/* Roles: a ruled parts list that becomes cards on phones, and the add/edit form below it. */
+
+.muted {
+  margin: 0;
+  color: var(--rp-graphite);
+}
+
+.totals {
+  margin: 0;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+.hint {
+  margin: 0;
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.form {
+  display: grid;
+  gap: 20px;
+  max-width: 720px;
+  min-width: 0;
+}
+
+.formBlock {
+  display: grid;
+  min-width: 0;
+  padding-top: 16px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+}
+
+.actions,
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+}
