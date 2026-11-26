@@ -1,5 +1,7 @@
 import {
   assessmentViewSchema,
+  documentControlSchema,
+  type DocumentControl,
   poamViewSchema,
   systemProfileResponseSchema,
   type AssessmentView,
@@ -52,6 +54,8 @@ interface Data {
   view: AssessmentView;
   poam: PoamView;
   profile: SystemProfile;
+  /** Null when the document-control call failed: the dashboard just omits the review row. */
+  control: DocumentControl | null;
 }
 
 type Load =
@@ -71,12 +75,17 @@ function useDashboard(): { load: Load; retry: () => void } {
     const live = { on: true };
     void (async () => {
       try {
-        const [view, poam, profile] = await Promise.all([
+        const controlCall = apiGet('/api/ssp/document-control', documentControlSchema).catch(
+          () => null,
+        );
+        const [view, poam, profile, control] = await Promise.all([
           apiGet('/api/assessment', assessmentViewSchema),
           apiGet('/api/poam', poamViewSchema),
           apiGet('/api/system-profile', systemProfileResponseSchema),
+          controlCall,
         ]);
-        if (live.on) setLoad({ status: 'ready', data: { view, poam, profile: profile.profile } });
+        if (live.on)
+          setLoad({ status: 'ready', data: { view, poam, profile: profile.profile, control } });
       } catch (error) {
         if (live.on) setLoad({ status: 'error', problem: problemOf(error) });
       }
@@ -233,8 +242,16 @@ function FamiliesSection({ view }: { view: AssessmentView }) {
   );
 }
 
-function AttentionSection({ view, poam }: { view: AssessmentView; poam: PoamView }) {
-  const rows = useMemo(() => needsAttention(view, poam, catalog), [view, poam]);
+function AttentionSection({
+  view,
+  poam,
+  control,
+}: {
+  view: AssessmentView;
+  poam: PoamView;
+  control: DocumentControl | null;
+}) {
+  const rows = useMemo(() => needsAttention(view, poam, catalog, control), [view, poam, control]);
   return (
     <section className={styles.attention} aria-label="Needs attention">
       <h2 className={styles.head}>
@@ -312,7 +329,7 @@ export function DashboardPage() {
     );
   }
 
-  const { view, poam, profile } = load.data;
+  const { view, poam, profile, control } = load.data;
   return (
     <div className={styles.page}>
       <h1>Dashboard</h1>
@@ -320,7 +337,7 @@ export function DashboardPage() {
         <ScoreSection view={view} />
         <ConditionalSection view={view} poam={poam} />
         <ObjectivesSection view={view} />
-        <AttentionSection view={view} poam={poam} />
+        <AttentionSection view={view} poam={poam} control={control} />
         <FamiliesSection view={view} />
       </div>
       <InspectionStrip

@@ -104,10 +104,24 @@ function profile(systemName: string | null) {
   };
 }
 
+function control(over: Record<string, unknown> = {}) {
+  return {
+    reviewCadenceMonths: 12,
+    nextReviewDate: null,
+    nextReviewDue: null,
+    daysToReview: null,
+    reviewOverdue: false,
+    revisions: [],
+    approvals: [],
+    ...over,
+  };
+}
+
 interface Api {
   assessment?: () => Response | Promise<Response>;
   poam?: unknown;
   profile?: unknown;
+  control?: () => Response | Promise<Response>;
 }
 
 function fakeApi(api: Api) {
@@ -124,6 +138,8 @@ function fakeApi(api: Api) {
       if (input === '/api/poam') return Promise.resolve(json(200, api.poam ?? poam()));
       if (input === '/api/system-profile')
         return Promise.resolve(json(200, api.profile ?? profile(null)));
+      if (input === '/api/ssp/document-control')
+        return Promise.resolve(api.control ? api.control() : json(200, control()));
       return Promise.resolve(json(404, { error: { code: 'not_found', message: 'nf' } }));
     }),
   );
@@ -369,6 +385,7 @@ describe('loading and error', () => {
           );
         if (input === '/api/assessment') return Promise.resolve(json(200, assessment()));
         if (input === '/api/system-profile') return Promise.resolve(json(200, profile(null)));
+        if (input === '/api/ssp/document-control') return Promise.resolve(json(200, control()));
         if (input === '/api/poam')
           return Promise.resolve(
             json(500, {
@@ -406,5 +423,52 @@ describe('inspection strip', () => {
     fakeApi({ profile: profile(null) });
     await ready();
     expect(await screen.findByText('System not named')).toBeInTheDocument();
+  });
+});
+
+describe('review overdue', () => {
+  it('shows the row with its link when the api says overdue', async () => {
+    fakeApi({
+      control: () =>
+        json(
+          200,
+          control({
+            nextReviewDate: '2026-11-20',
+            nextReviewDue: '2026-11-20',
+            daysToReview: -3,
+            reviewOverdue: true,
+          }),
+        ),
+    });
+    await ready();
+    const attention = screen.getByRole('region', { name: 'Needs attention' });
+    const link = await within(attention).findByRole('link', {
+      name: 'SSP review overdue: due 2026-11-20 · 3 days overdue',
+    });
+    expect(link).toHaveAttribute('href', '/ssp?tab=document-control');
+    expect(attention).not.toHaveTextContent('Nothing needs attention.');
+  });
+});
+
+describe('review call fails quietly', () => {
+  it('the dashboard renders with no error and no review row', async () => {
+    let asked = false;
+    fakeApi({
+      control: () => {
+        asked = true;
+        return json(500, {
+          error: { code: 'internal_error', message: 'Review is down', requestId: 'req-9' },
+        });
+      },
+    });
+    await ready();
+    await waitFor(() => {
+      expect(asked).toBe(true);
+    });
+    expect(screen.queryByText('Review is down')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    const attention = screen.getByRole('region', { name: 'Needs attention' });
+    expect(attention).toHaveTextContent('Nothing needs attention.');
+    expect(screen.queryByText(/SSP review overdue/)).not.toBeInTheDocument();
   });
 });

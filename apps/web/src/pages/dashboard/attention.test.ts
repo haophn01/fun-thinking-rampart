@@ -1,4 +1,4 @@
-import type { AssessmentView, PoamView } from '@rampart/api/contract';
+import type { AssessmentView, DocumentControl, PoamView } from '@rampart/api/contract';
 import { loadCatalog } from '@rampart/catalog';
 import { describe, expect, it } from 'vitest';
 import { needsAttention } from './attention';
@@ -164,5 +164,62 @@ describe('POA&M edges', () => {
   it('an unassigned owner shows no owner', () => {
     const rows = needsAttention(view([]), poam([item({ overdue: true, owner: null })]), catalog);
     expect(rows[0]?.owner).toBeNull();
+  });
+});
+
+function control(over: Partial<DocumentControl> = {}): DocumentControl {
+  return {
+    reviewCadenceMonths: 12,
+    nextReviewDate: '2026-11-20',
+    nextReviewDue: '2026-11-20',
+    daysToReview: -3,
+    reviewOverdue: true,
+    revisions: [],
+    approvals: [],
+    ...over,
+  };
+}
+
+describe('review overdue row', () => {
+  it('adds one row after the prerequisite rows with the due date and days overdue', () => {
+    const rows = needsAttention(
+      view([
+        { code: 'poam_missing', requirementId: id(R3), citation: 'c' },
+        { code: 'prerequisite_not_met', requirementId: 'CA.L2-3.12.4', citation: 'c' },
+      ]),
+      poam(),
+      catalog,
+      control(),
+    );
+    expect(rows.map((r) => r.kind)).toEqual(['prerequisite', 'review_overdue', 'poam_missing']);
+    expect(rows[1]).toMatchObject({
+      key: 'review-overdue',
+      href: '/ssp?tab=document-control',
+      message: 'SSP review overdue: due 2026-11-20 · 3 days overdue',
+    });
+    expect(rows[1]?.requirementId).toBeUndefined();
+  });
+
+  it('says "1 day overdue" for one day', () => {
+    const rows = needsAttention(
+      view([]),
+      poam(),
+      catalog,
+      control({ daysToReview: -1, nextReviewDue: '2026-11-22' }),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toBe('SSP review overdue: due 2026-11-22 · 1 day overdue');
+  });
+});
+
+describe('review not overdue', () => {
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['due today', control({ daysToReview: 0, reviewOverdue: false })],
+    ['due later', control({ daysToReview: 9, reviewOverdue: false, nextReviewDue: '2026-12-02' })],
+    ['no due date', control({ daysToReview: null, nextReviewDue: null, reviewOverdue: false })],
+  ])('adds no row when the review is %s', (_name, value) => {
+    expect(needsAttention(view([]), poam(), catalog, value)).toEqual([]);
   });
 });
