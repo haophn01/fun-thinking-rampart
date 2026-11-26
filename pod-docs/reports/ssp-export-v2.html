@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan report: SSP export v2</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fff; --fg: #1b1b1f; --muted: #5d5d66; --line: #d9d9e0; --soft: #f4f4f7;
+  --accent: #E10600; --ok: #1d7a3e; --bad: #b42318; --warn: #a15c07;
+  --display: "Space Grotesk", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #131316; --fg: #ececf1; --muted: #a2a2ad; --line: #34343c; --soft: #1d1d22;
+          --accent: #8da2ff; --ok: #5cc98a; --bad: #ff8a80; --warn: #f0b45c; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 system-ui, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.25; }
+h1 { font-size: 1.9rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.4rem; margin: 2.5rem 0 .75rem; padding-top: .5rem; border-top: 1px solid var(--line); }
+h3 { font-size: 1.1rem; margin: 1.25rem 0 .5rem; }
+a { color: var(--accent); }
+code, pre { font: 15px/1.45 ui-monospace, Consolas, monospace; }
+pre { background: var(--soft); padding: .75rem; overflow-x: auto; border-radius: 6px; }
+.meta { color: var(--muted); margin: 0 0 1rem; }
+nav.toc { background: var(--soft); border-radius: 8px; padding: .75rem 1rem; }
+nav.toc ol { margin: 0; padding-left: 1.25rem; columns: 2 14rem; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
+th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; vertical-align: top; }
+th { background: var(--soft); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin: 1rem 0 .25rem; }
+.stat { background: var(--soft); border-radius: 8px; padding: .5rem .75rem; }
+.stat b { display: block; font-size: 1.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat span { color: var(--muted); font-size: .9rem; }
+.note { color: var(--muted); font-size: .9rem; margin: 0 0 1rem; }
+.pill { display: inline-block; padding: 0 .5rem; border-radius: 99px; font-size: .9rem; border: 1px solid currentColor; white-space: nowrap; }
+.ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .muted { color: var(--muted); }
+.lead { font-size: 1.1rem; font-weight: 600; margin: 0 0 .75rem; }
+details { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .9rem; margin: .5rem 0; }
+details > summary { cursor: pointer; font-weight: 600; }
+details[open] > summary { margin-bottom: .5rem; }
+table.decisions td:first-child { font-weight: 600; min-width: 12rem; }
+.shots { display: grid; grid-template-columns: 3fr 1fr; gap: .75rem; align-items: start; }
+.shots figure { margin: 0; } .shots img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+figcaption { color: var(--muted); font-size: .9rem; }
+.small { display: block; color: var(--muted); font-size: .9rem; }
+table.risks td:first-child { font-weight: 600; }
+pre.mermaid { background: var(--soft); text-align: center; }
+@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { body { font-size: 16px; } .shots { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>SSP export v2: an assessor-ready System Security Plan</h1>
+<p class="meta">Plan <code>ssp-export-v2</code> · final PR <a href="https://github.com/haophn01/fun-thinking-rampart/pull/23">#23, review round 1 verdict fix</a>; fixes in <a href="https://github.com/haophn01/fun-thinking-rampart/pull/24">#24 (round 2 verdict pass)</a>, on <code>main</code> through <a href="https://github.com/haophn01/fun-thinking-rampart/pull/25">#25</a> · written 2026-11-26 by pod:reporter</p>
+
+<nav class="toc" aria-label="Contents"><ol>
+  <li><a href="#glance">At a glance</a></li>
+  <li><a href="#timeline">Merge timeline</a></li>
+  <li><a href="#features">Key features</a></li>
+  <li><a href="#proof">Proof</a></li>
+  <li><a href="#risks">Risks and undo</a></li>
+  <li><a href="#fit">How it fits together, as built</a></li>
+  <li><a href="#decisions">Key decisions</a></li>
+  <li><a href="#left">What's left</a></li>
+</ol></nav>
+
+<section id="glance">
+<h2>At a glance</h2>
+<p><b>Goal:</b> turn Rampart's SSP export into a document a C3PAO or self-assessor recognizes: NIST's CUI SSP outline plus the 32 CFR 170.19 sections, with a pre-export check that shows what an assessor would catch.</p>
+<p><b>Shipped:</b></p>
+<ul>
+  <li>An SSP workspace with six tabs: identification and roles, environment and diagrams, assets (five Level 2 categories), service providers with a responsibility matrix, document control, and lint and export.</li>
+  <li>Planned implementation and N/A rationale fields on each requirement, and a dashboard item "SSP review overdue".</li>
+  <li>A pre-export check (warnings only) shared by the web panel and <code>GET /api/ssp/lint</code>.</li>
+  <li>Export v2: NIST sections 1 to 4, the CMMC sections, embedded PNG/JPEG diagrams, signature lines, Appendices A and B, and an automatic record-of-changes entry on each export.</li>
+  <li>Migration 0005 (additive: 8 tables, 2 columns) and a <code>templates/</code> folder of official reference files.</li>
+</ul>
+<div class="stats">
+  <div class="stat"><b>3 · 8 · 22</b><span>sprints · waves · slices</span></div>
+  <div class="stat"><b>11</b><span>PRs (#15 to #25)</span></div>
+  <div class="stat"><b>154 · +25,323 −905</b><span>files · lines vs. main at plan start (440ff09)</span></div>
+  <div class="stat"><b>~14.6 h</b><span>wall time (estimate)</span></div>
+  <div class="stat"><b>~3.7M</b><span>agent context</span></div>
+  <div class="stat"><b>#23 fix, #24 pass</b><span>review, 2 rounds</span></div>
+</div>
+<p class="note">Wall time runs from the plan commit (2026-11-25 10:11 PST) to the #25 merge (2026-11-26 00:45 PST), usage-limit pauses included, so it is an estimate. Agent context is the sum of the three Sprint summaries' figures (1.21M + 1.47M + 1.05M): final context sizes, not tokens billed. Slices: 8 + 9 + 5.</p>
+
+<h3>Look here first</h3>
+<ol>
+  <li><code>apps/api/src/ssp-data/diagrams/embeddable.ts</code> (new in #24): decides from the stored bytes whether a diagram is PNG/JPEG. Round 1 found a GIF named <code>.png</code> passing. The reviewer's open someday finding is here (see What's left). A file that can't be read keeps the file name's verdict.</li>
+  <li><code>apps/api/db/migrations/0005*</code>: the one-way door. Additive only, tested on a 0004 database with every row kept. The human's database migrated cleanly after a backup.</li>
+  <li><code>apps/api/ssp/render.ts</code> and <code>image-info.ts</code>: the image embedding and the byte parser. Round 1 found the PR's Review guide left them out, so they got the least pointed review. Word opened a rendered file with no repair prompt (X2).</li>
+  <li><code>apps/api/src/ssp/routes.ts</code>: <code>GET /api/ssp/export</code> writes a record-of-changes row on a GET, after the render succeeds. The reviewer judged it safe because the cookie is <code>SameSite=Strict</code>, but it is surprising.</li>
+  <li><code>apps/web/src/pages/ssp/SspPage.tsx</code> and <code>useLoad</code>: panels stay mounted and now re-read when shown again. Round 1's two stale-data bugs lived here.</li>
+</ol>
+</section>
+
+<section id="timeline">
+<h2>Merge timeline</h2>
+<p class="lead">PR #23 reached <code>main</code> before its fixes existed.</p>
+<ul>
+  <li>The reviewer's round 1 on #23 (head <code>0b138f9</code>) returned <b>fix</b> with 3 FIX findings.</li>
+  <li>At <b>08:01Z</b> on 2026-11-26 the <code>haophn01</code> account merged #23 into <code>main</code> (via web or CLI, not by the orchestrator), still on head <code>0b138f9</code>. That was after the round-1 <code>fix</code> verdict and before the fix existed. The pre-approval to merge was conditional on a passing review and green CI, and neither held.</li>
+  <li>The fixes were made in #24, merged into <code>ssp-export-v2</code> at 08:30Z (head <code>ff4573d</code>). Round 2 passed on <code>ff4573d</code> and said <code>main</code> did not have the fix yet.</li>
+  <li>Follow-up PR #25 brought the fixes to <code>main</code>. After green CI (verify and e2e on ubuntu and windows, plus gitleaks) it was merged at 08:45Z as <code>734b7dd</code>. For about 44 minutes <code>main</code> carried all three round-1 findings.</li>
+</ul>
+</section>
+
+<section id="features">
+<h2>Key features</h2>
+<p class="note">No screenshots: the human dropped demo screenshots to save tokens ("no need for screenshot, to reduce token usage"). Each feature is shown by its result.</p>
+<div class="scroll"><table>
+<tr><th>What a user can do now</th><th>Result</th></tr>
+<tr><td>Fill the <b>SSP workspace</b> (<code>/ssp?tab=</code>)</td><td>Add a role (3 users, privileged): "3 users · 3 privileged". An out-of-scope asset with no justification is refused, then saved with one. With a provider assigned to AC.L2-3.1.1 the matrix reads "1 of 110 assigned". A past review date shows <b>Review overdue</b>, and the dashboard lists it. <a href="../feature-details/ssp-workspace.md">details</a></td></tr>
+<tr><td>Run the <b>pre-export check</b></td><td>On a fresh assessment, "112 errors · 1 warning", with findings grouped and an Open link each. The panel equals <code>GET /api/ssp/lint</code>. Export is never blocked. <a href="../feature-details/ssp-lint.md">details</a></td></tr>
+<tr><td><b>Export the SSP (v2)</b></td><td>A <code>SSP-&lt;id&gt;-&lt;date&gt;.docx</code> in NIST order with the CMMC sections, one embedded PNG and a reference line for a PDF or CUI diagram, signature lines, Appendices A and B, and a new "Exported as" row each time. <a href="../feature-details/ssp-export.md">details</a></td></tr>
+<tr><td>Save the <b>system profile</b> on the Identification tab</td><td>The CAGE code <code>1abc2</code> is stored as <b>1ABC2</b> and survives a reload; 4 characters are refused. <a href="../feature-details/system-profile.md">details</a></td></tr>
+<tr><td>Write <b>Planned implementation</b> and <b>N/A rationale</b> beside a statement</td><td>They are stored, audited, and printed in the export under the NIST status (Met is Implemented, Not Met is Planned to be implemented, all N/A is Not applicable).</td></tr>
+</table></div>
+</section>
+
+<section id="proof">
+<h2>Proof</h2>
+<p class="note">"Engineer" means the engineer's own tests and runtime checks, as written in the Sprint summaries. "Reviewer" is the plan reviewer on #23 (round 1) and #24 (round 2). I did not re-run anything for this report.</p>
+<div class="scroll"><table>
+<tr><th>Criterion or feature</th><th>Result</th><th>Checked by, and how</th></tr>
+<tr><td>Migration 0005 keeps rows from 0004</td><td class="ok">met</td><td>Engineer: a real 0004 database migrated twice with every row kept. Reviewer: <code>drizzle-kit check</code> clean. Human: the live app migrated after the backup.</td></tr>
+<tr><td>Every section persists and is audited</td><td class="ok">met</td><td>Engineer: tests per route plus restart checks. Reviewer: drove all 13 features.md rows on a scratch database, and ran red checks (mutations) that failed the tests as they should.</td></tr>
+<tr><td>Lint: a fixture per rule; panel equals api</td><td class="ok">met</td><td>Engineer: 16 tests, one per rule, and e2e that the panel equals the api. Reviewer: red checks on four rules.</td></tr>
+<tr><td>Export headings, embedded image, CUI never embedded</td><td class="ok">met</td><td>Engineer: unit and e2e tests; Word opened a sample (3,303 paragraphs, 20 tables, 1 image) with no repair prompt. Reviewer: drove it, and found the file-name-only embeddable bug (fixed in #24, re-checked in round 2).</td></tr>
+<tr><td>Dashboard "SSP review overdue"</td><td class="ok">met</td><td>Engineer: tests and runtime. Reviewer: drove it with the features.md rows.</td></tr>
+<tr><td><code>templates/</code> and <code>SOURCES.md</code></td><td class="warn">met, with a gap</td><td>Engineer: 4 NIST files committed; the DoD guides return 403 and are linked, as the plan allowed. A repo test exists (<code>tests/repo/templates.test.ts</code>) but I did not open it.</td></tr>
+<tr><td>Existing tests and look at 1280 and 375 px</td><td class="ok">met</td><td>Engineer: <code>e2e/look.spec.ts</code> covers every tab; the orchestrator also measured all six tabs on #18. Reviewer round 2: verify 924 tests, e2e 15.</td></tr>
+<tr><td>CI green on the final PR</td><td class="ok">met</td><td>#25: verify and e2e on ubuntu and windows, and gitleaks, all success (read with <code>gh</code>). Gitleaks ran only in CI.</td></tr>
+<tr><td>Look screenshots (E3's criterion)</td><td class="muted">dropped</td><td>The human struck it; look is measured only.</td></tr>
+</table></div>
+<h3>Not checked by this report</h3>
+<ul>
+  <li>CI on #24 (the reviewer reported it green; I read only #25's checks).</li>
+  <li>Whether the Word file would satisfy a real C3PAO. Nobody has tried that.</li>
+  <li>Nothing was re-run here: no tests, no browser, no screenshots.</li>
+</ul>
+</section>
+
+<section id="risks">
+<h2>Risks and undo</h2>
+<div class="scroll"><table class="risks">
+<tr><th>Change</th><th>Where</th><th>Undo</th></tr>
+<tr><td>Migration 0005: 8 tables and 2 columns (one-way door)</td><td><code>apps/api/db/migrations/0005*</code></td><td>Stop the app, restore <code>apps/api/data/rampart.pre-0005.sqlite</code>, then revert the merge. Without that restore, the new tables stay unused after a revert.</td></tr>
+<tr><td>Audit: 8 new entity types</td><td><code>apps/api/src/contract</code></td><td>Revert the PR; existing audit rows stay (the table is append-only).</td></tr>
+<tr><td>Public API: <code>/api/ssp/*</code> routes, and an export that writes a revision on GET</td><td><code>apps/api/src/ssp/routes.ts</code>, <code>ssp-data/*</code></td><td>Revert the merge. Record-of-changes rows already written stay in the database.</td></tr>
+<tr><td>CUI rule: CUI-flagged diagrams are never embedded</td><td><code>mayEmbed</code> in <code>model/diagrams.ts</code></td><td>A rule to keep, not a change to undo. Tests fail without the check.</td></tr>
+</table></div>
+<p>No auth change and no money. To undo the code, revert the merge commits of #23 and #25 with <code>git revert -m 1</code>.</p>
+</section>
+
+<section id="fit">
+<h2>How it fits together, as built</h2>
+<p>As the plan drew it, with these differences:</p>
+<ul>
+  <li><b>Export split in two.</b> The plan had one "ssp export v2" part. As built, <code>buildSspModel</code> (files under <code>ssp/model/</code>) makes the outline and <code>ssp/render.ts</code> with <code>image-info.ts</code> writes the .docx, so a later OSCAL export can reuse the outline.</li>
+  <li><b>Embeddable by bytes</b> (<code>ssp-data/diagrams/embeddable.ts</code>) is new, added after round 1. The plan had the file type decide.</li>
+  <li><b>Panels re-read when their tab is shown again</b> (<code>useLoad</code>): not in the plan.</li>
+  <li>The lint is <code>lintSspFrom</code> in <code>packages/rules/src/ssp-lint</code>, called by the api and imported by the web panel, as planned.</li>
+</ul>
+<pre class="mermaid">
+flowchart LR
+  web -->|HTTP JSON + CSRF| api
+  api --> sspdata[ssp-data loaders]
+  api -->|findings| lint[rules/ssp-lint]
+  web -->|live preview| lint
+  api --> model[ssp/model buildSspModel]
+  model --> render[ssp/render.ts]
+  render -->|image bytes, hash-checked| evidence[evidence store]
+  render -->|after a successful render| rev[appendExportRevision]
+  sspdata --> embed[embeddable.ts, from bytes]
+  embed --> model
+</pre>
+</section>
+
+<section id="decisions">
+<h2>Key decisions</h2>
+<div class="scroll"><table class="decisions">
+<tr><th>Decision</th><th>Who, why, alternative, consequence</th></tr>
+<tr><td>NIST outline first; SPRS data to Appendix A</td><td>Human (Q2). Assessors expect NIST's numbering. Alternative: keep the tool's own order. Consequence: Appendix B holds the 320 objectives.</td></tr>
+<tr><td>Structured assets, ESPs, matrix, roles; lint only warns</td><td>Human (Q3 to Q10). Free text can't be linted. Consequence: findings never block an export.</td></tr>
+<tr><td>Link diagrams from evidence; embed PNG/JPEG only; never embed CUI</td><td>Human (Q5). Keeps the V1 no-CUI rule. Other types are referenced with name, version and SHA-256.</td></tr>
+<tr><td>Migration 0005 additive; lint a pure function in <code>packages/rules</code></td><td>Agent defaults (in the plan). The web panel and api agree, as the score does.</td></tr>
+<tr><td>Tab keys replace history; categorization reset</td><td>Agent default (W9), decisions.md 2026-11-25. Matches WAI-ARIA tabs and the api's effective-value rule.</td></tr>
+<tr><td>Export wording ("every 1 month", CUI file line)</td><td>Agent default (X2), decisions.md 2026-11-25.</td></tr>
+<tr><td>Pre-export check wording kept as built; <code>aria-live="polite"</code> added</td><td>Agent default (W17, E4), decisions.md 2026-11-26. <code>role="status"</code> would collide with the info Alerts.</td></tr>
+<tr><td>Panels re-read when shown again; embeddable from bytes</td><td>Agent fix (F2) after round 1, decisions.md 2026-11-26. Alternative turned down: reload on the export click, which a plain download link would race.</td></tr>
+<tr><td>Demo screenshots dropped</td><td>Human, to save tokens. Consequence: look is measured, not seen.</td></tr>
+<tr><td>Final merge</td><td>The human answered "you merge it" and the account merged #23 early (see Merge timeline). The fixes then needed #25.</td></tr>
+</table></div>
+</section>
+
+<section id="left">
+<h2>What's left</h2>
+<p class="lead">Nothing to do now, one hardening item, and the earlier cleanups.</p>
+<h3>Fix next</h3>
+<ul><li>None. Both code findings from round 1 are fixed on <code>main</code> (734b7dd), and the PR-body finding was resolved in round 2.</li></ul>
+<h3>Before hosting</h3>
+<ul><li>Still open from plan <code>cmmc-l2-grc</code>: serve a production build with CSP and security headers.</li></ul>
+<h3>Someday</h3>
+<ul>
+  <li><b>Reviewer's finding:</b> <code>apps/api/src/ssp-data/diagrams/embeddable.ts</code> (lines 53 to 90): on a cold cache, <code>checkDiagramImages</code> keeps the bytes of every image it reads, not just the 10 the export embeds (up to 25 MiB each), so an export with many large images holds them all in memory. Cap the kept bytes to the embed slots. The queue entry is pending.</li>
+  <li>The duplicated helpers (<code>actorOf</code> in the V1 modules, the per-tab caption workarounds, <code>formatSize</code> copies, Conditional labels).</li>
+  <li>Delete the leftover folder <code>.claude/worktrees/ssp-workspace-w9</code>.</li>
+  <li>Parked: OSCAL SSP export, CSV asset import, review reminders, Rev 3, e-signatures.</li>
+</ul>
+</section>
+
+</main>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+</script>
+</body>
+</html>

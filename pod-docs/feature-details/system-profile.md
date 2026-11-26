@@ -19,4 +19,4 @@ The SSP's system characteristics: 13 fields (system name, identifier, organizati
 
 ## History
 - 2026-11-25 · plan cmmc-l2-grc · built (ssp-dashboard sprint, PRs #10 and #11) · [report](../reports/cmmc-l2-grc.html)
-- 2026-11-25 · plan ssp-export-v2 · the form moved, unchanged, into the Identification & roles tab of the SSP workspace (ssp-workspace sprint, PRs #17 and #18)
+- 2026-11-25 · plan ssp-export-v2 · the form moved, unchanged, into the Identification & roles tab of the SSP workspace (ssp-workspace sprint, PRs #17 and #18) · [report](../reports/ssp-export-v2.html)

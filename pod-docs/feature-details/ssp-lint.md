@@ -33,3 +33,4 @@ flowchart LR
 
 ## History
 - 2026-11-25 · plan ssp-export-v2 · built (ssp-export-lint sprint: rules L5 and api A12 in PRs #20 and #21, panel W17 in PR #21; e2e and docs in E4)
+- 2026-11-26 · plan ssp-export-v2 · the panel re-reads when its tab is shown again (review fix, PRs #24 and #25) · [report](../reports/ssp-export-v2.html)

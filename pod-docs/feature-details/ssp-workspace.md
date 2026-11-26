@@ -21,10 +21,10 @@ flowchart LR
   D[DashboardPage] -->|GET /api/ssp/document-control| A
 ```
 - Tabs: `SSP_TABS` in `pages/ssp/tabs.ts`. No `tab`, or an unknown one, selects Identification and leaves the URL alone. Clicking a tab pushes `?tab=<id>`, so Back returns to the previous tab; arrow keys wrap, Home/End jump.
-- A tab's panel mounts on its first visit and then stays mounted, hidden, so an unsaved draft survives a tab switch; an unvisited tab sends no request.
+- A tab's panel mounts on its first visit and then stays mounted, hidden, so an unsaved draft survives a tab switch; an unvisited tab sends no request. A mounted panel re-reads its data each time its tab is shown again (re-select, Back, or the browser tab regaining focus), so totals, lint and "Exported as" rows are current. There is no reload on the export click; Document control reloads when you return to it.
 - The SSP profile's fields (`SSP_PROFILE_FIELDS`) are split by group across tabs: `identification` on Identification, `cui` and `environment` on Environment, `review` on Document control. `SspProfileForm` PATCHes `/api/ssp/profile` with only the changed keys; blank text sends `null`.
 - Collections (roles, assets, diagrams, providers, approvals) share one create/edit form each; edit PATCHes only changed keys, Remove asks "Remove <name>?" first, and every write reloads the list so totals and order are the server's.
-- Diagrams link an evidence item: "Embedded image" for a PNG or JPEG that isn't CUI, "Referenced — contains CUI" for a CUI item, else "Referenced".
+- Diagrams link an evidence item: "Embedded image" for a file whose stored bytes read as PNG or JPEG and that isn't CUI, "Referenced — contains CUI" for a CUI item, else "Referenced".
 - The matrix PUTs `{ party, providerId, note }` to `/api/ssp/responsibilities/<requirement ID>`; ESP and Shared need a provider, Organization and Not set clear it.
 - Review overdue: when `GET /api/ssp/document-control` says `reviewOverdue`, Document control shows an error Alert "Review overdue" and the dashboard's Needs attention adds "SSP review overdue: due <date> · <n> day(s) overdue", linking to `/ssp?tab=document-control`.
 - The requirement detail on **Assessment** adds "SSP status", "Planned implementation" and "N/A rationale" below the implementation statement.
@@ -45,3 +45,4 @@ flowchart LR
 ## History
 - 2026-11-25 · plan ssp-export-v2 · built (ssp-workspace sprint, PRs #17 and #18; look spec and docs in E3)
 - 2026-11-25 · plan ssp-export-v2 · Lint & export gains the pre-export check (ssp-export-lint sprint, W17 in PR #21; e2e and docs in E4)
+- 2026-11-26 · plan ssp-export-v2 · panels re-read when their tab is shown again; embeddable from bytes (review fixes, PRs #24 and #25) · [report](../reports/ssp-export-v2.html)
