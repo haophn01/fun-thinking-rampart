@@ -129,11 +129,7 @@ async function readImages(
  * This export's own record-of-changes entry, as the file prints it and the api then stores it:
  * dated the UTC day of `now`, described by the file name, made by the exporter.
  */
-function exportEntryOf(
-  profile: SspRecords['profile'],
-  now: Date,
-  madeBy: string,
-): SspExportEntry {
+function exportEntryOf(profile: SspRecords['profile'], now: Date, madeBy: string): SspExportEntry {
   const date = utcDate(now);
   return {
     date,
