@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMemoryStore } from '../../storage';
@@ -161,13 +164,28 @@ describe('harness', () => {
     });
 
     it('merges env over its defaults', () => {
-      const h = harness({ env: { RATE_LIMIT_MULTIPLIER: '1', HOSTED: 'true', SERVE_WEB: 'true' } });
-      expect(h.config).toMatchObject({
-        rateLimitMultiplier: 1,
-        hosted: true,
-        serveWeb: true,
-        databasePath: ':memory:',
-      });
+      // SERVE_WEB needs a built web app, so it gets a temp one with just an index.html.
+      const dist = mkdtempSync(join(tmpdir(), 'rampart-harness-web-'));
+      try {
+        writeFileSync(join(dist, 'index.html'), '<!doctype html>');
+        const h = harness({
+          env: {
+            RATE_LIMIT_MULTIPLIER: '1',
+            HOSTED: 'true',
+            SERVE_WEB: 'true',
+            WEB_DIST_PATH: dist,
+          },
+        });
+        expect(h.config).toMatchObject({
+          rateLimitMultiplier: 1,
+          hosted: true,
+          serveWeb: true,
+          webDistPath: dist,
+          databasePath: ':memory:',
+        });
+      } finally {
+        rmSync(dist, { recursive: true, force: true });
+      }
       // An env LOG_LEVEL wins over the option, since env is the more specific of the two.
       expect(harness({ logLevel: 'warn', env: { LOG_LEVEL: 'error' } }).config).toMatchObject({
         logLevel: 'error',
