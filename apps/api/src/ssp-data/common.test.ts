@@ -1,7 +1,9 @@
+import type { FastifyRequest } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDb, runMigrations, type DbHandle } from '../../db/client';
 import { AppError } from '../errors';
-import { changedFields, newId, requireAssessmentId, utcDate } from './common';
+import type { ApiDeps } from '../routes';
+import { actorOf, changedFields, newId, requireAssessmentId, utcDate } from './common';
 
 const open: DbHandle[] = [];
 
@@ -78,5 +80,36 @@ describe('ssp-data common', () => {
     for (const id of ids) {
       expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     }
+  });
+
+  it('actorOf', () => {
+    const at = new Date('2026-11-25T23:59:00.000Z');
+    let ticks = 0;
+    const deps = {
+      now: () => {
+        ticks += 1;
+        return at;
+      },
+    } as unknown as ApiDeps;
+    const user = { id: 'u-1', email: 'a@example.com', displayName: 'Ada', role: 'admin' };
+    const signedIn = {
+      id: 'req-7',
+      auth: { id: 's', csrfToken: 't', user },
+    } as unknown as FastifyRequest;
+    expect(actorOf(signedIn, deps)).toEqual({ userId: 'u-1', now: at, requestId: 'req-7' });
+    expect(ticks).toBe(1);
+
+    // Without a session: unauthenticated (401), and the clock is not read.
+    const signedOut = { id: 'req-8', auth: null } as unknown as FastifyRequest;
+    let thrown: unknown;
+    try {
+      actorOf(signedOut, deps);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(AppError);
+    expect((thrown as AppError).code).toBe('unauthenticated');
+    expect((thrown as AppError).statusCode).toBe(401);
+    expect(ticks).toBe(1);
   });
 });
