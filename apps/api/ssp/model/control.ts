@@ -30,8 +30,11 @@ export function approvalBlocks(source: SspSource): SspBlock[] {
     heading(1, SSP_SECTIONS.approvals),
     ...(approvals.length === 0
       ? [paragraph('No approvals recorded.')]
-      : approvals.map(
-          (a): SspBlock => ({ kind: 'signature', name: a.name, title: a.title, date: a.approvedOn }),
-        )),
+      : approvals.map((a): SspBlock => ({
+          kind: 'signature',
+          name: a.name,
+          title: a.title,
+          date: a.approvedOn,
+        }))),
   ];
 }

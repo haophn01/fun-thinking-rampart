@@ -474,7 +474,9 @@ describe('buildSspModel', () => {
       ['Organization address', 'Not provided'],
       ['Organization phone', '+1 555 0100'],
     ]);
-    expect(identification.map((f) => f.label)).toEqual(table.rows.slice(v1.length).map((r) => r[0]));
+    expect(identification.map((f) => f.label)).toEqual(
+      table.rows.slice(v1.length).map((r) => r[0]),
+    );
     // The boundary is not in section 1.
     expect(table.rows.map((r) => r[0])).not.toContain('Authorization boundary');
 
@@ -736,10 +738,15 @@ describe('buildSspModel', () => {
   it('diagrams', () => {
     const png = pngOf(1248, 600);
     const jpeg = jpegOf(300, 900);
-    const network = fileLink('Boundary', 'net.png', {
-      evidence: { id: 'e-net', title: 'Network map', containsCui: false },
-      version: 2,
-    }, { version: 2, sha256: 'abc123' });
+    const network = fileLink(
+      'Boundary',
+      'net.png',
+      {
+        evidence: { id: 'e-net', title: 'Network map', containsCui: false },
+        version: 2,
+      },
+      { version: 2, sha256: 'abc123' },
+    );
     const pdf = fileLink('Flow', 'flow.pdf', { kind: 'data_flow' }, { sha256: 'def456' });
     // The api never sends this, but a CUI item is never embedded, whatever the input says.
     const cuiFile = fileLink('Secret', 'secret.png', {
@@ -858,7 +865,11 @@ describe('buildSspModel', () => {
   });
 
   it('record of changes', () => {
-    const entry = { date: '2026-11-23', description: 'Exported as SSP-x.docx', madeBy: 'Ada Admin' };
+    const entry = {
+      date: '2026-11-23',
+      description: 'Exported as SSP-x.docx',
+      madeBy: 'Ada Admin',
+    };
     const model = modelOf({
       control: {
         reviewCadenceMonths: 6,
@@ -902,7 +913,10 @@ describe('buildSspModel', () => {
     expect(paragraphs(none)).toEqual(['No changes recorded.']);
 
     // A one-month cadence reads in the singular.
-    const monthly = sectionOf(modelOf({ control: { reviewCadenceMonths: 1 } }), '4. Record of changes');
+    const monthly = sectionOf(
+      modelOf({ control: { reviewCadenceMonths: 1 } }),
+      '4. Record of changes',
+    );
     expect(fieldOf(monthly, 'Review cadence')).toBe('every 1 month');
   });
 
@@ -1038,7 +1052,8 @@ describe('buildSspModel', () => {
     );
     const tables = tablesOf(b);
     expect(tables).toHaveLength(14);
-    for (const table of tables) expect(table.columns).toEqual(['ID', 'Objective', 'Status', 'Note']);
+    for (const table of tables)
+      expect(table.columns).toEqual(['ID', 'Objective', 'Status', 'Note']);
     const rows = tables.flatMap((t) => t.rows);
     expect(rows).toHaveLength(320);
     expect(rows.map((r) => r[0])).toEqual(

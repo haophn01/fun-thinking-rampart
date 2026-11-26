@@ -157,7 +157,14 @@ describe('renderSspDocx', () => {
     const model: SspModel = {
       blocks: [
         { kind: 'paragraph', text: 'Before' },
-        { kind: 'image', data: png, type: 'png', width: 624, height: 312, altText: 'Boundary <A&B>' },
+        {
+          kind: 'image',
+          data: png,
+          type: 'png',
+          width: 624,
+          height: 312,
+          altText: 'Boundary <A&B>',
+        },
         { kind: 'paragraph', text: 'Figure 1. Boundary' },
       ],
     };
@@ -176,12 +183,10 @@ describe('renderSspDocx', () => {
 
     // A png Default content type, and an image relationship whose target is that part.
     const types = docxPart(bytes, '[Content_Types].xml');
-    const defaults = [...types.matchAll(/<Default ([^>]*)\/>/g)].map(([, attributes]) =>
-      Object.fromEntries(
-        [...(attributes ?? '').matchAll(/(\w+)="([^"]*)"/g)].map(([, k, v]) => [k, v]),
-      ),
+    // Attributes in either order.
+    expect(types).toMatch(
+      /<Default (?=[^>]*\bExtension="png")(?=[^>]*\bContentType="image\/png")[^>]*\/>/,
     );
-    expect(defaults).toContainEqual({ Extension: 'png', ContentType: 'image/png' });
     const rels = docxPart(bytes, 'word/_rels/document.xml.rels');
     const images = [
       ...rels.matchAll(

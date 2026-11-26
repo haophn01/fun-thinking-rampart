@@ -126,8 +126,7 @@ export function providerBlocks(source: SspSource): SspBlock[] {
   const rows = source.responsibilities
     .filter((r) => r.party !== null)
     .toSorted(
-      (a, b) =>
-        (order.get(a.requirementId) ?? Infinity) - (order.get(b.requirementId) ?? Infinity),
+      (a, b) => (order.get(a.requirementId) ?? Infinity) - (order.get(b.requirementId) ?? Infinity),
     );
   const total = source.catalog.requirements.length;
   return [

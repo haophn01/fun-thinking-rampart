@@ -55,13 +55,17 @@ export function diagramBlocks(source: SspSource): SspBlock[] {
     if (!slots.has(link)) {
       const max = String(source.maxEmbeddedImages);
       return [
-        paragraph(referenceLine(link, resolved, ` (referenced: the SSP embeds at most ${max} images)`)),
+        paragraph(
+          referenceLine(link, resolved, ` (referenced: the SSP embeds at most ${max} images)`),
+        ),
       ];
     }
     const bytes = source.images.get(link.id);
     const info = bytes === undefined ? null : imageInfo(bytes);
     if (bytes === undefined || info === null) {
-      return [paragraph(referenceLine(link, resolved, " (referenced: the image couldn't be read)"))];
+      return [
+        paragraph(referenceLine(link, resolved, " (referenced: the image couldn't be read)")),
+      ];
     }
     figure += 1;
     const size = fitImage(info);
