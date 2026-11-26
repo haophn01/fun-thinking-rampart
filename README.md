@@ -14,20 +14,30 @@ keep a rules-checked POA&M. "Rampart" is a placeholder name; the code spells it 
 You need Node 24 or later. pnpm comes from corepack, pinned by the `packageManager` field in
 `package.json`, so everyone runs the same version.
 
-From a clean clone, one command installs, migrates and starts the app (PowerShell or bash):
+From a clean clone, one command installs, builds, migrates and starts the app (PowerShell or
+bash):
 
 ```sh
 corepack pnpm start
 ```
 
-It runs `pnpm install --frozen-lockfile`, then `pnpm db:migrate`, then `pnpm dev`, and stops at
-the first step that fails with that step's exit code. Open http://127.0.0.1:3000: a new database
-shows Setup, where you create the first admin. Stop it with Ctrl+C. `corepack pnpm` needs no
-`corepack enable`, so it works even where that command fails.
+It runs `pnpm install --frozen-lockfile`, then `pnpm build`, then `pnpm db:migrate`, then the
+built api with `SERVE_WEB=true`, and stops at the first step that fails with that step's exit
+code. This is the production serving path: one server answers both the built pages and `/api` on
+`WEB_PORT` (default 3000), with the strict Content-Security-Policy on every page. Open
+http://127.0.0.1:3000: a new database shows Setup, where you create the first admin. Stop it with
+Ctrl+C. `corepack pnpm` needs no `corepack enable`, so it works even where that command fails.
+Port 3001 isn't used by `pnpm start`: it sets the api's `API_PORT` to `WEB_PORT`.
 
-`pnpm dev` starts the api on http://127.0.0.1:3001 and the web app on http://127.0.0.1:3000. Both
-bind to `127.0.0.1` only. Change the ports with `API_PORT` and `WEB_PORT` (`pnpm start` passes them
-through):
+```sh
+WEB_PORT=3010 corepack pnpm start                    # bash
+$env:WEB_PORT=3010; corepack pnpm start              # PowerShell
+```
+
+For development, `pnpm dev` is unchanged: it starts the api (`tsx watch`) on
+http://127.0.0.1:3001 and the web app (Vite, with hot reload) on http://127.0.0.1:3000, and Vite
+proxies `/api` to the api. Both bind to `127.0.0.1` only. Vite serves no CSP, so check anything
+CSP-related with `pnpm start` or `pnpm e2e`. Change the ports with `API_PORT` and `WEB_PORT`:
 
 ```sh
 API_PORT=3011 WEB_PORT=3010 pnpm dev                 # bash
@@ -48,9 +58,12 @@ pnpm exec playwright install chromium
 pnpm e2e
 ```
 
-Each run starts its own api (without watch) and web app on `127.0.0.1`, on `E2E_WEB_PORT`
-(default 3290) and `E2E_API_PORT` (default 3291), with a new database and file store in a fresh
-temporary folder (`E2E_RUN_DIR`), so it never touches `apps/api/data`. A failing test keeps its
+Each run builds the app (`pnpm build`), then starts one server on the production path: the built
+api with `SERVE_WEB=true`, serving the built pages and `/api` on `127.0.0.1:E2E_WEB_PORT` (default
+3290), with a new database and file store in a fresh temporary folder (`E2E_RUN_DIR`), so it never
+touches `apps/api/data`. There is no Vite in the run. Its rate limits are the real ones raised a
+hundredfold (`RATE_LIMIT_MULTIPLIER=100`) so the suite's own traffic never trips them. The build
+makes the first start slow; the server gets 300 s to answer. A failing test keeps its
 trace and screenshot in `test-results/`, and the HTML report goes to `playwright-report/`. Vitest
 never collects `e2e/`, so `pnpm verify` needs no browser.
 
@@ -60,11 +73,21 @@ The specs, in the order Playwright runs them (file name order):
   detail and the phone menu) at 1280 and 375 px: no visible text under 16 px, only the six palette
   colours (or transparent) for text, backgrounds and borders, every text pair at 4.5:1 (3:1 for
   large text), and no horizontal scroll at 375 px. Because it runs first and the other specs need a
-  fresh install, it starts a second api of its own on `E2E_API_PORT + 2` (3293 by default;
-  `E2E_LOOK_API_PORT` overrides it) with its own database in the run folder, fills every page
-  through that api, and routes the browser's `/api` calls to it. The pages still come from the
-  run's web app. Every SSP tab is measured with its data, Lint & export with its findings on
-  screen, and a seeded future-tense statement shows its finding there.
+  fresh install, it starts a second api of its own on 3293 (`E2E_LOOK_API_PORT` overrides it)
+  with its own database in the run folder, fills every page through that api, and routes the
+  browser's `/api` calls to it. The pages still come from the run's server, under its CSP, and
+  every page records zero CSP violations (a `securitypolicyviolation` listener). Every SSP tab is
+  measured with its data, Lint & export with its findings on screen, and a seeded future-tense
+  statement shows its finding there.
+- `security.spec.ts` checks the security headers on the production path. On the run's server it
+  only reads, signed out: `/` and `/assessment` carry the exact web CSP, `nosniff`,
+  `no-referrer`, the Permissions-Policy and `X-Frame-Options: DENY` and no HSTS; `/api/health`
+  carries the api CSP; the page loads only hashed `/assets/` files (immutable) and nothing from
+  Vite; and the app loads with no CSP violation. It also starts a hosted server of its own on
+  3294 (`HOSTED=true`, `SERVE_WEB=true`, real rate limits, so only a few requests;
+  `E2E_HOSTED_PORT` overrides it) and checks HSTS and that setup's cookie is
+  `__Host-rampart_session` with `Secure; HttpOnly; SameSite=Strict; Path=/` and no `Domain`, read
+  from the `Set-Cookie` header (a browser keeps `__Host-` cookies only over TLS).
 - `shell.spec.ts` checks that a fresh install shows Setup.
 - `smoke.spec.ts` walks the plan's Verification path: create the admin, reach 72 with
   AC.L2-3.1.20 Not Met (HOLD, its blocker, and the POA&M refusal), fix it and reach ACCEPT with
@@ -85,15 +108,15 @@ Run these from the repo root.
 
 | Script            | What it does                                                               |
 | ----------------- | -------------------------------------------------------------------------- |
-| `pnpm start`      | Frozen install, then `db:migrate`, then `dev` (`scripts/start.ts`)         |
-| `pnpm dev`        | Runs the api (`tsx watch`) and the web app (Vite) in parallel              |
+| `pnpm start`      | Frozen install, build, `db:migrate`, then serve all on `WEB_PORT` (3000)   |
+| `pnpm dev`        | Development: the api (`tsx watch`) and the web app (Vite) in parallel      |
 | `pnpm lint`       | `eslint .`, then `prettier --check .`                                      |
 | `pnpm format`     | `prettier --write .`                                                       |
 | `pnpm typecheck`  | `tsc --noEmit` in every workspace package                                  |
 | `pnpm test`       | `vitest run` across every package plus the repo checks in `tests/`         |
 | `pnpm build`      | Bundles the api with tsup and the web app with Vite                        |
 | `pnpm verify`     | lint, typecheck, test, build, in that order, stopping at the first failure |
-| `pnpm e2e`        | Playwright specs in `e2e/` against a fresh api and web app (see above)     |
+| `pnpm e2e`        | Playwright specs in `e2e/` against a fresh production build (see above)    |
 | `pnpm db:migrate` | Applies pending database migrations (the api also does this on start)      |
 
 Run `pnpm verify` before you open a pull request; CI runs the same command, and runs `pnpm e2e`
@@ -109,14 +132,21 @@ committed.
 The api reads these environment variables and refuses to start (exit code 1) if any is invalid,
 naming every bad one:
 
-| Variable        | Default               | Rules                                                                                                                                                  |
-| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `API_PORT`      | `3001`                | An integer from 1 to 65535                                                                                                                             |
-| `DATABASE_PATH` | `data/rampart.sqlite` | Relative paths are resolved from `apps/api`; the folder is created; `:memory:` works                                                                   |
-| `LOG_LEVEL`     | `info`                | A pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                           |
-| `STORAGE_PATH`  | `data/files`          | The evidence and policy file store. Relative paths are resolved from `apps/api`; the folder is created on the first upload; whitespace only is refused |
+| Variable                | Default               | Rules                                                                                                                                                                                                                                                                     |
+| ----------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `API_PORT`              | `3001`                | An integer from 1 to 65535                                                                                                                                                                                                                                                |
+| `DATABASE_PATH`         | `data/rampart.sqlite` | Relative paths are resolved from `apps/api`; the folder is created; `:memory:` works                                                                                                                                                                                      |
+| `LOG_LEVEL`             | `info`                | A pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                                                                                                                                              |
+| `STORAGE_PATH`          | `data/files`          | The evidence and policy file store. Relative paths are resolved from `apps/api`; the folder is created on the first upload; whitespace only is refused                                                                                                                    |
+| `HOSTED`                | `false`               | Exactly `true` or `false`. `true` means the api sits behind one local reverse proxy on 127.0.0.1 that terminates HTTPS: HSTS, the `__Host-rampart_session` Secure cookie, `upgrade-insecure-requests` in the page CSP, and `X-Forwarded-For` honoured only from 127.0.0.1 |
+| `SERVE_WEB`             | `false`               | Exactly `true` or `false`. `true` serves the built web app (`WEB_DIST_PATH`) from the api; a missing `index.html` stops the start (run `pnpm build` first). `pnpm start` sets it                                                                                          |
+| `WEB_DIST_PATH`         | `../web/dist`         | The built web app's folder. Relative paths are resolved from `apps/api`. Read once at start: files added later aren't served                                                                                                                                              |
+| `RATE_LIMIT_MULTIPLIER` | `1`                   | Digits only, 1 to 1000. Multiplies every rate limit's maximum (600 requests a minute per IP, and 10 a minute per IP each for setup and sign-in). Tests and e2e raise it; hosted mode needs 1                                                                              |
 
-An empty value counts as unset. The host is always `127.0.0.1`. On start the api opens the SQLite
+An empty value counts as unset. The host is always `127.0.0.1`. With `HOSTED=true` the api also
+refuses to start (exit code 1, before it opens the database) unless `SERVE_WEB=true`,
+`RATE_LIMIT_MULTIPLIER` is 1 and `LOG_LEVEL` isn't `debug` or `trace`, naming every rule broken.
+A request over a rate limit gets 429 `too_many_attempts` with `Retry-After`. On start the api opens the SQLite
 database (WAL, foreign keys on), applies pending migrations, then listens. There is no seed data
 yet.
 
