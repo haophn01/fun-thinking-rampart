@@ -1,4 +1,4 @@
-import type { SystemProfile } from '@rampart/api/contract';
+import type { SspProfile, SystemProfile } from '@rampart/api/contract';
 import { loadCatalog } from '@rampart/catalog';
 import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -53,6 +53,25 @@ const SAVED_PROFILE: Profile = {
   cageCode: '1ABC2',
   updatedAt: SAVED_AT,
   updatedBy: ME,
+};
+
+const SSP_PROFILE: SspProfile = {
+  categorization: 'Moderate',
+  securityOfficer: null,
+  securityOfficerEmail: null,
+  organizationAddress: null,
+  organizationPhone: null,
+  cuiCategories: null,
+  cuiLocations: null,
+  cuiEntryExit: null,
+  topologyNarrative: null,
+  dataFlowNarrative: null,
+  inventoryReference: null,
+  maintenanceStatement: null,
+  reviewCadenceMonths: 12,
+  nextReviewDate: null,
+  updatedAt: null,
+  updatedBy: null,
 };
 
 function assessmentView(status: 'met' | 'not_met' | 'not_assessed', statements: number) {
@@ -114,6 +133,9 @@ function sspApi(
         csrfToken: 'csrf-1',
       }),
     'GET /api/assessment': () => json(200, assessmentView('met', 3)),
+    // The Identification & roles tab also loads the SSP identification fields and the roles.
+    'GET /api/ssp/profile': () => json(200, { profile: SSP_PROFILE }),
+    'GET /api/ssp/roles': () => json(200, { roles: [], totals: { users: 0, privilegedUsers: 0 } }),
     'GET /api/system-profile': () => json(200, { profile }),
     'PATCH /api/system-profile': (call) => {
       const patch = call.body as Record<string, string | null>;
