@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { SESSION_MAX_AGE_SECONDS } from '../auth/sessions';
 import { SESSION_COOKIE } from '../contract';
 import { ADMIN, createHarness, type Harness, type HarnessOptions } from '../testing/harness';
+import { WEB_CSP } from './headers';
 
 const HOSTED_COOKIE = '__Host-rampart_session';
 const API_CSP = "default-src 'none';base-uri 'none';form-action 'none';frame-ancestors 'none'";
@@ -68,7 +69,10 @@ describe('local behaviour is unchanged', () => {
     const h = harness();
     for (const url of ['/api/health', '/api/nope', '/nope']) {
       const response = await h.app.inject({ url });
-      expect(response.headers['content-security-policy'], url).toBe(API_CSP);
+      // The CSP splits by path: api paths keep the api CSP, anything else gets the web CSP.
+      expect(response.headers['content-security-policy'], url).toBe(
+        url.startsWith('/api') ? API_CSP : WEB_CSP,
+      );
       expect(response.headers['x-content-type-options'], url).toBe('nosniff');
       expect(response.headers['x-frame-options'], url).toBe('DENY');
       expect(response.headers['x-powered-by'], url).toBeUndefined();
