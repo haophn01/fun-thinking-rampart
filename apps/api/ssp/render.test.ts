@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PRODUCT_NAME } from '../src/contract';
 import type { SspModel } from './model';
 import { renderSspDocx } from './render';
-import { docxPart, docxText } from './testing/docx-text';
+import { docxMedia, docxPart, docxText, pngOf } from './testing/docx-text';
 
 // Late evening in California is already the next day in UTC.
 const GENERATED_AT = new Date('2026-11-24T23:30:00-08:00');
@@ -31,8 +31,11 @@ const EVERY_BLOCK: SspModel = {
       empty: 'None linked',
     },
     { kind: 'list', label: 'Evidence', items: [], empty: 'None linked' },
+    { kind: 'signature', name: 'Pat Owner', title: 'System owner', date: '2026-11-01' },
   ],
 };
+
+const SIGNATURE_LINE = `Signature: ${'_'.repeat(32)}`;
 
 describe('renderSspDocx', () => {
   it('text safety', async () => {
@@ -78,6 +81,19 @@ describe('renderSspDocx', () => {
     const first = await renderSspDocx(EVERY_BLOCK, { generatedAt: GENERATED_AT });
     const second = await renderSspDocx(EVERY_BLOCK, { generatedAt: new Date(GENERATED_AT) });
     expect(docxPart(second)).toBe(docxPart(first));
+
+    // With an image, only the media and relationship IDs may differ.
+    const pictured: SspModel = {
+      blocks: [
+        ...EVERY_BLOCK.blocks,
+        { kind: 'image', data: pngOf(4, 4), type: 'png', width: 624, height: 624, altText: 'A' },
+      ],
+    };
+    const ids = (xml: string) => xml.replace(/r:embed="[^"]*"/g, 'r:embed=""');
+    const a = docxPart(await renderSspDocx(pictured, { generatedAt: GENERATED_AT }));
+    const b = docxPart(await renderSspDocx(pictured, { generatedAt: GENERATED_AT }));
+    expect(ids(b)).toBe(ids(a));
+    expect(a).toContain('<w:drawing>');
 
     // The time matters: it is the "Generated" line, as a UTC date.
     const text = docxText(first);
@@ -126,10 +142,89 @@ describe('renderSspDocx', () => {
       'Access Policy',
       'Remote Work',
       'Evidence: None linked',
+      'Pat Owner, System owner',
+      SIGNATURE_LINE,
+      'Date: 2026-11-01',
     ]);
     // Document properties name the product and the title.
     const core = docxPart(bytes, 'docProps/core.xml');
     expect(core).toContain(`<dc:creator>${PRODUCT_NAME}</dc:creator>`);
     expect(core).toContain('<dc:title>System Security Plan</dc:title>');
+  });
+
+  it('embeds images', async () => {
+    const png = pngOf(40, 20);
+    const model: SspModel = {
+      blocks: [
+        { kind: 'paragraph', text: 'Before' },
+        {
+          kind: 'image',
+          data: png,
+          type: 'png',
+          width: 624,
+          height: 312,
+          altText: 'Boundary <A&B>',
+        },
+        { kind: 'paragraph', text: 'Figure 1. Boundary' },
+      ],
+    };
+    const bytes = await renderSspDocx(model, { generatedAt: GENERATED_AT });
+    const xml = docxPart(bytes);
+
+    // One media part holding the exact bytes, and one drawing that shows it.
+    const media = docxMedia(bytes);
+    expect(media).toHaveLength(1);
+    expect(media[0]).toMatch(/^word\/media\/[^/]+\.png$/);
+    expect(xml.match(/<w:drawing>/g)).toHaveLength(1);
+    // Drawn at the model's size: pixels at 96 dpi are 9525 EMU each.
+    expect(xml).toContain(`<wp:extent cx="${String(624 * 9525)}" cy="${String(312 * 9525)}"/>`);
+    // The alt text is the caption, escaped.
+    expect(xml).toContain('descr="Boundary &lt;A&amp;B&gt;"');
+
+    // A png Default content type, and an image relationship whose target is that part.
+    const types = docxPart(bytes, '[Content_Types].xml');
+    // Attributes in either order.
+    expect(types).toMatch(
+      /<Default (?=[^>]*\bExtension="png")(?=[^>]*\bContentType="image\/png")[^>]*\/>/,
+    );
+    const rels = docxPart(bytes, 'word/_rels/document.xml.rels');
+    const images = [
+      ...rels.matchAll(
+        /<Relationship Id="([^"]+)" Type="[^"]+\/relationships\/image" Target="([^"]+)"\/>/g,
+      ),
+    ];
+    expect(images).toHaveLength(1);
+    const [, id, target] = images[0] ?? [];
+    expect(`word/${target ?? ''}`).toBe(media[0]);
+    expect(xml).toContain(`r:embed="${id ?? ''}"`);
+    expect(docxText(bytes).split('\n')).toEqual(['Before', '', 'Figure 1. Boundary']);
+  });
+
+  it('signature lines', async () => {
+    const model: SspModel = {
+      blocks: [
+        { kind: 'signature', name: 'Pat Owner', title: 'System owner', date: '2026-11-01' },
+        { kind: 'signature', name: 'Sam <Officer>', title: 'ISSO & lead', date: null },
+      ],
+    };
+    const bytes = await renderSspDocx(model, { generatedAt: GENERATED_AT });
+    expect(docxText(bytes).split('\n')).toEqual([
+      'Pat Owner, System owner',
+      SIGNATURE_LINE,
+      'Date: 2026-11-01',
+      'Sam <Officer>, ISSO & lead',
+      SIGNATURE_LINE,
+      `Date: ${'_'.repeat(12)}`,
+    ]);
+    // Each block stays together on one page.
+    const keptWithNext = [...docxPart(bytes).matchAll(/<w:p>(?:(?!<\/w:p>)[\s\S])*<\/w:p>/g)]
+      .filter(([p]) => p.includes('<w:keepNext/>'))
+      .map(([p]) => [...p.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((t) => t[1]).join(''));
+    expect(keptWithNext).toEqual([
+      'Pat Owner, System owner',
+      SIGNATURE_LINE,
+      'Sam &lt;Officer&gt;, ISSO &amp; lead',
+      SIGNATURE_LINE,
+    ]);
   });
 });

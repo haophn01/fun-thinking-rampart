@@ -5,8 +5,8 @@ They take a `Catalog` from `@rampart/catalog` and an assessment input, hold no s
 do no I/O. Regulatory values live in one cited data object, `REGULATION`
 (`src/poam/regulation.ts`); a regulatory change is an edit there, a citation, and a test.
 
-Entry points: `@rampart/rules` (status, score, and the evaluation and what-if helpers) and
-`@rampart/rules/poam` (POA&M rules).
+Entry points: `@rampart/rules` (status, score, the evaluation and what-if helpers, and the SSP
+lint) and `@rampart/rules/poam` (POA&M rules).
 
 ## Rules
 
@@ -32,9 +32,41 @@ Entry points: `@rampart/rules` (status, score, and the evaluation and what-if he
 | `REGULATION` data shape, citations, and frozen state                                                                                                                                                                                                                                                                                                           | `REGULATION`                                                                | 32 CFR 170.21, 170.24                                                    | `src/poam/regulation.test.ts`                                                                      |
 | Every barred and exception ID in `REGULATION` exists in the real catalog                                                                                                                                                                                                                                                                                       | `REGULATION`                                                                | 32 CFR 170.21(a)(2)                                                      | `src/catalog.integration.test.ts`                                                                  |
 
+## SSP lint
+
+`lintSspFrom(catalog, sources, limits)` (`src/ssp-lint/`) checks the SSP before export. It is pure,
+never mutates its input, and gives findings in rule order, then subject order (catalog order for
+requirements, input order for assets and diagrams). `sources` is structural, so the api's
+`AssessmentView`, `Asset[]`, `DiagramLink[]` and `DocumentControl` fit as they are; `limits` is
+`{ maxEmbeddedImages, largeImageBytes }`, passed in so the rules never import the contract. A
+requirement with no outcome is not assessed with no N/A objectives, and blank text (null, empty or
+whitespace) counts as missing. Without `openPoamRequirementIds`, rules 7 and 10 are skipped.
+`SSP_LINT_RULES` holds each rule's id, severity, label and hint; `SSP_LINT_VERSION` is `1.0.0`. The
+api's zod mirror is `apps/api/src/contract/ssp-lint.ts`.
+
+| #   | Rule                       | Severity | Fires when                                                                                |
+| --- | -------------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| 1   | `ssp_requirement_not_met`  | error    | the catalog's prerequisite (CA.L2-3.12.4) is Not Met or not assessed                      |
+| 2   | `no_assets`                | error    | no assets are recorded                                                                    |
+| 3   | `out_of_scope_unjustified` | error    | an out-of-scope asset has a blank justification                                           |
+| 4   | `no_network_diagram`       | error    | no diagram link of kind `network` (any network link clears it)                            |
+| 5   | `review_overdue`           | error    | the document-control review is overdue                                                    |
+| 6   | `empty_statement`          | error    | the implementation statement is blank and the requirement isn't all N/A                   |
+| 7   | `not_met_without_poam`     | error    | Not Met, not the prerequisite, and no open POA&M item                                     |
+| 8   | `na_without_rationale`     | warning  | one or more objectives are N/A and the N/A rationale is blank                             |
+| 9   | `future_tense`             | warning  | the statement uses a `FUTURE_TENSE_TERMS` term (`plannedImplementation` is never checked) |
+| 10  | `ssp_poam_mismatch`        | warning  | an open POA&M item on a requirement that isn't Not Met                                    |
+| 11  | `large_image`              | warning  | an embeddable image is larger than `largeImageBytes`                                      |
+| 12  | `image_limit`              | warning  | an embeddable link after the first `maxEmbeddedImages`                                    |
+
+Future-tense terms match case-insensitively on word boundaries (a hyphen is one), and a space in a
+term matches any run of whitespace. "Willow", "unplanned", "skill" and "TBDs" don't match. Tests:
+`src/ssp-lint/lint.test.ts` (one fixture per rule in `src/ssp-lint/fixtures.ts`) and
+`src/ssp-lint/future-tense.test.ts`.
+
 ## Tests
 
-- The unit tests (`src/*.test.ts`, `src/poam/*.test.ts`) run against small fixture catalogs built in
+- The unit tests (`src/*.test.ts`, `src/poam/*.test.ts`, `src/ssp-lint/*.test.ts`) run against small fixture catalogs built in
   `src/testing/fixture-catalog.ts` and `src/poam/fixtures.ts`.
 - `src/catalog.integration.test.ts` runs the same rules against `loadCatalog()`. It builds scenarios
   from catalog data and picks requirements by their points, except the IDs the plan names.

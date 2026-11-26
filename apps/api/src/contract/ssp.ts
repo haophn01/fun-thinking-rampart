@@ -7,6 +7,12 @@ import type { conditionalResultSchema } from './evaluation';
 export const SSP_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
+/** The most diagram images one SSP embeds; embeddable links after these are referenced. */
+export const SSP_MAX_EMBEDDED_IMAGES = 10;
+
+/** An embeddable image larger than this (5 MiB) makes the .docx large: the lint warns. */
+export const SSP_LARGE_IMAGE_BYTES = 5 * 1024 * 1024;
+
 /** The longest system identifier a file name keeps. */
 const MAX_FILE_ID = 64;
 
