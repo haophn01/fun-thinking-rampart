@@ -1,10 +1,12 @@
 // One-command start from a clean clone: `corepack pnpm start`.
-// Installs from the lockfile, applies migrations, then runs both dev servers.
+// Installs from the lockfile, builds, applies migrations, then serves the built app and the api
+// from one server on WEB_PORT (default 3000): http://127.0.0.1:3000/. `pnpm dev` stays the
+// development path (Vite on WEB_PORT, the api on API_PORT).
 // Node 24 runs this file directly (type stripping), so it uses `node:` imports only.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export interface Step {
@@ -14,7 +16,6 @@ export interface Step {
 
 export interface RunOptions {
   env: NodeJS.ProcessEnv;
-  shell: boolean;
 }
 
 /** Runs one command to completion and resolves with its exit code (null when a signal ended it). */
@@ -24,15 +25,17 @@ export type Runner = (
   options: RunOptions,
 ) => Promise<number | null>;
 
+/** pnpm as an executable plus the words before its own arguments; never a shell command line. */
 export interface PnpmCommand {
   command: string;
   prefix: string[];
-  shell: boolean;
 }
 
 export interface StartOptions {
   env: NodeJS.ProcessEnv;
   execPath: string;
+  /** Whether a file exists; finds corepack's pnpm entry next to Node. */
+  exists: (path: string) => boolean;
   platform: NodeJS.Platform;
   run: Runner;
   /** A folder holding the pnpm shims from writePnpmShims(); it goes first on every step's PATH. */
@@ -45,37 +48,55 @@ export interface ShimFile {
   content: string;
 }
 
+/** Where `pnpm start` serves when WEB_PORT is unset: the address the human already opens. */
+export const DEFAULT_START_PORT = '3000';
+
 /** The steps, in order. Each one must succeed before the next starts. */
 export function startSteps(): Step[] {
   return [
     { name: 'install', args: ['install', '--frozen-lockfile'] },
+    { name: 'build', args: ['build'] },
     { name: 'migrate', args: ['db:migrate'] },
-    { name: 'dev', args: ['dev'] },
+    { name: 'serve', args: ['--filter', '@rampart/api', 'start'] },
   ];
 }
 
 /**
- * The pnpm that launched this script: pnpm sets `npm_execpath` to its entry file, which the same
- * Node runs. Without it (run as plain `node scripts/start.ts`), fall back to `corepack pnpm`,
- * which on Windows is a .cmd shim and so needs a shell.
+ * The serve step's env: the caller's, with the api serving the built web app and listening on
+ * WEB_PORT (unset or empty: 3000). A caller's API_PORT and SERVE_WEB are overridden, since one
+ * server answers both the pages and `/api`.
+ */
+export function serveEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const port =
+    env.WEB_PORT === undefined || env.WEB_PORT === '' ? DEFAULT_START_PORT : env.WEB_PORT;
+  return { ...env, SERVE_WEB: 'true', API_PORT: port };
+}
+
+/**
+ * How to start pnpm without a shell (as scripts/audit-gate.ts does): the entry file pnpm set in
+ * `npm_execpath` when it launched this script, run by the same Node; else corepack's pnpm entry
+ * next to Node (on Windows the only other corepack is a .cmd, which needs a shell); else
+ * `corepack pnpm` from PATH.
  */
 export function pnpmCommand(
   env: NodeJS.ProcessEnv,
   execPath: string,
-  platform: NodeJS.Platform,
+  exists: (path: string) => boolean,
 ): PnpmCommand {
   const entry = env.npm_execpath;
   if (entry !== undefined && entry !== '') {
     return /\.[cm]?js$/i.test(entry)
-      ? { command: execPath, prefix: [entry], shell: false }
-      : { command: entry, prefix: [], shell: false };
+      ? { command: execPath, prefix: [entry] }
+      : { command: entry, prefix: [] };
   }
-  return { command: 'corepack', prefix: ['pnpm'], shell: platform === 'win32' };
+  const corepackPnpm = join(dirname(execPath), 'node_modules', 'corepack', 'dist', 'pnpm.js');
+  if (exists(corepackPnpm)) return { command: execPath, prefix: [corepackPnpm] };
+  return { command: 'corepack', prefix: ['pnpm'] };
 }
 
 /**
- * `pnpm` launchers for the scripts that call pnpm again (`db:migrate`, `dev`): a .cmd for Windows
- * shells and a sh script for the rest. Both run the same pnpm as this script.
+ * `pnpm` launchers for the scripts that call pnpm again (`build`, `db:migrate`, the api's start):
+ * a .cmd for Windows shells and a sh script for the rest. Both run the same pnpm as this script.
  */
 export function pnpmShims(pnpm: PnpmCommand): ShimFile[] {
   // Quote only words that need it: cmd.exe gives a batch file called by a quoted bare name
@@ -107,17 +128,18 @@ export function withShimOnPath(
   };
 }
 
-/** Runs every step in order and returns the exit code: the first failure's, or dev's own. */
+/** Runs every step in order and returns the exit code: the first failure's, or serve's own. */
 export async function runStart(options: StartOptions): Promise<number> {
-  const pnpm = pnpmCommand(options.env, options.execPath, options.platform);
+  const pnpm = pnpmCommand(options.env, options.execPath, options.exists);
   const env = withShimOnPath(options.env, options.shimDir, options.platform);
   let code = 0;
   for (const step of startSteps()) {
+    const stepEnv = step.name === 'serve' ? serveEnv(env) : env;
+    if (step.name === 'serve') {
+      options.log(`serving the app on http://127.0.0.1:${String(stepEnv.API_PORT)}/`);
+    }
     options.log(`> pnpm ${step.args.join(' ')}`);
-    const exit = await options.run(pnpm.command, [...pnpm.prefix, ...step.args], {
-      env,
-      shell: pnpm.shell,
-    });
+    const exit = await options.run(pnpm.command, [...pnpm.prefix, ...step.args], { env: stepEnv });
     code = exit ?? 1;
     if (code !== 0) {
       options.log(`${step.name} failed (exit code ${String(code)})`);
@@ -127,14 +149,10 @@ export async function runStart(options: StartOptions): Promise<number> {
   return code;
 }
 
-/** The real runner: inherits the terminal, so Ctrl+C reaches the dev servers too. */
+/** The real runner: no shell, and it inherits the terminal, so Ctrl+C reaches the server too. */
 export const spawnRunner: Runner = (command, args, options) =>
   new Promise((resolvePromise) => {
-    // With a shell, Node wants one command line (passing args too is deprecated, DEP0190).
-    // Every argument here is a fixed word from startSteps(), so joining needs no quoting.
-    const child = options.shell
-      ? spawn([command, ...args].join(' '), { env: options.env, shell: true, stdio: 'inherit' })
-      : spawn(command, args, { env: options.env, stdio: 'inherit' });
+    const child = spawn(command, args, { env: options.env, stdio: 'inherit' });
     child.once('error', (error) => {
       console.error(error.message);
       resolvePromise(1);
@@ -159,10 +177,11 @@ if (invokedDirectly) {
   process.on('SIGINT', () => undefined);
   const shimDir = mkdtempSync(join(tmpdir(), 'rampart-pnpm-'));
   try {
-    writePnpmShims(shimDir, pnpmCommand(process.env, process.execPath, process.platform));
+    writePnpmShims(shimDir, pnpmCommand(process.env, process.execPath, existsSync));
     process.exitCode = await runStart({
       env: process.env,
       execPath: process.execPath,
+      exists: existsSync,
       platform: process.platform,
       run: spawnRunner,
       shimDir,

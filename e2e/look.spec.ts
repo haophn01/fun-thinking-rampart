@@ -87,6 +87,8 @@ async function startApi() {
       DATABASE_PATH: join(runDir, 'look.sqlite'),
       STORAGE_PATH: join(runDir, 'files'),
       LOG_LEVEL: 'warn',
+      // As the config's api: real limits, raised so the suite never trips them.
+      RATE_LIMIT_MULTIPLIER: '100',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

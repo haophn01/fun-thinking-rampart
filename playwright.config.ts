@@ -53,6 +53,8 @@ export default defineConfig({
         DATABASE_PATH: join(runDir, 'e2e.sqlite'),
         STORAGE_PATH: join(runDir, 'files'),
         LOG_LEVEL: 'warn',
+        // The real limits stay on, raised so the suite's own traffic never trips them.
+        RATE_LIMIT_MULTIPLIER: '100',
       },
       reuseExistingServer: false,
       timeout: 120_000,
