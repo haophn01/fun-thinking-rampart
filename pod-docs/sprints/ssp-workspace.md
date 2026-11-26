@@ -207,7 +207,7 @@ Everything in the archived Shared contracts still holds (the error envelope, `ap
 - **Success criteria:**
   - `[test] Every nav route, the assessment detail and all six SSP tabs pass the text size, palette, contrast and 375 px scroll checks — e2e/look.spec.ts › look holds on every route`
   - `[test] The seeded SSP tabs show their data (a role, an out-of-scope asset, an ESP row, "Embedded image", "Referenced — contains CUI", a revision, an approval) and the dashboard shows "SSP review overdue" — e2e/look.spec.ts › seeded workspace shows its data`
-  - `[manual] 16 screenshots exist in demo-screenshots/v2-ssp-workspace/, show seeded data, and match the Inspection column of cmmc-l2-grc-look-3.html — open them`
+  - ~~[manual] 16 demo screenshots~~ (dropped 2026-11-25 by the human: "no need for screenshot, to reduce token usage")
   - `[manual] pnpm e2e is green locally on Windows with DEMO_SCREENSHOTS_DIR unset, and git status shows no screenshot files — run output`
 - **Depends on:** W9, W10, W11, W12, W13, W14, W15, W16
 - **One-way door:** none
