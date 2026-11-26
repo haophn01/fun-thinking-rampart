@@ -135,6 +135,9 @@ const REVIEW_DUE_IN_DAYS = -5;
 const APPROVED_ON = utcDatePlus(-400);
 const PLANNED = 'Block remote reach to CUI from personal devices with the MDM policy in Q2.';
 const NA_RATIONALE = 'No objective of this requirement is N/A.';
+/** A statement in the future tense, so Lint & export shows a future-tense finding. */
+const FUTURE_REQUIREMENT_ID = catalog.requirements[5]?.id ?? '';
+const FUTURE_STATEMENT = `${FUTURE_REQUIREMENT_ID} will be enforced by the MDM policy; the date is TBD.`;
 
 /** A value for every SSP profile field, so every group's form is filled. */
 const SSP_PROFILE = {
@@ -209,6 +212,12 @@ async function seed(request: APIRequestContext): Promise<Seeded> {
       implementationStatement: `${r.id} is met by the documented access procedure.`,
     });
   }
+  await client.write(
+    'PATCH',
+    `/api/assessment/requirements/${FUTURE_REQUIREMENT_ID}`,
+    { implementationStatement: FUTURE_STATEMENT },
+    requirementWriteResponseSchema,
+  );
 
   const evidence = await client.write(
     'POST',
@@ -646,6 +655,10 @@ test.describe('look', () => {
         if (view.label !== undefined) {
           await expect(page.getByRole('tab', { selected: true })).toHaveText(view.label);
         }
+        if (view.path === '/ssp?tab=export') {
+          // Measure the pre-export check with its findings on screen, not while it runs.
+          await expect(page.locator('[data-tone] [data-message]').first()).toBeVisible();
+        }
         const facts = await page.evaluate(collectFacts);
         checked += facts.texts.length;
         for (const line of violations(facts, width))
@@ -720,6 +733,20 @@ test.describe('look', () => {
       'Manual',
     );
     await expect(page.getByRole('row', { name: /Avery Approver/ })).toContainText(APPROVED_ON);
+
+    // Lint & export: the future-tense statement's finding, linked to its requirement.
+    await open(page, '/ssp?tab=export');
+    const future = page
+      .locator('[data-tone]')
+      .filter({ has: page.getByText('Future-tense statements · 1', { exact: true }) });
+    await expect(future).toHaveAttribute('data-tone', 'info');
+    await expect(future.locator('[data-message]')).toHaveText([
+      `${FUTURE_REQUIREMENT_ID} says "will", "TBD" (future tense).`,
+    ]);
+    const family = requirementById(catalog, FUTURE_REQUIREMENT_ID).family;
+    await expect(
+      future.getByRole('link', { name: `Open ${FUTURE_REQUIREMENT_ID}`, exact: true }),
+    ).toHaveAttribute('href', `/assessment?family=${family}&req=${FUTURE_REQUIREMENT_ID}`);
 
     // Dashboard: the overdue review in Needs attention, linking to document control.
     await open(page, '/');
