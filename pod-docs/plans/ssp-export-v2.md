@@ -175,7 +175,7 @@ erDiagram
 |--------|------|--------|------------|
 | ssp-data | Migration 0005 and contract; API for roles, CUI description, assets, ESPs and the responsibility matrix, diagram links, requirement planned/N-A fields, document control (revisions, cadence, approvals), all audited; the `templates/` folder | done | — |
 | ssp-workspace | Web: SSP workspace tabs (identification and roles, environment and diagrams, assets, service providers and matrix, document control); planned and N/A fields in the assessment workspace; dashboard "review overdue" | done | ssp-data |
-| ssp-export-lint | The lint rules package and `GET /api/ssp/lint`, with a live lint panel; export v2 in NIST outline plus CMMC sections plus Appendices A and B, embedded images, signature lines and the automatic record-of-changes entry; e2e and Look updates | planned | ssp-workspace |
+| ssp-export-lint | The lint rules package and `GET /api/ssp/lint`, with a live lint panel; export v2 in NIST outline plus CMMC sections plus Appendices A and B, embedded images, signature lines and the automatic record-of-changes entry; e2e and Look updates | active | ssp-workspace |
 
 ## Look
 `Inherits plan cmmc-l2-grc: **C · Inspection**`, unchanged. It uses the same six tokens, fonts, controls and layout rules (C's ruler, GO / NO GO chips, ballooned section labels, 16 px minimum, red text at body size only on Sheet). The new screens use existing controls only: TextField, TextArea, Select, RadioGroup, Checkbox, FileField, Alert, StatusChip, SectionLabel, plus tables in the existing card style. Lint findings use Alert (error tone for errors, info for warnings) and cite the requirement. (default: no new look round — the human chose Q13 a)
