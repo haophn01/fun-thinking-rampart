@@ -60,3 +60,9 @@ Consequences: near the end of the US day, countdowns and "due today" can be off 
 - **Cadence wording:** the record of changes says "every 1 month" when the cadence is 1, and "every <n> months" otherwise.
 - **CUI file version line:** a file version on a CUI-flagged item prints `<caption> — <kind>: <title> v<n>, contains CUI, <fileName>, SHA-256 <sha>, <date>`, with no "(referenced: …)" suffix. The api never produces this case.
 - **Why:** these were raised as PENDING by X2 (plan `ssp-export-v2`, sprint `ssp-export-lint`) and taken as defaults by the orchestrator. The human can change them.
+
+## 2026-11-26 — Pre-export check wording (agent default)
+
+- **Wording kept as built (W17):** the panel shows "Running the pre-export check…" while it loads, not "Loading…". The Export note reads "Findings don't block the export. Fix them first, or export as is.", not the contract's "The check only warns. You can export at any time." Both say the same thing.
+- **Fixed in the wave merge:** the summary line was not announced to screen readers. It now has `aria-live="polite"`. `role="status"` would have collided with the info Alerts, which already use that role.
+- **Why:** E4 raised these as PENDING (plan `ssp-export-v2`, sprint `ssp-export-lint`). The orchestrator took the wording as a default and fixed the accessibility gap.
