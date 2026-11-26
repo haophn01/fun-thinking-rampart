@@ -27,7 +27,7 @@ beforeEach(() => {
         sha256: createHash('sha256').update(bytes).digest('hex'),
       };
     });
-    scope.get('/test/file', (_request, reply) => sendFile(reply, FILE_BYTES, POLITICA));
+    scope.get('/api/test/file', (_request, reply) => sendFile(reply, FILE_BYTES, POLITICA));
     scope.get('/test/ascii', (_request, reply) =>
       sendFile(reply, FILE_BYTES, `it's "q" (1)*%.pdf`),
     );
@@ -154,7 +154,7 @@ describe('readUpload', () => {
 
 describe('sendFile headers', () => {
   it('sends an attachment with an RFC 5987 name, octet-stream, content-length and no-store', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/test/file' });
+    const response = await harness.app.inject({ method: 'GET', url: '/api/test/file' });
     expect(response.statusCode).toBe(200);
     expect(response.rawPayload.equals(FILE_BYTES)).toBe(true);
     expect(response.headers['content-type']).toBe('application/octet-stream');
