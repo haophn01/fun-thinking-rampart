@@ -72,6 +72,10 @@ lockfile. New versions must be at least a day old (`minimumReleaseAge` in `pnpm-
   a warning; remove it. CI also runs the gate with `--expect-findings` on
   `tests/fixtures/supply-chain/vulnerable`, a lockfile with a known high advisory, to prove the
   gate still fails. Never install that fixture.
+- **Semgrep** (the `semgrep` CI job): the OSS CLI with the `p/default`, `p/typescript` and
+  `p/react` rulesets fails on any ERROR-severity finding. Fix the code. When a rule is wrong for
+  this code, add `--exclude-rule <id>` to the job with a comment saying why. Skipped paths are in
+  `.semgrepignore`. CodeQL isn't used: it needs paid GitHub Advanced Security on a private repo.
 
 ## No CUI
 
