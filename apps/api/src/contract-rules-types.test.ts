@@ -43,6 +43,8 @@ import {
   type AssessmentView,
   type DiagramLink,
   type DocumentControl,
+  SSP_LARGE_IMAGE_BYTES,
+  SSP_MAX_EMBEDDED_IMAGES,
 } from './contract';
 
 interface RulesEvaluation {
@@ -158,9 +160,6 @@ describe('contract evaluation mirrors', () => {
   });
 
   it('ssp lint mirror', () => {
-    // The export's limits (X2 owns the shared constants in contract/ssp.ts).
-    const SSP_MAX_EMBEDDED_IMAGES = 10;
-    const SSP_LARGE_IMAGE_BYTES = 5 * 1024 * 1024;
     expectTypeOf<z.infer<typeof sspLintRuleIdSchema>>().toEqualTypeOf<SspLintRuleId>();
     expectTypeOf<z.infer<typeof sspLintSeveritySchema>>().toEqualTypeOf<SspLintSeverity>();
     expectTypeOf<z.infer<typeof sspLintFindingSchema>>().toEqualTypeOf<SspLintFinding>();
