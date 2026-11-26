@@ -50,6 +50,8 @@ function api() {
         },
       }),
     'GET /api/assessment': () => json(500, { error: { code: 'internal', message: 'x' } }),
+    'GET /api/ssp/roles': () => json(200, { roles: [], totals: { users: 0, privilegedUsers: 0 } }),
+    'GET /api/ssp/assets': () => json(200, { assets: [] }),
   });
 }
 
@@ -102,7 +104,9 @@ describe('SSP tabs', () => {
     await tablist();
     expect(selectedTab()).toHaveTextContent('Assets');
     const panel = screen.getByRole('tabpanel', { name: 'Assets' });
-    expect(within(panel).getByText("This tab isn't built yet.")).toBeInTheDocument();
+    expect(
+      await within(panel).findByRole('heading', { name: /Asset inventory/ }),
+    ).toBeInTheDocument();
     // The Identification tab was never visited, so it sent nothing.
     expect(stub.sent('GET /api/system-profile')).toHaveLength(0);
   });
@@ -222,7 +226,7 @@ describe('SSP tabs', () => {
     await profile.requested;
     // The frame is up while the tab's own load is still out.
     expect(screen.getByRole('tablist', { name: 'SSP sections' })).toBeInTheDocument();
-    expect(screen.getByText(/^Loading/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Loading/).length).toBeGreaterThan(0);
     expect(document.title).toMatch(/^SSP · /);
     profile.answer(json(200, { profile: PROFILE }));
     expect(await screen.findByRole('form', { name: 'System profile' })).toBeInTheDocument();
