@@ -1,0 +1,35 @@
+{
+  "actions": [],
+  "muted": [],
+  "advisories": {
+    "1106913": {
+      "id": 1106913,
+      "github_advisory_id": "GHSA-35jh-r3h4-6jhm",
+      "severity": "high",
+      "module_name": "lodash",
+      "title": "Command Injection in lodash",
+      "url": "https://github.com/advisories/GHSA-35jh-r3h4-6jhm",
+      "vulnerable_versions": "<1.0.0",
+      "patched_versions": ">=1.0.0",
+      "findings": [
+        {
+          "version": "0.9.0",
+          "paths": [".>lodash"]
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 1,
+      "critical": 0
+    },
+    "dependencies": 10,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 10
+  }
+}

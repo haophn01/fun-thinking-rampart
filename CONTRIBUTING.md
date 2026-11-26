@@ -63,6 +63,15 @@ lockfile. New versions must be at least a day old (`minimumReleaseAge` in `pnpm-
   `minimumReleaseAge` holds back versions under a day old, `trustPolicy: no-downgrade` refuses a
   version published with weaker provenance than an earlier one, and `blockExoticSubdeps` refuses
   transitive dependencies from git or tarball URLs.
+- **Audit gate** (`node scripts/audit-gate.ts`, the `audit` CI job): `pnpm audit` fails the build
+  on any high or critical advisory. Moderate, low and info pass. Output it can't read (not JSON,
+  a network error) fails too. Fix a finding by upgrading the package within its range. If no fix
+  exists, add `{ "id": "<GHSA id>", "reason": "<why it's safe for now>", "until": "YYYY-MM-DD" }`
+  to `audit-allowlist.json`, with `until` at most 30 days ahead. After that UTC date the entry
+  fails the gate until it is fixed, renewed or removed. An entry that matches nothing passes with
+  a warning; remove it. CI also runs the gate with `--expect-findings` on
+  `tests/fixtures/supply-chain/vulnerable`, a lockfile with a known high advisory, to prove the
+  gate still fails. Never install that fixture.
 
 ## No CUI
 
