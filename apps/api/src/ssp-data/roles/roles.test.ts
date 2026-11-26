@@ -261,7 +261,7 @@ describe('ssp role routes', () => {
     // No roles: empty list, 0/0.
     expect(await list(admin)).toEqual({ roles: [], totals: { users: 0, privilegedUsers: 0 } });
 
-    // Roles made at the same moment are ordered by id; later ones after them.
+    // Roles made at the same moment are ordered by id; later ones after them (also by id).
     const a = roleOf(await admin.post(URL, role({ title: 'Admins', userCount: 2 })), 201);
     const b = roleOf(
       await admin.post(URL, role({ title: 'Staff', userCount: 40, privileged: false })),
@@ -273,9 +273,11 @@ describe('ssp role routes', () => {
       await admin.post(URL, role({ title: 'Guests', userCount: 0, privileged: false })),
       201,
     );
-    const sameMoment = [a, b].sort((x, y) => (x.id < y.id ? -1 : 1));
+    const byId = (x: { id: string }, y: { id: string }) => (x.id < y.id ? -1 : 1);
+    const sameMoment = [a, b].sort(byId);
+    const laterMoment = [c, d].sort(byId);
     let read = await list(admin);
-    expect(read.roles.map(({ id }) => id)).toEqual([...sameMoment, c, d].map(({ id }) => id));
+    expect(read.roles.map(({ id }) => id)).toEqual([...sameMoment, ...laterMoment].map(({ id }) => id));
     expect(read.totals).toEqual({ users: 45, privilegedUsers: 5 });
 
     // Switching a role to privileged moves its users; removed roles count for neither.
