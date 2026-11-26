@@ -53,6 +53,7 @@ import {
   poamItemSchema,
   poamViewSchema,
   putObjectiveResultRequestSchema,
+  requirementStateSchema,
   requirementStatusSchema,
   roleSchema,
   setupRequestSchema,
@@ -90,7 +91,10 @@ describe('contract schemas', () => {
       evidence_not_cui: 409,
       unsupported_file_type: 415,
       file_integrity_failed: 500,
+      provider_in_use: 409,
     };
+    expect(ERROR_CODES).toEqual(Object.keys(table));
+    expect(ERROR_CODES.at(-1)).toBe('provider_in_use');
     expect([...ERROR_CODES].sort()).toEqual(Object.keys(table).sort());
     expect(ERROR_STATUS).toEqual(table);
     for (const code of ERROR_CODES) expect(ERROR_STATUS[code], code).toBe(table[code]);
@@ -150,6 +154,24 @@ describe('contract schemas', () => {
       'policy.links_updated',
       'policy.version_added',
       'system_profile.updated',
+      'ssp_profile.updated',
+      'system_role.created',
+      'system_role.updated',
+      'system_role.removed',
+      'asset.created',
+      'asset.updated',
+      'asset.removed',
+      'service_provider.created',
+      'service_provider.updated',
+      'service_provider.removed',
+      'responsibility.updated',
+      'diagram_link.created',
+      'diagram_link.updated',
+      'diagram_link.removed',
+      'ssp_revision.created',
+      'ssp_approval.created',
+      'ssp_approval.updated',
+      'ssp_approval.removed',
     ]);
     expect(AUDIT_ENTITY_TYPES).toEqual([
       'user',
@@ -160,6 +182,14 @@ describe('contract schemas', () => {
       'evidence_item',
       'policy',
       'system_profile',
+      'ssp_profile',
+      'system_role',
+      'asset',
+      'service_provider',
+      'responsibility',
+      'diagram_link',
+      'ssp_revision',
+      'ssp_approval',
     ]);
   });
 
@@ -731,5 +761,46 @@ describe('contract schemas', () => {
     expect(policyResponseSchema.parse({ item: policy })).toEqual({ item: policy });
     expect(policyListSchema.parse({ items: [policy] })).toEqual({ items: [policy] });
     expect(accepts(policySchema, { ...policy, requirementIds: undefined })).toBe(false);
+  });
+  it('requirement fields', () => {
+    const base = {
+      requirementId: 'AC.L2-3.1.1',
+      implementationLevel: null,
+      implementationStatement: null,
+      owner: null,
+      updatedAt: '2026-11-25T10:00:00.000Z',
+    };
+    // Older rows (and older mocks) without the two keys still parse.
+    expect(requirementStateSchema.parse(base)).toEqual(base);
+    const full = { ...base, plannedImplementation: 'Roll out MFA by Q2', naRationale: null };
+    expect(requirementStateSchema.parse(full)).toEqual(full);
+    expect(accepts(requirementStateSchema, { ...base, plannedImplementation: 3 })).toBe(false);
+    expect(accepts(requirementStateSchema, { ...base, naRationale: undefined })).toBe(true);
+
+    // The patch takes each new key alone; trims; blank becomes null.
+    expect(patchRequirementRequestSchema.parse({ plannedImplementation: '  Buy a VPN  ' })).toEqual(
+      { plannedImplementation: 'Buy a VPN' },
+    );
+    expect(patchRequirementRequestSchema.parse({ naRationale: '  No wireless.  ' })).toEqual({
+      naRationale: 'No wireless.',
+    });
+    expect(patchRequirementRequestSchema.parse({ plannedImplementation: ' \n\t ' })).toEqual({
+      plannedImplementation: null,
+    });
+    expect(patchRequirementRequestSchema.parse({ naRationale: '' })).toEqual({ naRationale: null });
+    expect(patchRequirementRequestSchema.parse({ naRationale: null })).toEqual({
+      naRationale: null,
+    });
+    // Limits: 20,000 for the plan, 4,000 for the rationale, counted after trimming.
+    expect(
+      accepts(patchRequirementRequestSchema, { plannedImplementation: 'p'.repeat(20000) }),
+    ).toBe(true);
+    expect(
+      accepts(patchRequirementRequestSchema, { plannedImplementation: 'p'.repeat(20001) }),
+    ).toBe(false);
+    expect(accepts(patchRequirementRequestSchema, { naRationale: 'n'.repeat(4000) })).toBe(true);
+    expect(accepts(patchRequirementRequestSchema, { naRationale: 'n'.repeat(4001) })).toBe(false);
+    expect(accepts(patchRequirementRequestSchema, { naRationale: 7 })).toBe(false);
+    expect(accepts(patchRequirementRequestSchema, {})).toBe(false);
   });
 });

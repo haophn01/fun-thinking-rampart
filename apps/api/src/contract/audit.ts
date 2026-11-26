@@ -24,6 +24,24 @@ export const AUDIT_ACTIONS = [
   'policy.links_updated',
   'policy.version_added',
   'system_profile.updated',
+  'ssp_profile.updated',
+  'system_role.created',
+  'system_role.updated',
+  'system_role.removed',
+  'asset.created',
+  'asset.updated',
+  'asset.removed',
+  'service_provider.created',
+  'service_provider.updated',
+  'service_provider.removed',
+  'responsibility.updated',
+  'diagram_link.created',
+  'diagram_link.updated',
+  'diagram_link.removed',
+  'ssp_revision.created',
+  'ssp_approval.created',
+  'ssp_approval.updated',
+  'ssp_approval.removed',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -38,6 +56,17 @@ export const AUDIT_ENTITY_TYPES = [
   'policy',
   /** The entity ID is the assessment ID: one profile per assessment. */
   'system_profile',
+  /** The entity ID is the assessment ID: one SSP profile per assessment. */
+  'ssp_profile',
+  /** The entity ID is the row's UUID, except for `responsibility`. */
+  'system_role',
+  'asset',
+  'service_provider',
+  /** The entity ID is the requirement ID: one row per requirement. */
+  'responsibility',
+  'diagram_link',
+  'ssp_revision',
+  'ssp_approval',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

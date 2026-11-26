@@ -33,6 +33,12 @@ export const requirementStateSchema = z.object({
   implementationLevel: implementationLevelSchema.nullable(),
   implementationStatement: z.string().nullable(),
   owner: z.object({ id: z.string(), displayName: z.string(), active: z.boolean() }).nullable(),
+  /**
+   * The SSP's "planned to be implemented" text and the reason a requirement is not applicable.
+   * The api always sends both; they are optional only so older mocks still parse.
+   */
+  plannedImplementation: z.string().nullable().optional(),
+  naRationale: z.string().nullable().optional(),
   updatedAt: z.iso.datetime(),
 });
 export type RequirementState = z.infer<typeof requirementStateSchema>;
@@ -81,6 +87,8 @@ export const patchRequirementRequestSchema = z
     implementationStatement: implementationStatementSchema.optional(),
     implementationLevel: implementationLevelSchema.nullable().optional(),
     ownerId: z.uuid().nullable().optional(),
+    plannedImplementation: implementationStatementSchema.optional(),
+    naRationale: noteSchema.optional(),
   })
   .refine((body) => Object.keys(body).length > 0, { message: 'Nothing to change' });
 export type PatchRequirementRequest = z.infer<typeof patchRequirementRequestSchema>;

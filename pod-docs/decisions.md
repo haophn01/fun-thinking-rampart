@@ -48,3 +48,21 @@ Consequences: an admin can sign themself out with one click. Adding a confirm di
 Context: the plan review found that POA&M due dates, the 180-day clock and the closeout checks use the UTC calendar date. For a US user after about 4–5 pm local time, they read one day ahead.
 Decision: keep UTC days, as `contract/poam.ts` documents.
 Consequences: near the end of the US day, countdowns and "due today" can be off by one. Fixing it needs the user's time zone (a setting, or the browser's offset sent with requests).
+
+## 2026-11-25 — SSP workspace tab keys and categorization reset (agent default)
+
+- **Tab history:** clicking an SSP tab pushes a history entry, and clicking the selected tab adds none. Arrow, Home and End keys **replace** the `?tab=` entry, so Back doesn't step through every tab the keys passed.
+- **Categorization reset:** clearing the categorization when it already holds the default counts as no change, so Save stays disabled. This follows the API's effective-value rule; the default is stored as null.
+- **Why:** these match the WAI-ARIA tabs pattern and the API's rules. Raised as PENDING by W9 (plan `ssp-export-v2`, sprint `ssp-workspace`) and taken as defaults by the orchestrator. The human can change them.
+
+## 2026-11-25 — SSP export v2 wording (agent default)
+
+- **Cadence wording:** the record of changes says "every 1 month" when the cadence is 1, and "every <n> months" otherwise.
+- **CUI file version line:** a file version on a CUI-flagged item prints `<caption> — <kind>: <title> v<n>, contains CUI, <fileName>, SHA-256 <sha>, <date>`, with no "(referenced: …)" suffix. The api never produces this case.
+- **Why:** these were raised as PENDING by X2 (plan `ssp-export-v2`, sprint `ssp-export-lint`) and taken as defaults by the orchestrator. The human can change them.
+
+## 2026-11-26 — Pre-export check wording (agent default)
+
+- **Wording kept as built (W17):** the panel shows "Running the pre-export check…" while it loads, not "Loading…". The Export note reads "Findings don't block the export. Fix them first, or export as is.", not the contract's "The check only warns. You can export at any time." Both say the same thing.
+- **Fixed in the wave merge:** the summary line was not announced to screen readers. It now has `aria-live="polite"`. `role="status"` would have collided with the info Alerts, which already use that role.
+- **Why:** E4 raised these as PENDING (plan `ssp-export-v2`, sprint `ssp-export-lint`). The orchestrator took the wording as a default and fixed the accessibility gap.

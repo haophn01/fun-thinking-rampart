@@ -1,177 +1,111 @@
-import {
-  assessmentViewSchema,
-  systemProfileResponseSchema,
-  type AssessmentView,
-  type SystemProfile,
-} from '@rampart/api/contract';
-import { loadCatalog } from '@rampart/catalog';
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
-import { apiGet, apiSend, type ResponseSchema } from '../../api/client';
-import { Alert, Button, SectionLabel, StatusChip } from '../../look';
+import { useId, useState, type ComponentType, type KeyboardEvent } from 'react';
+import { useSearchParams } from 'react-router';
 import { usePageTitle } from '../usePageTitle';
-import { ProfileForm, type ProfilePatch } from './ProfileForm';
 import styles from './ssp.module.css';
+import { SSP_TABS, stepTab, tabFromParam, type SspTabId } from './tabs';
+import { AssetsTab } from './tabs/AssetsTab';
+import { DocumentControlTab } from './tabs/DocumentControlTab';
+import { EnvironmentTab } from './tabs/EnvironmentTab';
+import { ExportTab } from './tabs/ExportTab';
+import { IdentificationTab } from './tabs/IdentificationTab';
+import { ProvidersTab } from './tabs/ProvidersTab';
 
-const TOTAL_REQUIREMENTS = loadCatalog().requirements.length;
-/** The SSP requirement: no SPRS score without it. */
-const SSP_REQUIREMENT = 'CA.L2-3.12.4';
+const PANELS: Record<SspTabId, ComponentType> = {
+  identification: IdentificationTab,
+  environment: EnvironmentTab,
+  assets: AssetsTab,
+  providers: ProvidersTab,
+  'document-control': DocumentControlTab,
+  export: ExportTab,
+};
 
-interface Loaded<T> {
-  /** `null` until the first load answers. */
-  data: T | null;
-  failed: boolean;
-  reload: () => Promise<void>;
+/** The keys that move between tabs, and where each goes from `from`. */
+function keyTarget(key: string, from: SspTabId): SspTabId | null {
+  switch (key) {
+    case 'ArrowRight':
+      return stepTab(from, 1);
+    case 'ArrowLeft':
+      return stepTab(from, -1);
+    case 'Home':
+      return SSP_TABS[0].id;
+    case 'End':
+      return SSP_TABS[SSP_TABS.length - 1]?.id ?? from;
+    default:
+      return null;
+  }
 }
 
-/** Loads one GET on mount. A failed reload keeps the data it had; only a first load shows the error. */
-function useLoad<T>(path: string, schema: ResponseSchema<T>): Loaded<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [failed, setFailed] = useState(false);
-  // Each load bumps this; an answer from an older load (or after unmount) is dropped.
-  const latest = useRef(0);
-  const reload = useCallback(async () => {
-    latest.current += 1;
-    const run = latest.current;
-    const body = await apiGet(path, schema).then(
-      (value) => value,
-      () => null,
-    );
-    if (run !== latest.current) return;
-    if (body !== null) setData(body);
-    setFailed(body === null);
-  }, [path, schema]);
-  useEffect(() => {
-    // reload() sets state only after its request answers, never synchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void reload();
-    return () => {
-      latest.current += 1;
-    };
-  }, [reload]);
-  return { data, failed, reload };
-}
-
-function Section({
-  number,
-  title,
-  children,
-}: {
-  number: number;
-  title: string;
-  children: ReactNode;
-}) {
-  const headingId = useId();
-  return (
-    <section className={styles.section} aria-labelledby={headingId}>
-      <h2 id={headingId} className={styles.sectionHead}>
-        <SectionLabel number={number}>{title}</SectionLabel>
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-function LoadError({ title, onRetry }: { title: string; onRetry: () => void }) {
-  return (
-    <Alert tone="error" title={title}>
-      <p>Check that the API is running, then retry.</p>
-      <Button className={styles.retry} onClick={onRetry}>
-        Retry
-      </Button>
-    </Alert>
-  );
-}
-
-/** How many requirements hold a statement that isn't blank. */
-function countStatements(view: AssessmentView): number {
-  return view.requirementStates.filter((s) => (s.implementationStatement ?? '').trim() !== '')
-    .length;
-}
-
-function Readiness({ view }: { view: AssessmentView }) {
-  const outcome = view.evaluation.outcomes.find((o) => o.requirementId === SSP_REQUIREMENT);
-  const status = outcome === undefined ? 'not_assessed' : outcome.allNa ? 'na' : outcome.status;
-  return (
-    <div className={styles.readiness}>
-      <div className={styles.reqLine}>
-        <span className={styles.mono}>{SSP_REQUIREMENT}</span>
-        <StatusChip status={status} />
-      </div>
-      <p>
-        {`${String(countStatements(view))} of ${String(TOTAL_REQUIREMENTS)} requirements have an implementation statement`}
-      </p>
-      <p>
-        <Link className={styles.link} to="/assessment">
-          Open the Assessment
-        </Link>
-      </p>
-    </div>
-  );
-}
-
-/** The SSP page: the system profile, how ready the plan is, and the .docx export. */
+/**
+ * The SSP workspace: one tab per SSP section, chosen by `?tab=`. A panel mounts on its first
+ * visit and stays mounted while hidden, so a draft survives a tab switch.
+ */
 export function SspPage() {
   usePageTitle('SSP');
-  const profile = useLoad('/api/system-profile', systemProfileResponseSchema);
-  const assessment = useLoad('/api/assessment', assessmentViewSchema);
+  const baseId = useId();
+  const [params, setParams] = useSearchParams();
+  const selected = tabFromParam(params.get('tab'));
+  const [visited, setVisited] = useState<ReadonlySet<SspTabId>>(() => new Set([selected]));
+  // Adjusting state while rendering: the newly selected panel joins the mounted ones.
+  if (!visited.has(selected)) setVisited(new Set([...visited, selected]));
 
-  const save = useCallback(async (patch: ProfilePatch): Promise<SystemProfile> => {
-    const { profile: stored } = await apiSend(
-      'PATCH',
-      '/api/system-profile',
-      patch,
-      systemProfileResponseSchema,
-    );
-    return stored;
-  }, []);
+  const tabId = (id: SspTabId) => `${baseId}-tab-${id}`;
+  const panelId = (id: SspTabId) => `${baseId}-panel-${id}`;
 
-  let form: ReactNode;
-  if (profile.data !== null) {
-    form = <ProfileForm profile={profile.data.profile} onSave={save} />;
-  } else if (profile.failed) {
-    form = (
-      <LoadError
-        title="Can't load the system profile"
-        onRetry={() => {
-          void profile.reload();
-        }}
-      />
-    );
-  } else {
-    form = <p className={styles.muted}>Loading the system profile…</p>;
+  function select(id: SspTabId, replace: boolean) {
+    if (id === selected) return;
+    setParams({ tab: id }, { replace });
   }
 
-  let readiness: ReactNode;
-  if (assessment.data !== null) {
-    readiness = <Readiness view={assessment.data} />;
-  } else if (assessment.failed) {
-    readiness = (
-      <LoadError
-        title="Can't load the readiness"
-        onRetry={() => {
-          void assessment.reload();
-        }}
-      />
-    );
-  } else {
-    readiness = <p className={styles.muted}>Loading the readiness…</p>;
+  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const target = keyTarget(event.key, selected);
+    if (target === null) return;
+    event.preventDefault();
+    // Arrow keys replace the entry, so Back doesn't step through every tab the keys passed.
+    select(target, true);
+    document.getElementById(tabId(target))?.focus();
   }
 
   return (
     <section className={styles.page}>
       <h1>SSP</h1>
-      <Section number={1} title="System profile">
-        {form}
-      </Section>
-      <Section number={2} title="Readiness">
-        {readiness}
-      </Section>
-      <Section number={3} title="Export">
-        <a className={styles.export} href="/api/ssp/export" download>
-          Export SSP (.docx)
-        </a>
-      </Section>
+      <div className={styles.tabs} role="tablist" aria-label="SSP sections">
+        {SSP_TABS.map((tab) => {
+          const isSelected = tab.id === selected;
+          return (
+            <button
+              key={tab.id}
+              id={tabId(tab.id)}
+              type="button"
+              role="tab"
+              className={styles.tab}
+              aria-selected={isSelected}
+              aria-controls={visited.has(tab.id) ? panelId(tab.id) : undefined}
+              tabIndex={isSelected ? 0 : -1}
+              onClick={() => {
+                select(tab.id, false);
+              }}
+              onKeyDown={onKeyDown}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+      {SSP_TABS.filter((tab) => visited.has(tab.id)).map((tab) => {
+        const Panel = PANELS[tab.id];
+        return (
+          <div
+            key={tab.id}
+            id={panelId(tab.id)}
+            role="tabpanel"
+            aria-labelledby={tabId(tab.id)}
+            className={styles.panel}
+            hidden={tab.id !== selected}
+          >
+            <Panel />
+          </div>
+        );
+      })}
     </section>
   );
 }

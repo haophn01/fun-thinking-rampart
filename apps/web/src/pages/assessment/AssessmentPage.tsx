@@ -138,6 +138,9 @@ export function AssessmentPage() {
             noteOf={assessment.noteOf}
             isSaving={assessment.isSaving}
             level={shownLevel(requirement.id)}
+            outcome={
+              assessment.evaluation.outcomes.find((o) => o.requirementId === requirement.id) ?? null
+            }
             patching={assessment.isPatching(requirement.id)}
             backTo={`?family=${family}`}
             onStatus={(objectiveId, status) => {
@@ -153,6 +156,12 @@ export function AssessmentPage() {
               void assessment.patchRequirement(requirement.id, {
                 implementationStatement: statement,
               })
+            }
+            onPlanned={(text) =>
+              void assessment.patchRequirement(requirement.id, { plannedImplementation: text })
+            }
+            onNaRationale={(text) =>
+              void assessment.patchRequirement(requirement.id, { naRationale: text })
             }
             onOwner={(ownerId) => void assessment.patchRequirement(requirement.id, { ownerId })}
           />

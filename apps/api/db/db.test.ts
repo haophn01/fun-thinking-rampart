@@ -32,12 +32,36 @@ const POAM_EVIDENCE_TABLES = [
   'policy_link',
   'policy_version',
 ];
+/** The eight tables migration 0005_ssp_data adds. */
+const SSP_DATA_TABLES = [
+  'asset',
+  'diagram_link',
+  'responsibility',
+  'service_provider',
+  'ssp_approval',
+  'ssp_profile',
+  'ssp_revision',
+  'system_role',
+];
 const ALL_TABLES = [
   'assessment',
   ...ASSESSMENT_TABLES,
   ...POAM_EVIDENCE_TABLES,
   'system_profile',
+  ...SSP_DATA_TABLES,
 ].sort();
+/** requirement_state's columns: 0001's, then the two 0005 adds. */
+const REQUIREMENT_STATE_COLUMNS = [
+  'assessment_id',
+  'requirement_id',
+  'implementation_level',
+  'implementation_statement',
+  'owner_user_id',
+  'updated_by',
+  'updated_at',
+  'planned_implementation',
+  'na_rationale',
+];
 const AT = '2026-11-23T00:00:00.000Z';
 const SHA = 'a'.repeat(64);
 
@@ -113,13 +137,14 @@ describe('database', () => {
     const handle = track(openDb(':memory:'));
     runMigrations(handle.db);
 
-    // assessment, the five assessment-sprint tables and the seven POA&M and evidence tables
-    // (and drizzle's own journal table).
+    // assessment, the five assessment-sprint tables, the seven POA&M and evidence tables, the
+    // system profile and the eight SSP data tables (and drizzle's own journal table).
     expect(
       tables(handle)
         .filter((name) => name !== '__drizzle_migrations')
         .sort(),
     ).toEqual(ALL_TABLES);
+    expect(columnsOf(handle, 'requirement_state')).toEqual(REQUIREMENT_STATE_COLUMNS);
     const columns = handle.sqlite.prepare('pragma table_info(assessment)').all() as {
       name: string;
       notnull: number;
@@ -236,15 +261,7 @@ describe('database', () => {
       'updated_by',
       'updated_at',
     ]);
-    expect(columnsOf(handle, 'requirement_state')).toEqual([
-      'assessment_id',
-      'requirement_id',
-      'implementation_level',
-      'implementation_statement',
-      'owner_user_id',
-      'updated_by',
-      'updated_at',
-    ]);
+    expect(columnsOf(handle, 'requirement_state')).toEqual(REQUIREMENT_STATE_COLUMNS);
     const indexColumns = (index: string): string[] =>
       (handle.sqlite.prepare(`pragma index_info(\`${index}\`)`).all() as { name: string }[]).map(
         (column) => column.name,
@@ -492,7 +509,15 @@ describe('database', () => {
         .filter((name) => name !== '__drizzle_migrations')
         .sort(),
     ).toEqual(ALL_TABLES);
-    expect(rowsOf(upgraded)).toEqual(before);
+    // Every row is kept; 0005 gives requirement_state rows two new, empty columns.
+    expect(rowsOf(upgraded)).toEqual({
+      ...before,
+      requirement_state: (before.requirement_state as Record<string, unknown>[]).map((row) => ({
+        ...row,
+        planned_implementation: null,
+        na_rationale: null,
+      })),
+    });
     // The kept rows still enforce their rules, and the new tables can point at them.
     expect(() => {
       seedUser(upgraded, 'u3', 'admin@example.com');

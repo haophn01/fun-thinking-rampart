@@ -18,3 +18,5 @@ export * from './evidence';
 export * from './policies';
 export * from './system-profile';
 export * from './ssp';
+export * from './ssp-data';
+export * from './ssp-lint';

@@ -1,4 +1,4 @@
-import type { AssessmentView, PoamView } from '@rampart/api/contract';
+import type { AssessmentView, DocumentControl, PoamView } from '@rampart/api/contract';
 import { getRequirement, type Catalog } from '@rampart/catalog';
 
 export type AttentionKind =
@@ -8,13 +8,14 @@ export type AttentionKind =
   | 'overdue'
   | 'due_after_deadline'
   | 'ready_to_close'
-  | 'not_assessed';
+  | 'not_assessed'
+  | 'review_overdue';
 
 export interface AttentionRow {
   key: string;
   kind: AttentionKind;
-  /** Where the fix lives: the assessment or the POA&M page. */
-  href: '/assessment' | '/poam';
+  /** Where the fix lives: the assessment, the POA&M page or the SSP's Document control tab. */
+  href: '/assessment' | '/poam' | '/ssp?tab=document-control';
   /** What is wrong, in a plain phrase. */
   message: string;
   /** Present on requirement rows; absent on the "not yet assessed" summary row. */
@@ -30,7 +31,7 @@ type Item = PoamView['items'][number];
 
 /**
  * What the dashboard asks a person to look at, in this order: the SSP prerequisite, each
- * ineligible requirement, each Not Met requirement without an open POA&M item, overdue open
+ * SSP review overdue (when `control` says so), each ineligible requirement, each Not Met requirement without an open POA&M item, overdue open
  * items, open items due after the closeout deadline, open items ready to close, then the count
  * of requirements not yet assessed. Closed items never appear. Empty means nothing to do.
  */
@@ -38,6 +39,7 @@ export function needsAttention(
   view: AssessmentView,
   poam: PoamView,
   catalog: Catalog,
+  control?: DocumentControl | null,
 ): AttentionRow[] {
   const { blockers } = view.evaluation.conditional;
   const outcomeOf = new Map(view.evaluation.outcomes.map((o) => [o.requirementId, o.status]));
@@ -80,6 +82,19 @@ export function needsAttention(
         ),
       );
     }
+  }
+  if (
+    control?.reviewOverdue === true &&
+    control.nextReviewDue !== null &&
+    control.daysToReview !== null
+  ) {
+    const late = Math.abs(control.daysToReview);
+    rows.push({
+      key: 'review-overdue',
+      kind: 'review_overdue',
+      href: '/ssp?tab=document-control',
+      message: `SSP review overdue: due ${control.nextReviewDue} · ${String(late)} ${late === 1 ? 'day' : 'days'} overdue`,
+    });
   }
   for (const b of blockers) {
     if (b.code === 'poam_ineligible') {

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SSP Export v2 Overview</title>
+<style>
+:root{--bg:#F2F1EC;--sheet:#FFFFFF;--ink:#111111;--muted:#6B6B66;--red:#E10600;--blue:#1F4BFF}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:32px 16px}
+main{max-width:1100px;margin:0 auto}
+.rule{border-top:3px solid var(--ink);margin-bottom:24px}
+h1{font:800 38px/1.1 system-ui,sans-serif;letter-spacing:-.01em;margin-bottom:8px}
+h2{font:700 22px/1.2 system-ui,sans-serif;margin:36px 0 12px;padding-top:10px;border-top:1.5px solid var(--ink);display:flex;align-items:center;gap:10px}
+h2 span{display:inline-grid;place-items:center;width:30px;height:30px;border:1.5px solid var(--ink);border-radius:50%;font:700 16px ui-monospace,Consolas,monospace}
+p{max-width:840px;margin-bottom:10px}
+.goal{font-size:19px}
+.mono{font-family:ui-monospace,Consolas,monospace}
+.muted{color:var(--muted)}
+table{width:100%;border-collapse:collapse;background:var(--sheet);border:1.5px solid var(--ink)}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #d6d2c6;vertical-align:top}
+th{background:var(--ink);color:#fff;font-weight:600}
+td:first-child{font-weight:600}
+td:nth-child(3){font-family:ui-monospace,Consolas,monospace;font-size:16px}
+.tablewrap{overflow-x:auto}
+.diagram{background:var(--sheet);border:1.5px solid var(--ink);padding:16px;overflow-x:auto}
+.outline{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.box{background:var(--sheet);border:1.5px solid var(--ink);padding:14px}
+.box h3{font-size:18px;margin-bottom:6px}
+.box ol,.box ul{margin-left:22px}
+.new{color:var(--blue);font-weight:700}
+.sprints{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.sp{background:var(--sheet);border:1.5px solid var(--ink);padding:14px}
+.sp b{display:block;font-family:ui-monospace,Consolas,monospace;color:var(--red)}
+.sp .n{font:800 28px system-ui;display:block}
+.note{border:1.5px solid var(--ink);border-left:10px solid var(--red);background:var(--sheet);padding:12px 14px;margin-top:12px}
+@media (max-width:600px){h1{font-size:28px}}
+</style>
+</head>
+<body>
+<main>
+<div class="rule"></div>
+<p class="mono muted">pod-docs/plans/ssp-export-v2.md · 3 sprints · 2026-11-25</p>
+<h1>SSP export v2: an assessor-ready System Security Plan</h1>
+<p class="goal">The export follows <b>NIST's own CUI SSP template outline</b> and adds the sections 32 CFR 170.19 expects: an asset inventory by the five Level 2 categories, external service providers with a responsibility matrix, diagrams and CUI data flows, roles, document control, and per-objective detail. A <b>pre-export lint</b> shows what an assessor will catch, and a <span class="mono">templates/</span> folder holds the official references.</p>
+
+<h2><span>1</span>The exported document, v1 → v2</h2>
+<div class="outline">
+  <div class="box"><h3>v1 (today)</h3><ol><li>System characteristics</li><li>Assessment summary (SPRS, Conditional, 180-day)</li><li>Security requirements</li><li>Plan of action and milestones</li></ol></div>
+  <div class="box"><h3>v2 (this plan)</h3><ol>
+    <li>System identification <span class="new">+ categorization, security officer, roles table</span></li>
+    <li>System environment <span class="new">+ topology and CUI data-flow narratives, embedded diagrams, hardware and software inventory reference</span></li>
+    <li class="new">CUI description · asset inventory (5 categories) · service providers and responsibility matrix</li>
+    <li>Requirements: <span class="new">Implemented / Planned / Not applicable, planned implementation, N/A rationale</span></li>
+    <li>Plan of action and milestones</li>
+    <li class="new">Record of changes (automatic on export) and approval signature lines</li>
+    <li class="new">Appendix A: assessment status (SPRS, Conditional, 180-day) · Appendix B: assessment objectives</li>
+  </ol></div>
+</div>
+
+<h2><span>2</span>Parts</h2>
+<div class="tablewrap"><table>
+<tr><th>Part</th><th>New or changed</th><th>Where</th><th>Does</th></tr>
+<tr><td>ssp data</td><td>new</td><td>apps/api/db (0005), apps/api/src/ssp-data</td><td>Roles, assets, ESPs, responsibilities, diagram links, revisions, approvals; extends the profile and requirement state</td></tr>
+<tr><td>contract</td><td>changed</td><td>apps/api/src/contract</td><td>Schemas for the new resources and fields; new audit actions</td></tr>
+<tr><td>ssp lint</td><td>new</td><td>packages/rules/src/ssp-lint</td><td>Pure function: findings with severity and a fix hint, shared by web and api</td></tr>
+<tr><td>ssp export v2</td><td>changed</td><td>apps/api/ssp</td><td>NIST outline, CMMC sections, appendices, images, signature lines, automatic record of changes</td></tr>
+<tr><td>web — SSP workspace</td><td>changed</td><td>apps/web/src/pages/ssp</td><td>Tabs: Identification &amp; roles · Environment · Assets · Service providers &amp; matrix · Document control · Lint &amp; export</td></tr>
+<tr><td>web — requirement fields</td><td>changed</td><td>apps/web/src/pages/assessment</td><td>Planned implementation and N/A rationale</td></tr>
+<tr><td>web — dashboard</td><td>changed</td><td>apps/web/src/pages/dashboard</td><td>"SSP review overdue" in Needs attention</td></tr>
+<tr><td>templates</td><td>new</td><td>templates/</td><td>Official NIST and DoD reference files plus SOURCES.md (vendor templates linked only)</td></tr>
+</table></div>
+
+<h2><span>3</span>How they connect</h2>
+<div class="diagram"><pre class="mermaid">
+flowchart LR
+  web -->|HTTP JSON + CSRF| api
+  api -->|reads and writes| sspdata[ssp data]
+  api -->|asks for findings| ssplint[ssp lint]
+  ssplint -->|reads points and objectives| catalog
+  api -->|asks for a document| sspexport[ssp export v2]
+  sspexport -->|reads| sspdata
+  sspexport -->|reads image bytes, hash-checked| evidencestore[evidence store]
+  sspexport -->|appends record of changes| sspdata
+  web -->|imports for live lint preview| ssplint
+</pre></div>
+
+<h2><span>4</span>Main flow: prepare and export the SSP</h2>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  actor Lead
+  participant web
+  participant api
+  participant lint as ssp lint
+  participant export as ssp export v2
+  participant db
+  Lead->>web: fill identification, roles, assets, ESPs and matrix, link diagrams
+  web->>api: save each section (audited)
+  api->>db: write rows and audit events
+  Lead->>web: open Lint & export
+  web->>api: GET /api/ssp/lint
+  api->>lint: findings from view + SSP data
+  lint-->>web: e.g. 3.1.3 says "will deploy" (future tense); no network diagram linked
+  Lead->>web: fix what matters, Export
+  web->>api: GET /api/ssp/export
+  api->>export: NIST outline + CMMC sections + appendices
+  export->>db: append record of changes (export)
+  export-->>Lead: SSP-id-date.docx with embedded diagram and signature lines
+</pre></div>
+
+<h2><span>5</span>Data (one additive migration, 0005)</h2>
+<div class="diagram"><pre class="mermaid">
+erDiagram
+  ASSESSMENT ||--|| SYSTEM_PROFILE : describes
+  ASSESSMENT ||--o{ SYSTEM_ROLE : staffs
+  ASSESSMENT ||--o{ ASSET : inventories
+  ASSESSMENT ||--o{ SERVICE_PROVIDER : uses
+  ASSESSMENT ||--o{ RESPONSIBILITY : assigns
+  SERVICE_PROVIDER ||--o{ RESPONSIBILITY : carries
+  ASSESSMENT ||--o{ DIAGRAM_LINK : shows
+  EVIDENCE_ITEM ||--o{ DIAGRAM_LINK : draws
+  ASSESSMENT ||--o{ SSP_REVISION : records
+  ASSESSMENT ||--o{ SSP_APPROVAL : signs
+</pre></div>
+
+<h2><span>6</span>Sprints</h2>
+<div class="sprints">
+  <div class="sp"><span class="n">1</span><b>ssp-data</b>Migration 0005 and the contract; the API for roles, CUI description, assets, ESPs and matrix, diagram links, planned and N/A fields, and document control, all audited; the <span class="mono">templates/</span> folder.</div>
+  <div class="sp"><span class="n">2</span><b>ssp-workspace</b>The SSP workspace tabs, the planned and N/A fields in the assessment workspace, and the dashboard "review overdue" item.</div>
+  <div class="sp"><span class="n">3</span><b>ssp-export-lint</b>The lint rules and panel; export v2 with the NIST outline, CMMC sections, Appendices A and B, embedded images, signature lines and the automatic record of changes; e2e and Look updates.</div>
+</div>
+
+<div class="note"><b>Unchanged:</b> the C · Inspection look, no CUI in V1 (CUI-flagged diagrams are never embedded), and every existing test and e2e path. <b>Later (parked):</b> OSCAL export, CSV asset import, Rev 3 outline, hosting and Microsoft 365.</div>
+</main>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs';
+mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#FFFFFF',primaryBorderColor:'#111111',primaryTextColor:'#111111',lineColor:'#111111',fontSize:'16px',actorBkg:'#FFFFFF',actorBorder:'#111111'}});
+</script>
+</body>
+</html>

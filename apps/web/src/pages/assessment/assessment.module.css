@@ -200,3 +200,13 @@
     display: inline-flex;
   }
 }
+
+.sspStatus {
+  margin: 0;
+  color: var(--rp-graphite);
+}
+
+.hint {
+  margin: 0;
+  color: var(--rp-graphite);
+}

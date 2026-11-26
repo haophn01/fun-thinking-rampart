@@ -1,0 +1,164 @@
+/* The SSP tabs' shared kit: sections, profile forms, tables that become cards on phones. */
+
+.section {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+}
+
+.sectionHead {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.muted {
+  margin: 0;
+  color: var(--rp-graphite);
+}
+
+.retry {
+  margin-top: 12px;
+}
+
+.form {
+  display: grid;
+  gap: 20px;
+  max-width: 720px;
+  min-width: 0;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hint {
+  margin: 0;
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.saved {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+.lastSaved {
+  margin: 0;
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  overflow-wrap: anywhere;
+}
+
+/* A drawing's parts list: Sheet face, Ink rules, a mono caption above. */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--rp-sheet);
+  border: var(--rp-rule) solid var(--rp-ink);
+}
+
+.tableBlock {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.caption {
+  margin: 0;
+  padding-bottom: 8px;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.table th,
+.table td {
+  padding: 10px 12px;
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.table th {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+  color: var(--rp-graphite);
+}
+
+.cellLabel {
+  display: none;
+}
+
+.removeWrap {
+  display: inline-flex;
+}
+
+.confirm {
+  display: inline-grid;
+  gap: 8px;
+}
+
+.question {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+@media (max-width: 767px) {
+  .table,
+  .table tbody {
+    display: block;
+    border: 0;
+    background: none;
+  }
+
+  /* A block table shrinks its caption to one character wide; give it the full row. */
+  .table caption {
+    display: block;
+    width: 100%;
+  }
+
+  /* The header row stays for screen readers; each cell carries its own label. */
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .table tr {
+    display: block;
+    margin-bottom: 16px;
+    background: var(--rp-sheet);
+    border: var(--rp-rule) solid var(--rp-ink);
+  }
+
+  .table td {
+    display: block;
+    border-bottom: 0;
+  }
+
+  .cellLabel {
+    display: block;
+    color: var(--rp-graphite);
+    font-family: var(--rp-font-mono);
+    font-size: var(--rp-text-label);
+  }
+}

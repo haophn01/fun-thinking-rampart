@@ -10,3 +10,4 @@ export {
   type EvaluationDiff,
   type WhatIfChanges,
 } from './evaluate';
+export * from './ssp-lint';

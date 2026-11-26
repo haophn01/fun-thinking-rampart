@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openDb, runMigrations, type DbHandle } from './client';
+import { openDb, type DbHandle } from './client';
 
 const MIGRATIONS = fileURLToPath(new URL('./migrations', import.meta.url));
 const AT = '2026-11-23T00:00:00.000Z';
@@ -202,7 +202,12 @@ describe('system profile migration', () => {
     const journal = readJournal();
     const at0003 = journal.entries.findIndex((entry) => entry.tag === '0003_poam_evidence');
     expect(at0003).toBe(3);
-    expect(journal.entries.map((entry) => entry.tag).slice(4)).toEqual(['0004_system_profile']);
+    // 0004 is followed only by 0005_ssp_data, which has its own upgrade test (ssp-data.test.ts).
+    expect(journal.entries.map((entry) => entry.tag).slice(4)).toEqual([
+      '0004_system_profile',
+      '0005_ssp_data',
+    ]);
+    const at0004 = at0003 + 1;
 
     // The migration's SQL only adds: one new table, no drops, alters or rewrites.
     const sql = readFileSync(join(MIGRATIONS, '0004_system_profile.sql'), 'utf8');
@@ -228,10 +233,12 @@ describe('system profile migration', () => {
     const oldSchema = schemaSql(old);
     old.sqlite.close();
 
-    // Upgrade: every row is kept, every old definition is unchanged, and the table is added.
+    // Upgrade to 0004 exactly: every row is kept, every old definition is unchanged, and the
+    // table is added.
+    const upTo0004 = migrationsUpTo(at0004 + 1);
     const upgraded = track(openDb(path));
-    runMigrations(upgraded.db);
-    expect(appliedMigrations(upgraded)).toBe(journal.entries.length);
+    migrate(upgraded.db, { migrationsFolder: upTo0004 });
+    expect(appliedMigrations(upgraded)).toBe(at0004 + 1);
     expect(tables(upgraded)).toEqual([...KEPT_TABLES, 'system_profile'].sort());
     expect(rowsOf(upgraded)).toEqual(before);
     const newSchema = schemaSql(upgraded);
@@ -281,7 +288,7 @@ describe('system profile migration', () => {
     // A second run is a no-op.
     const applied = appliedMigrations(upgraded);
     const schemaBefore = schemaSql(upgraded);
-    runMigrations(upgraded.db);
+    migrate(upgraded.db, { migrationsFolder: upTo0004 });
     expect(appliedMigrations(upgraded)).toBe(applied);
     expect(schemaSql(upgraded)).toEqual(schemaBefore);
     expect(upgraded.sqlite.prepare('select count(*) from system_profile').pluck().get()).toBe(1);

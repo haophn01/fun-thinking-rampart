@@ -63,14 +63,21 @@ The specs, in the order Playwright runs them (file name order):
   fresh install, it starts a second api of its own on `E2E_API_PORT + 2` (3293 by default;
   `E2E_LOOK_API_PORT` overrides it) with its own database in the run folder, fills every page
   through that api, and routes the browser's `/api` calls to it. The pages still come from the
-  run's web app.
+  run's web app. Every SSP tab is measured with its data, Lint & export with its findings on
+  screen, and a seeded future-tense statement shows its finding there.
 - `shell.spec.ts` checks that a fresh install shows Setup.
 - `smoke.spec.ts` walks the plan's Verification path: create the admin, reach 72 with
   AC.L2-3.1.20 Not Met (HOLD, its blocker, and the POA&M refusal), fix it and reach ACCEPT with
   eligible POA&M items, upload evidence and see its SHA-256 (a CUI item refuses a file), upload and
   link a policy, fill the system profile and export the SSP (its text holds the profile and every
-  requirement's status and statement), then read the audit log. Scores are planned from the
-  catalog's points, never typed in.
+  requirement's status and statement inside section 3). Then it fills the SSP workspace (a role
+  through the UI; the SSP profile, one asset per category, a provider named on an ESP matrix row,
+  a PNG and a PDF diagram, the CUI item as the data flow and a dated approval through the api),
+  checks that the pre-export check on Lint & export matches `GET /api/ssp/lint`, exports again and
+  reads the v2 document back (the ten headings in order, the role, one embedded PNG, the PDF and
+  CUI reference lines, the export's own record-of-changes row, which the api then stores as an
+  `export` revision, the signature lines and both appendices), and reads the audit log. Scores
+  are planned from the catalog's points, never typed in.
 
 ## Scripts
 
@@ -162,7 +169,8 @@ JSON body. Request bodies are strict: an unknown key gives 400.
 | `PATCH /api/assessment/requirements/:requirementId` | any user | `{ implementationStatement?, implementationLevel?, ownerId? }`; `null` unsets. Answers with the evaluation                                          |
 | `GET /api/system-profile`                           | any user | `{ profile }`: the SSP's system characteristics, every field `null` until the first save                                                            |
 | `PATCH /api/system-profile`                         | any user | Any of the profile fields; blank becomes `null`, a CAGE code is 5 letters or digits, `{}` gives 400. Answers with `{ profile }`                     |
-| `GET /api/ssp/export`                               | any user | The System Security Plan as a `.docx` download, `SSP-<system identifier>-<UTC date>.docx`. Writes nothing                                           |
+| `GET /api/ssp/lint`                                 | any user | The pre-export check: `{ version, findings, counts: { errors, warnings } }`, findings in rule order. Writes nothing                                 |
+| `GET /api/ssp/export`                               | any user | The System Security Plan as a `.docx` download, `SSP-<system identifier>-<UTC date>.docx`. Appends one `export` entry to the record of changes      |
 
 - **One evaluation:** every response's `evaluation` is `evaluateAssessment` from `@rampart/rules`
   over the stored rows, the same function the web app runs for its live and what-if scores. A
@@ -179,10 +187,22 @@ JSON body. Request bodies are strict: an unknown key gives 400.
 - **Conditional status** needs a score of at least 88 and an open POA&M item for every Not Met
   requirement (32 CFR 170.24(c)(2)(i)(B)(6)); a Not Met requirement with no open item is a
   `poam_missing` blocker.
-- **SSP export:** the document has the system profile, an assessment summary (SPRS score,
-  Conditional status, counts), every requirement in catalog order with its status, points, owner,
-  implementation statement, objectives, linked policies and evidence and its open POA&M item, then
-  the whole POA&M. Fill the profile on the SSP page or with `PATCH /api/system-profile`.
+- **SSP export:** the document follows the NIST SP 800-171 SSP outline: 1 System identification
+  (with 1.1 Roles and users), 2 System environment (with 2.1 Diagrams), the CMMC CUI description,
+  asset inventory and service providers with the responsibility matrix, 3 Requirements (each with
+  its NIST status, points, owner, current and planned implementation, N/A rationale, policies,
+  evidence and open POA&M item), 4 Record of changes, Approvals (signature lines), Appendix A
+  (assessment status, SPRS, POA&M) and Appendix B (all 320 objectives). Up to 10 PNG or JPEG
+  diagrams not flagged CUI are embedded; the rest are referenced by file name and SHA-256, or by
+  where a CUI file is kept. Each export appends `Exported as <file name>` to the record of
+  changes, after the document renders and before it is sent. Fill the data on the SSP workspace
+  tabs or through the `/api/ssp/*` routes.
+- **Pre-export check:** `GET /api/ssp/lint` runs `lintSspFrom` from `@rampart/rules` over the
+  assessment, assets, diagram links and document control: errors (the SSP requirement isn't Met,
+  no assets, an out-of-scope asset without a justification, no network diagram, review overdue,
+  empty statements, Not Met without a POA&M item) and warnings (N/A without a rationale,
+  future-tense statements, SSP and POA&M disagree, large images, images over the embed limit).
+  The web app runs the same function on Lint & export. Findings never block the export.
 
 ## The dashboard
 
@@ -191,18 +211,19 @@ possible score to 110 with the Conditional line at 88, a feature control frame (
 more), and the inspector's stamp: **ACCEPT** when Conditional or Final status is reachable,
 otherwise **HOLD** with the number of blockers. Beside it are the Conditional check (each blocker
 with its citation, the open POA&M count and the 180-day closeout clock), objective counts, family
-progress and a "Needs attention" list, and under them the inspection strip. The SSP page (`/ssp`)
-holds the system profile form, how ready the SSP is, and the **Export SSP (.docx)** link.
+progress and a "Needs attention" list, and under them the inspection strip. The SSP workspace
+(`/ssp`) has six tabs; its Lint & export tab shows how ready the SSP is, the pre-export check and
+the **Export SSP (.docx)** link.
 
 ## Parts
 
-| Package            | Folder             | What it does                                                                                                              |
-| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| `@rampart/catalog` | `packages/catalog` | The NIST SP 800-171 Rev 2 catalog as versioned data: families, requirements, objectives and SPRS points                   |
-| `@rampart/rules`   | `packages/rules`   | Pure functions: requirement status, SPRS score, POA&M eligibility, Conditional check, 180-day clock                       |
-| `@rampart/api`     | `apps/api`         | Fastify HTTP API on `/api`, the only writer of the SQLite database; also owns the shared contract                         |
-| (part of the api)  | `apps/api/ssp`     | Builds the SSP: a pure outline from the catalog, profile, assessment, POA&M, policies and evidence, rendered as a `.docx` |
-| `@rampart/web`     | `apps/web`         | React app built with Vite                                                                                                 |
+| Package            | Folder             | What it does                                                                                                                                                                                               |
+| ------------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@rampart/catalog` | `packages/catalog` | The NIST SP 800-171 Rev 2 catalog as versioned data: families, requirements, objectives and SPRS points                                                                                                    |
+| `@rampart/rules`   | `packages/rules`   | Pure functions: requirement status, SPRS score, POA&M eligibility, Conditional check, 180-day clock, and the SSP pre-export check (`ssp-lint`)                                                             |
+| `@rampart/api`     | `apps/api`         | Fastify HTTP API on `/api`, the only writer of the SQLite database; also owns the shared contract                                                                                                          |
+| (part of the api)  | `apps/api/ssp`     | Export v2: a pure outline in the NIST SSP order from the catalog, profiles, SSP workspace data, assessment, POA&M, policies and evidence, rendered as a `.docx` with embedded diagrams and signature lines |
+| `@rampart/web`     | `apps/web`         | React app built with Vite                                                                                                                                                                                  |
 
 ## How they connect
 

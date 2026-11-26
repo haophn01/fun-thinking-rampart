@@ -13,19 +13,36 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from '@playwright/test';
 import { loadCatalog } from '@rampart/catalog';
 import { REGULATION } from '@rampart/rules/poam';
 import {
+  approvalResponseSchema,
   assessmentViewSchema,
+  assetResponseSchema,
+  diagramResponseSchema,
   evidenceItemResponseSchema,
   poamItemResponseSchema,
   policyResponseSchema,
+  providerResponseSchema,
+  requirementWriteResponseSchema,
+  responsibilityRowResponseSchema,
+  revisionResponseSchema,
+  roleResponseSchema,
+  sspProfileResponseSchema,
   systemProfileResponseSchema,
   userResponseSchema,
 } from '../apps/api/src/contract/index.ts';
 import { BODY_TEXT_MIN, LARGE_TEXT_MIN, contrastRatio } from '../apps/web/src/look/contrast.ts';
 import { COLORS, TEXT_SIZES_PX } from '../apps/web/src/look/tokens.ts';
+import { SSP_TABS } from '../apps/web/src/pages/ssp/tabs.ts';
 import { api, ensureOk, type Api } from './helpers/api';
 import {
   firstObjectiveId,
@@ -34,6 +51,8 @@ import {
   requirementByNist,
   utcDatePlus,
 } from './helpers/plan';
+
+type StorageState = Awaited<ReturnType<APIRequestContext['storageState']>>;
 
 const API_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../apps/api');
 const HOST = '127.0.0.1';
@@ -104,8 +123,45 @@ async function stopApi() {
 
 // ---------- data ----------
 
-/** Puts something on every page: blockers, an item, evidence, a policy, a profile, two users. */
-async function seed(request: APIRequestContext): Promise<Api> {
+/** What the seed made that the checks name by id. */
+interface Seeded {
+  /** The requirement whose matrix row names the provider as ESP. */
+  espRequirementId: string;
+  providerId: string;
+}
+
+/** How far the seeded next review date lies from today: in the past, so the review is overdue. */
+const REVIEW_DUE_IN_DAYS = -5;
+const APPROVED_ON = utcDatePlus(-400);
+const PLANNED = 'Block remote reach to CUI from personal devices with the MDM policy in Q2.';
+const NA_RATIONALE = 'No objective of this requirement is N/A.';
+/** A statement in the future tense, so Lint & export shows a future-tense finding. */
+const FUTURE_REQUIREMENT_ID = catalog.requirements[5]?.id ?? '';
+const FUTURE_STATEMENT = `${FUTURE_REQUIREMENT_ID} will be enforced by the MDM policy; the date is TBD.`;
+
+/** A value for every SSP profile field, so every group's form is filled. */
+const SSP_PROFILE = {
+  categorization: 'Moderate impact for confidentiality, low for integrity',
+  securityOfficer: 'Sam Security',
+  securityOfficerEmail: 'sam@example.test',
+  organizationAddress: '1 Engineering Way, Springfield, VA 22150',
+  organizationPhone: '+1 (703) 555-0142',
+  cuiCategories: 'CTI (Controlled Technical Information); EXPT (Export Controlled)',
+  cuiLocations: 'The enclave file server and the two engineering workstations.',
+  cuiEntryExit: 'CUI arrives from the prime over DoD SAFE and leaves the same way.',
+  topologyNarrative: 'One flat VLAN behind the boundary firewall, with no wireless inside it.',
+  dataFlowNarrative: 'Drawings move from SAFE to the file server, then to the CAD workstations.',
+  inventoryReference: 'https://inventory.example.test/enclave',
+  maintenanceStatement: 'The IT lead maintains every asset; the MSP patches monthly.',
+  reviewCadenceMonths: 12,
+  nextReviewDate: utcDatePlus(REVIEW_DUE_IN_DAYS),
+};
+
+/**
+ * Puts something on every page: blockers, an item, evidence, a policy, a profile, two users, and
+ * the SSP workspace's profile, roles, assets, provider, matrix row, diagrams and document control.
+ */
+async function seed(request: APIRequestContext): Promise<Seeded> {
   await ensureOk(
     await request.post('/api/setup', {
       data: { email: 'lena@example.test', displayName: 'Lena Look', password: 'look-check-pass-1' },
@@ -156,6 +212,12 @@ async function seed(request: APIRequestContext): Promise<Api> {
       implementationStatement: `${r.id} is met by the documented access procedure.`,
     });
   }
+  await client.write(
+    'PATCH',
+    `/api/assessment/requirements/${FUTURE_REQUIREMENT_ID}`,
+    { implementationStatement: FUTURE_STATEMENT },
+    requirementWriteResponseSchema,
+  );
 
   const evidence = await client.write(
     'POST',
@@ -182,10 +244,13 @@ async function seed(request: APIRequestContext): Promise<Api> {
     { title: 'Network diagram', description: null, containsCui: true, objectiveIds: [] },
     evidenceItemResponseSchema,
   );
-  await client.send('POST', `/api/evidence/${cui.item.id}/references`, {
-    location: '\\\\enclave-fs01\\cui\\diagrams\\network-diagram-final-v3.vsdx',
-    note: 'Kept on the enclave file server.',
-  });
+  await ensureOk(
+    await client.send('POST', `/api/evidence/${cui.item.id}/references`, {
+      location: '\\\\enclave-fs01\\cui\\diagrams\\network-diagram-final-v3.vsdx',
+      note: 'Kept on the enclave file server.',
+    }),
+    'POST evidence reference',
+  );
 
   const policy = await client.write(
     'POST',
@@ -228,7 +293,147 @@ async function seed(request: APIRequestContext): Promise<Api> {
     },
     userResponseSchema,
   );
-  return client;
+  await client.write(
+    'PATCH',
+    `/api/assessment/requirements/${barred.id}`,
+    { plannedImplementation: PLANNED, naRationale: NA_RATIONALE },
+    requirementWriteResponseSchema,
+  );
+  return seedSspWorkspace(client, barred.id, cui.item.id);
+}
+
+/** A 1×1 PNG, so the network diagram is an image the SSP can embed. */
+const PNG_BYTES = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+/**
+ * Fills every SSP tab: the profile in every group (a past next review date), two roles (one
+ * privileged), one asset per category, a provider named as ESP on `espRequirementId`, a PNG
+ * network diagram and the CUI item as the data flow, a manual revision and an approval.
+ */
+async function seedSspWorkspace(
+  client: Api,
+  espRequirementId: string,
+  cuiEvidenceId: string,
+): Promise<Seeded> {
+  await client.write('PATCH', '/api/ssp/profile', SSP_PROFILE, sspProfileResponseSchema);
+
+  const roles = [
+    {
+      title: 'System administrator',
+      person: 'Ira IT',
+      responsibilities: 'Accounts, patching and backups.',
+      userCount: 2,
+      privileged: true,
+    },
+    {
+      title: 'Design engineer',
+      person: null,
+      responsibilities: 'CAD work on CUI drawings.',
+      userCount: 12,
+      privileged: false,
+    },
+  ];
+  for (const role of roles) await client.write('POST', '/api/ssp/roles', role, roleResponseSchema);
+
+  const assets = [
+    { name: 'CAD workstation', category: 'cui', assetType: 'Workstation', location: 'Lab 2' },
+    { name: 'Boundary firewall', category: 'spa', assetType: 'Firewall', location: 'Server room' },
+    { name: 'Print server', category: 'crma', assetType: 'Server', location: 'Server room' },
+    { name: 'CNC mill controller', category: 'specialized', assetType: 'OT', location: 'Shop' },
+    {
+      name: 'Guest Wi-Fi',
+      category: 'out_of_scope',
+      assetType: 'Network',
+      location: 'Lobby',
+      outOfScopeJustification: 'Physically separate network; no CUI.',
+    },
+  ];
+  for (const asset of assets) {
+    await client.write(
+      'POST',
+      '/api/ssp/assets',
+      { owner: 'Ira IT', treatment: null, ...asset },
+      assetResponseSchema,
+    );
+  }
+
+  const { provider } = await client.write(
+    'POST',
+    '/api/ssp/providers',
+    {
+      name: 'Northwind Cloud',
+      providerType: 'cloud',
+      fedrampStatus: 'FedRAMP Moderate',
+      services: 'Hosted email and file sync for the enclave.',
+      agreementReference: 'MSA-2026-014',
+    },
+    providerResponseSchema,
+  );
+  await client.write(
+    'PUT',
+    `/api/ssp/responsibilities/${encodeURIComponent(espRequirementId)}`,
+    { party: 'esp', providerId: provider.id, note: 'Northwind controls the external links.' },
+    responsibilityRowResponseSchema,
+  );
+
+  const network = await client.write(
+    'POST',
+    '/api/evidence',
+    {
+      title: 'Enclave network diagram',
+      description: 'Boundary, VLAN and workstations.',
+      containsCui: false,
+      objectiveIds: [],
+    },
+    evidenceItemResponseSchema,
+  );
+  await ensureOk(
+    await client.upload(
+      `/api/evidence/${network.item.id}/versions`,
+      'enclave-network.png',
+      PNG_BYTES,
+    ),
+    'upload network diagram',
+  );
+  await client.write(
+    'POST',
+    '/api/ssp/diagrams',
+    {
+      evidenceId: network.item.id,
+      kind: 'network',
+      caption: 'Enclave network, boundary to workstations',
+      version: null,
+    },
+    diagramResponseSchema,
+  );
+  await client.write(
+    'POST',
+    '/api/ssp/diagrams',
+    {
+      evidenceId: cuiEvidenceId,
+      kind: 'data_flow',
+      caption: 'CUI path from SAFE to the CAD workstations',
+      version: null,
+    },
+    diagramResponseSchema,
+  );
+
+  await client.write(
+    'POST',
+    '/api/ssp/revisions',
+    { date: utcDatePlus(-3), description: 'Added the enclave diagrams and the asset inventory.' },
+    revisionResponseSchema,
+  );
+  await client.write(
+    'POST',
+    '/api/ssp/approvals',
+    { name: 'Avery Approver', title: 'Chief Executive Officer', approvedOn: APPROVED_ON },
+    approvalResponseSchema,
+  );
+  return { espRequirementId, providerId: provider.id };
 }
 
 // ---------- checks ----------
@@ -367,36 +572,56 @@ async function open(page: Page, path: string) {
 
 // ---------- the test ----------
 
+/** A browser context signed in as the seeded admin, its `/api` calls routed to the look api. */
+async function lookContext(
+  browser: Browser,
+  baseURL: string | undefined,
+  storageState: StorageState,
+): Promise<BrowserContext> {
+  const context = await browser.newContext({
+    ...(baseURL === undefined ? {} : { baseURL }),
+    storageState,
+  });
+  // Pages come from the config's web app; their api calls go to the look api.
+  // Only the api's own paths: module URLs such as /@fs/…/apps/api/src/contract also hold "/api/".
+  await context.route(
+    (url) => url.pathname.startsWith('/api/'),
+    async (route) => {
+      const url = new URL(route.request().url());
+      const response = await route.fetch({ url: `${API_ORIGIN}${url.pathname}${url.search}` });
+      await route.fulfill({ response });
+    },
+  );
+  return context;
+}
+
+/** `/ssp?tab=<id>` for each SSP tab, in tab order. */
+const SSP_TAB_VIEWS = SSP_TABS.map((tab) => ({
+  name: `/ssp?tab=${tab.id}`,
+  path: `/ssp?tab=${tab.id}`,
+  label: tab.label,
+}));
+
 test.describe('look', () => {
-  test.beforeAll(async () => {
-    test.setTimeout(120_000);
+  let storageState: StorageState;
+  let seeded: Seeded;
+
+  test.beforeAll(async ({ playwright }) => {
+    test.setTimeout(180_000);
     await startApi();
+    // Seed through the look api once; both tests sign in with its session cookie.
+    const request = await playwright.request.newContext({ baseURL: API_ORIGIN });
+    seeded = await seed(request);
+    storageState = await request.storageState();
+    await request.dispose();
   });
   test.afterAll(async () => {
     await stopApi();
   });
 
-  test('look holds on every route', async ({ browser, playwright }, testInfo) => {
-    test.setTimeout(180_000);
-    // Seed through the look api, then hand its session cookie to the browser.
-    const request = await playwright.request.newContext({ baseURL: API_ORIGIN });
-    await seed(request);
-    const { baseURL } = testInfo.project.use;
-    const context = await browser.newContext({
-      ...(baseURL === undefined ? {} : { baseURL }),
-      storageState: await request.storageState(),
-    });
-    await request.dispose();
-    // Pages come from the config's web app; their api calls go to the look api.
-    // Only the api's own paths: module URLs such as /@fs/…/apps/api/src/contract also hold "/api/".
-    await context.route(
-      (url) => url.pathname.startsWith('/api/'),
-      async (route) => {
-        const url = new URL(route.request().url());
-        const response = await route.fetch({ url: `${API_ORIGIN}${url.pathname}${url.search}` });
-        await route.fulfill({ response });
-      },
-    );
+  test('look holds on every route', async ({ browser }, testInfo) => {
+    test.setTimeout(240_000);
+    const context = await lookContext(browser, testInfo.project.use.baseURL, storageState);
     const page = await context.newPage();
 
     // Every route the Primary nav offers, as the signed-in user sees it.
@@ -410,13 +635,15 @@ test.describe('look', () => {
     expect(routes).toContain('/ssp');
 
     const barred = requirementByNist(catalog, '3.1.20');
-    const views = [
+    const views: { name: string; path: string; label?: string }[] = [
       ...routes.map((path) => ({ name: path, path })),
-      // The requirement detail: the objective radios, notes and statement.
+      // The requirement detail: the objective radios, notes, statement and the two SSP fields.
       {
         name: '/assessment (detail)',
         path: `/assessment?family=${barred.family}&req=${encodeURIComponent(barred.id)}`,
       },
+      // Every SSP tab, each with its seeded data.
+      ...SSP_TAB_VIEWS,
     ];
 
     const found: string[] = [];
@@ -425,6 +652,13 @@ test.describe('look', () => {
       await page.setViewportSize({ width, height: 900 });
       for (const view of views) {
         await open(page, view.path);
+        if (view.label !== undefined) {
+          await expect(page.getByRole('tab', { selected: true })).toHaveText(view.label);
+        }
+        if (view.path === '/ssp?tab=export') {
+          // Measure the pre-export check with its findings on screen, not while it runs.
+          await expect(page.locator('[data-tone] [data-message]').first()).toBeVisible();
+        }
         const facts = await page.evaluate(collectFacts);
         checked += facts.texts.length;
         for (const line of violations(facts, width))
@@ -444,5 +678,89 @@ test.describe('look', () => {
 
     expect(checked, 'text elements checked').toBeGreaterThan(100);
     expect([...new Set(found)], [...new Set(found)].join('\n')).toEqual([]);
+  });
+
+  test('seeded workspace shows its data', async ({ browser }, testInfo) => {
+    test.setTimeout(120_000);
+    const context = await lookContext(browser, testInfo.project.use.baseURL, storageState);
+    const page = await context.newPage();
+    await page.setViewportSize({ width: WIDTHS[0], height: 900 });
+
+    // Identification & roles: the profile, the roles table and its totals.
+    await open(page, '/ssp?tab=identification');
+    await expect(page.getByLabel('System security officer', { exact: true })).toHaveValue(
+      SSP_PROFILE.securityOfficer,
+    );
+    const roles = page.getByRole('table', { name: 'System roles' });
+    await expect(roles.getByRole('row', { name: /System administrator/ })).toContainText('Yes');
+    await expect(roles.getByRole('row', { name: /Design engineer/ })).toContainText('No');
+    await expect(page.getByText('14 users · 2 privileged')).toBeVisible();
+
+    // Environment: a narrative and both diagrams, one embedded and one CUI reference.
+    await open(page, '/ssp?tab=environment');
+    await expect(page.getByLabel('Network topology')).toHaveValue(SSP_PROFILE.topologyNarrative);
+    await expect(page.getByRole('row', { name: /Enclave network/ })).toContainText(
+      'Embedded image',
+    );
+    await expect(page.getByRole('row', { name: /CUI path/ })).toContainText(
+      'Referenced — contains CUI',
+    );
+
+    // Assets: one per category, the out-of-scope one with its justification.
+    await open(page, '/ssp?tab=assets');
+    await expect(page.getByText('5 assets')).toBeVisible();
+    const outOfScope = page.getByRole('table', { name: /Out-of-Scope Assets · 1/ });
+    await expect(outOfScope.getByRole('row', { name: /Guest Wi-Fi/ })).toContainText(
+      'Physically separate network; no CUI.',
+    );
+
+    // Service providers & matrix: the provider, and the ESP row that names it.
+    await open(page, '/ssp?tab=providers');
+    const providers = page.getByRole('table', { name: 'Service providers · 1' });
+    await expect(providers.getByRole('row', { name: /Northwind Cloud/ })).toContainText(
+      'FedRAMP Moderate',
+    );
+    await expect(page.getByLabel(`Party for ${seeded.espRequirementId}`)).toHaveValue('esp');
+    await expect(page.getByLabel(`Provider for ${seeded.espRequirementId}`)).toHaveValue(
+      seeded.providerId,
+    );
+    await expect(page.getByText('1 of 110 assigned')).toBeVisible();
+
+    // Document control: the overdue review, a manual revision and an approval.
+    await open(page, '/ssp?tab=document-control');
+    await expect(page.getByText('Review overdue', { exact: true })).toBeVisible();
+    await expect(page.getByRole('row', { name: /Added the enclave diagrams/ })).toContainText(
+      'Manual',
+    );
+    await expect(page.getByRole('row', { name: /Avery Approver/ })).toContainText(APPROVED_ON);
+
+    // Lint & export: the future-tense statement's finding, linked to its requirement.
+    await open(page, '/ssp?tab=export');
+    const future = page
+      .locator('[data-tone]')
+      .filter({ has: page.getByText('Future-tense statements · 1', { exact: true }) });
+    await expect(future).toHaveAttribute('data-tone', 'info');
+    await expect(future.locator('[data-message]')).toHaveText([
+      `${FUTURE_REQUIREMENT_ID} says "will", "TBD" (future tense).`,
+    ]);
+    const family = requirementById(catalog, FUTURE_REQUIREMENT_ID).family;
+    await expect(
+      future.getByRole('link', { name: `Open ${FUTURE_REQUIREMENT_ID}`, exact: true }),
+    ).toHaveAttribute('href', `/assessment?family=${family}&req=${FUTURE_REQUIREMENT_ID}`);
+
+    // Dashboard: the overdue review in Needs attention, linking to document control.
+    await open(page, '/');
+    const overdue = page.getByRole('link', { name: /^SSP review overdue: due / });
+    await expect(overdue).toHaveText(
+      `SSP review overdue: due ${SSP_PROFILE.nextReviewDate} · ${String(-REVIEW_DUE_IN_DAYS)} days overdue`,
+    );
+    await expect(overdue).toHaveAttribute('href', '/ssp?tab=document-control');
+
+    // The assessment detail shows both new fields on 3.1.20.
+    const barred = requirementByNist(catalog, '3.1.20');
+    await open(page, `/assessment?family=${barred.family}&req=${encodeURIComponent(barred.id)}`);
+    await expect(page.getByLabel('Planned implementation')).toHaveValue(PLANNED);
+    await expect(page.getByLabel('N/A rationale')).toHaveValue(NA_RATIONALE);
+    await context.close();
   });
 });
