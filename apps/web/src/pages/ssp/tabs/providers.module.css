@@ -1,0 +1,126 @@
+/* Service providers and the responsibility matrix (SSP tab). */
+
+.muted {
+  margin: 0;
+  color: var(--rp-graphite);
+}
+
+.formWrap {
+  min-width: 0;
+}
+
+.form {
+  display: grid;
+  gap: 20px;
+  max-width: 720px;
+  min-width: 0;
+}
+
+.formTitle {
+  margin: 0;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  font-weight: 400;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hint {
+  margin: 0;
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  overflow-wrap: anywhere;
+}
+
+.actions,
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.rowActions {
+  gap: 8px;
+}
+
+.prose {
+  white-space: pre-line;
+}
+
+/* The matrix: the count, the family filter, then one parts list per family. */
+.matrixHead {
+  display: grid;
+  gap: 12px;
+  max-width: 720px;
+  min-width: 0;
+}
+
+.count {
+  margin: 0;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+.familySelect {
+  max-width: 480px;
+}
+
+.tableWrap {
+  min-width: 0;
+}
+
+.familyHeading {
+  margin: 0;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.reqId {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  white-space: nowrap;
+}
+
+/* The column header names each control on desktop, and the cell label on phones. */
+.cellControl {
+  min-width: 0;
+}
+
+.cellControl label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.saveCell {
+  display: inline-grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.saved {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+.rowError {
+  color: var(--rp-ink);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  /* In card layout the caption must span the cards, not shrink to a narrow column. */
+  .tableWrap caption {
+    display: block;
+  }
+}
