@@ -58,6 +58,11 @@ function expectCleared(cookie: SetCookie): void {
   expect(maxAge === '0' || (expires !== undefined && Date.parse(expires) === 0)).toBe(true);
 }
 
+/** Registers a stand-in route that reports `request.ip`, before the app is ready. */
+function addIpRoute(h: Harness): void {
+  h.app.get('/test/ip', (request) => ({ ip: request.ip }));
+}
+
 describe('local behaviour is unchanged', () => {
   it('/api/health and an unknown route keep the api CSP, nosniff and DENY', async () => {
     const h = harness();
@@ -205,5 +210,40 @@ describe('hosted mode reads only its own cookie name', () => {
       headers: { cookie: `${SESSION_COOKIE}=${token}` },
     });
     expect((JSON.parse(session.body) as { user: unknown }).user).toBeNull();
+  });
+});
+
+describe('trustProxy only for the local proxy when hosted', () => {
+  async function ipOf(h: Harness, remoteAddress: string, forwarded?: string): Promise<string> {
+    const response = await h.app.inject({
+      url: '/test/ip',
+      remoteAddress,
+      headers: forwarded === undefined ? {} : { 'x-forwarded-for': forwarded },
+    });
+    expect(response.statusCode).toBe(200);
+    return (JSON.parse(response.body) as { ip: string }).ip;
+  }
+
+  it('locally X-Forwarded-For never changes request.ip', async () => {
+    const h = harness();
+    addIpRoute(h);
+    expect(await ipOf(h, '127.0.0.1', '203.0.113.7')).toBe('127.0.0.1');
+    expect(await ipOf(h, '10.0.0.5', '203.0.113.7')).toBe('10.0.0.5');
+    expect(await ipOf(h, '127.0.0.1')).toBe('127.0.0.1');
+  });
+
+  it('hosted, it is honoured from 127.0.0.1 and not from 10.0.0.5', async () => {
+    const h = harness({ env: { HOSTED: 'true' } });
+    addIpRoute(h);
+    expect(await ipOf(h, '127.0.0.1', '203.0.113.7')).toBe('203.0.113.7');
+    expect(await ipOf(h, '10.0.0.5', '203.0.113.7')).toBe('10.0.0.5');
+    expect(await ipOf(h, '127.0.0.1')).toBe('127.0.0.1');
+  });
+
+  it('hosted, a client-sent X-Forwarded-For cannot hide the address the proxy saw', async () => {
+    const h = harness({ env: { HOSTED: 'true' } });
+    addIpRoute(h);
+    // The proxy appends the peer it saw, so only the last hop is the proxy's word.
+    expect(await ipOf(h, '127.0.0.1', '198.51.100.9, 203.0.113.7')).toBe('203.0.113.7');
   });
 });

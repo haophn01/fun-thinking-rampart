@@ -53,6 +53,9 @@ export function buildApp({
     logController: new LogController({ requestIdLogLabel: 'requestId' }),
     genReqId: (request) => resolveRequestId(request.headers['x-request-id']),
     bodyLimit: BODY_LIMIT_BYTES,
+    // Hosted, only the single local reverse proxy's X-Forwarded-For is honoured. Locally the
+    // header never changes request.ip.
+    trustProxy: config.hosted ? '127.0.0.1' : false,
   });
   const ctx: SecurityContext = { config, now };
 
