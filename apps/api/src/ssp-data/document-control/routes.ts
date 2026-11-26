@@ -1,6 +1,4 @@
-import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import type { Actor } from '../../assessment/repository';
 import {
   approvalResponseSchema,
   createApprovalRequestSchema,
@@ -9,9 +7,8 @@ import {
   patchApprovalRequestSchema,
   revisionResponseSchema,
 } from '../../contract';
-import { AppError } from '../../errors';
 import { respond } from '../../respond';
-import type { ApiDeps } from '../../routes';
+import { actorOf } from '../common';
 import type { SspDataRoutes } from '../routes';
 import {
   createApproval,
@@ -23,12 +20,6 @@ import {
 
 const idParams = z.object({ id: z.string() });
 const ADMIN_ONLY = { config: { role: 'admin' as const } };
-
-/** The signed-in writer. The guard has already refused a request without a session. */
-function actorOf(request: FastifyRequest, deps: ApiDeps): Actor {
-  if (!request.auth) throw new AppError('unauthenticated', 'Sign in to continue.');
-  return { userId: request.auth.user.id, now: deps.now(), requestId: request.id };
-}
 
 /**
  * Document control, under `/api/ssp/document-control`, `/api/ssp/revisions`

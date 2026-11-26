@@ -1,25 +1,16 @@
-import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import type { Actor } from '../../assessment/repository';
 import {
   createSystemRoleRequestSchema,
   patchSystemRoleRequestSchema,
   roleResponseSchema,
   rolesResponseSchema,
 } from '../../contract';
-import { AppError } from '../../errors';
 import { respond } from '../../respond';
-import type { ApiDeps } from '../../routes';
+import { actorOf } from '../common';
 import type { SspDataRoutes } from '../routes';
 import { createSystemRole, listSystemRoles, patchSystemRole, removeSystemRole } from './repository';
 
 const roleParams = z.object({ id: z.string() });
-
-/** The signed-in writer. The guard has already refused a request without a session. */
-function actorOf(request: FastifyRequest, deps: ApiDeps): Actor {
-  if (!request.auth) throw new AppError('unauthenticated', 'Sign in to continue.');
-  return { userId: request.auth.user.id, now: deps.now(), requestId: request.id };
-}
 
 /**
  * The SSP's system roles, under `/api/ssp/roles`: any signed-in user lists, creates, changes

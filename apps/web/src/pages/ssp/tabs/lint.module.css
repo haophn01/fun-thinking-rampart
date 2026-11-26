@@ -1,0 +1,45 @@
+/* The pre-export check: a summary line and one Alert per rule with findings. */
+
+.panel {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.summary {
+  margin: 0;
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+.muted {
+  margin: 0;
+  color: var(--rp-graphite);
+}
+
+.list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding-left: 20px;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin: 12px 0 0;
+  color: var(--rp-graphite);
+  overflow-wrap: anywhere;
+}
+
+.link {
+  color: var(--rp-ink);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link:focus-visible {
+  outline: var(--rp-focus-width) solid var(--rp-ink);
+  outline-offset: 2px;
+}
