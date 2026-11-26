@@ -8,11 +8,11 @@ _From plan: pod-docs/plans/security-hardening.md · Slug: sec-baseline · Status
 |------|-------|-------|--------|----|--------|------------|------------|
 | 1 | S1 | Supply-chain CI: SHA-pinned actions, audit gate, Semgrep, pnpm settings, the one dependency add | sec-baseline-s1 | #28 | done | 78d507f | — |
 | 1 | C1 | Security config, `HOSTED` mode, startup checks, app seams, route table, harness options | sec-baseline-c1 | #28 | done | 78d507f | — |
-| 2 | H1 | Security headers: web CSP vs api CSP, HSTS hosted-only, Permissions-Policy | sec-baseline-h1 | — | pending | — | C1 |
-| 2 | P1 | Production web serving from the api, and `pnpm start` on the production path | sec-baseline-p1 | — | pending | — | C1 |
-| 2 | T1 | Rate limiting on every request, tight limits on setup and sign-in | sec-baseline-t1 | — | pending | — | S1, C1 |
-| 2 | M1 | Access-control regression matrix over every api route | sec-baseline-m1 | — | pending | — | C1 |
-| 2 | R1 | Log redaction review and tests | sec-baseline-r1 | — | pending | — | C1 |
+| 2 | H1 | Security headers: web CSP vs api CSP, HSTS hosted-only, Permissions-Policy | sec-baseline-h1 | #30 | done | efa0a59 | C1 |
+| 2 | P1 | Production web serving from the api, and `pnpm start` on the production path | sec-baseline-p1 | #30 | done | efa0a59 | C1 |
+| 2 | T1 | Rate limiting on every request, tight limits on setup and sign-in | sec-baseline-t1 | #30 | done | efa0a59 | S1, C1 |
+| 2 | M1 | Access-control regression matrix over every api route | sec-baseline-m1 | #30 | done | efa0a59 | C1 |
+| 2 | R1 | Log redaction review and tests | sec-baseline-r1 | #30 | done | efa0a59 | C1 |
 | 3 | E1 | e2e on the production path, header spec, CSP violation check; docs | sec-baseline-e1 | — | pending | — | H1, P1, T1 |
 
 Plan branch `security-hardening`; wave heads `sec-baseline-w1`, `sec-baseline-w2`, `sec-baseline-w3`. Merge target `main`. No migration and no one-way door in this sprint.
