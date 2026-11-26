@@ -174,7 +174,7 @@ erDiagram
 | Sprint | Goal | Status | Depends on |
 |--------|------|--------|------------|
 | ssp-data | Migration 0005 and contract; API for roles, CUI description, assets, ESPs and the responsibility matrix, diagram links, requirement planned/N-A fields, document control (revisions, cadence, approvals), all audited; the `templates/` folder | done | — |
-| ssp-workspace | Web: SSP workspace tabs (identification and roles, environment and diagrams, assets, service providers and matrix, document control); planned and N/A fields in the assessment workspace; dashboard "review overdue" | active | ssp-data |
+| ssp-workspace | Web: SSP workspace tabs (identification and roles, environment and diagrams, assets, service providers and matrix, document control); planned and N/A fields in the assessment workspace; dashboard "review overdue" | done | ssp-data |
 | ssp-export-lint | The lint rules package and `GET /api/ssp/lint`, with a live lint panel; export v2 in NIST outline plus CMMC sections plus Appendices A and B, embedded images, signature lines and the automatic record-of-changes entry; e2e and Look updates | planned | ssp-workspace |
 
 ## Look

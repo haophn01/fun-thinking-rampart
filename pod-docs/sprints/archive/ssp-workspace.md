@@ -16,7 +16,7 @@ _From plan: pod-docs/plans/ssp-export-v2.md · Slug: ssp-workspace · Status: ac
 | 2 | W14 | Tab: Assets | ssp-workspace-w14 | #18 | done | b7985c4 | W9 |
 | 2 | W15 | Tab: Service providers & matrix | ssp-workspace-w15 | #18 | done | b7985c4 | W9 |
 | 2 | W16 | Tab: Document control | ssp-workspace-w16 | #18 | done | b7985c4 | W9 |
-| 3 | E3 | Look spec on every tab, demo screenshots, docs | ssp-workspace-e3 | — | pending | — | W9, W10, W11, W12, W13, W14, W15, W16 |
+| 3 | E3 | Look spec on every tab, demo screenshots, docs | ssp-workspace-e3 | #19 | done | 448f148 | W9, W10, W11, W12, W13, W14, W15, W16 |
 
 Plan branch `ssp-export-v2`; wave heads `ssp-workspace-w1`, `ssp-workspace-w2`, `ssp-workspace-w3`. Merge target `main`. Web only: no api, contract, DB or dependency change. Out of this sprint: the lint package, `GET /api/ssp/lint`, the live lint panel and export v2 (sprint `ssp-export-lint`).
 
@@ -212,3 +212,33 @@ Everything in the archived Shared contracts still holds (the error envelope, `ap
 - **Depends on:** W9, W10, W11, W12, W13, W14, W15, W16
 - **One-way door:** none
 - **Model:** opus
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date (`main` has no new commits since 440ff09).
+- **Slices shipped:** W9, W10, W11 (PR #17, af68e15); W12–W16 (PR #18, b7985c4); E3 (PR #19), all into `ssp-export-v2`. These are web-only changes, with no one-way doors.
+- **Human changes mid-sprint:** demo screenshots were dropped ("no need for screenshot, to reduce token usage"). E3's screenshot criterion is struck through, and look checks are measured only from now on. The human deleted two stray files (`D:\tmp-w10-375.png`; the W9 folder is still pending).
+- **Queue and decisions:**
+  - W9's PENDINGs (tab-key history, categorization reset) were taken as defaults in decisions.md. W15's spec-gap choices (plural counts, hint placement, no reload after a 409) were taken as defaults.
+  - The per-tab caption workarounds, now redundant with the kit fix, were added to the someday duplication item.
+  - The human still needs to delete the leftover folder `.claude/worktrees/ssp-workspace-w9` (node_modules links).
+- **Slice log:**
+  - W9: opus · medium · test-first yes · runtime: tabs, drafts kept, Back, export 200 · 2 PENDINGs, both taken as defaults · stopped at the 5-hour limit and resumed · left the w9 folder (an `rm -rf` was refused)
+  - W10: sonnet · medium · test-first yes · runtime: a planned implementation was still there after a reload · flagged the flaky roles test · left a stray PNG at D:\ (deleted by the human) · stopped at the limit and resumed
+  - W11: sonnet · high · test-first yes · runtime: overdue row at 1280 and 375 · caught a U+FFFD it had introduced · stopped at the limit and resumed
+  - W12: sonnet · medium · test-first yes · runtime: a role and the SSO were still there after a reload · stopped at the weekly limit and resumed
+  - W13: sonnet · medium · test-first yes · runtime: PNG embedded and CUI referenced · stopped at the weekly limit and resumed
+  - W14: sonnet · medium · test-first yes · runtime: out-of-scope justification, remove · found the kit caption bug · stopped at the weekly limit and resumed
+  - W15: opus · medium · test-first yes · runtime: ESP row, 409 text, rename; 24 ms median per keystroke over 110 rows · stopped at the weekly limit and resumed
+  - W16: sonnet · medium · test-first yes (24 tests) · runtime: overdue Alert, revision and approval still there after a reload · stopped at the weekly limit and resumed
+  - E3: opus · medium · test-first partly (the look test had no red, since the tabs already existed) · runtime: e2e 12 passed · screenshots dropped by the human
+  - Stalls: none. Usage-limit stops: 3 at the 5-hour limit and 5 at the weekly limit, all resumed with no work lost.
+- **Wave fixes:**
+  - Wave 1: the flaky `roles.test.ts › totals`, a same-moment ordering bug in the test from sprint ssp-data (2 of 5 failing before, 8 of 8 passing after). Also the e2e smoke now opens `?tab=export`.
+  - Wave 2: the kit caption at ≤767 px, and `tabs.test.tsx` updated for the real tabs.
+- **Wave checks:** each wave passed verify (815, then 872, then 872), e2e (11, 11, then 12) and root tsc. CI was green on both OSes for #17, #18 and #19. The orchestrator ran a measured look check of all six tabs on PR #18.
+- **Agent context at hand-back:** about 1,470,000 tokens (sum of each agent's `subagent_tokens`, its final context size, not tokens billed).
+- **For the next sprint (ssp-export-lint):**
+  - The Lint & export tab (`ExportTab.tsx`) holds readiness and the V1 export link; the lint panel replaces or joins it.
+  - `e2e/look.spec.ts` seeds a full workspace, and the export sprint can reuse that seed for the v2 export assertions.
+  - The repository loaders for the export are listed in the archived ssp-data summary.
