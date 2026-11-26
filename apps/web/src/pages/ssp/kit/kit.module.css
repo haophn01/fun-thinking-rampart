@@ -128,6 +128,12 @@
     background: none;
   }
 
+  /* A block table shrinks its caption to one character wide; give it the full row. */
+  .table caption {
+    display: block;
+    width: 100%;
+  }
+
   /* The header row stays for screen readers; each cell carries its own label. */
   .table thead {
     position: absolute;
