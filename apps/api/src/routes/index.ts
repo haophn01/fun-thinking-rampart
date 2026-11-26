@@ -2,6 +2,7 @@ import cookie from '@fastify/cookie';
 import type { FastifyInstance } from 'fastify';
 import type { AppDb } from '../../db/client';
 import type { FileStore } from '../../storage';
+import type { Config } from '../config';
 import { registerAssessmentRoutes } from '../assessment/routes';
 import { registerAuditRoutes } from '../audit/list';
 import { registerGuard } from '../auth/guard';
@@ -16,6 +17,8 @@ import { registerUserRoutes } from '../users/routes';
 
 /** What every api route needs. */
 export interface ApiDeps {
+  /** The loaded settings: hosted mode picks the session cookie, for one. */
+  config: Config;
   db: AppDb;
   /** The app clock: every expiry, lockout, audit `at` and "today" comes from it. */
   now: () => Date;
