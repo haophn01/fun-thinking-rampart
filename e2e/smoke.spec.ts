@@ -457,7 +457,8 @@ test.describe('verification path', () => {
       );
     });
     const view = await readView(client);
-    await page.reload();
+    // Readiness and the export link live on the SSP workspace's Lint & export tab.
+    await page.goto('/ssp?tab=export');
     await expect(
       page.getByText(
         `${String(catalog.requirements.length)} of ${String(catalog.requirements.length)} requirements have an implementation statement`,

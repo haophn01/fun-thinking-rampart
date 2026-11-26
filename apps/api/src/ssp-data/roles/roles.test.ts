@@ -277,7 +277,9 @@ describe('ssp role routes', () => {
     const sameMoment = [a, b].sort(byId);
     const laterMoment = [c, d].sort(byId);
     let read = await list(admin);
-    expect(read.roles.map(({ id }) => id)).toEqual([...sameMoment, ...laterMoment].map(({ id }) => id));
+    expect(read.roles.map(({ id }) => id)).toEqual(
+      [...sameMoment, ...laterMoment].map(({ id }) => id),
+    );
     expect(read.totals).toEqual({ users: 45, privilegedUsers: 5 });
 
     // Switching a role to privileged moves its users; removed roles count for neither.
