@@ -346,4 +346,46 @@ describe('Lint panel', () => {
       expect(api.sent('GET /api/ssp/assets')).toHaveLength(2);
     });
   });
+
+  it('selecting the tab again re-runs the check (stale tab repro A)', async () => {
+    const user = userEvent.setup();
+    let assets: Asset[] = [];
+    const created = asset({ id: 'a-2', name: 'Printer', category: 'cui' });
+    const api = open(
+      { assets },
+      {
+        'GET /api/ssp/assets': () => json(200, { assets }),
+        'POST /api/ssp/assets': () => {
+          assets = [created];
+          return json(201, { asset: created });
+        },
+      },
+    );
+    const section = await lintSection();
+    const noAssets = await within(section).findByText(`${label('no_assets')} · 1`);
+    expect(await within(section).findByText('1 error · 0 warnings')).toBeInTheDocument();
+
+    await user.click(
+      within(noAssets.closest('[data-tone]') as HTMLElement).getByRole('link', {
+        name: /Open Assets/,
+      }),
+    );
+    const form = within(await screen.findByRole('form', { name: 'Add an asset' }));
+    await user.type(form.getByLabelText('Name'), 'Printer');
+    await user.click(form.getByRole('button', { name: 'Add asset' }));
+    await api.waitForCall('POST /api/ssp/assets');
+    const assetsPanel = screen.getByRole('tabpanel', { name: 'Assets' });
+    expect(await within(assetsPanel).findByRole('row', { name: /Printer/ })).toBeVisible();
+
+    await user.click(screen.getByRole('tab', { name: 'Lint & export' }));
+    expect(
+      await within(section).findByText('No findings. Every check passes.'),
+    ).toBeInTheDocument();
+    // The same panel, reloaded: it was never unmounted.
+    expect(section).toBeInTheDocument();
+    // The Assets tab reads the list too, so only the other three count one reload each.
+    for (const key of READS.filter((k) => k !== 'GET /api/ssp/assets')) {
+      expect(api.sent(key), key).toHaveLength(2);
+    }
+  });
 });

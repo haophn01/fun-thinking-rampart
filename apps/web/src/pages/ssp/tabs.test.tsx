@@ -210,12 +210,65 @@ describe('SSP tabs', () => {
     expect(name).toBeVisible();
     expect(name).toHaveValue('Acme Enclave draft');
     expect(exportPanel).not.toBeVisible();
+    // Selected again, the panel re-reads its data; the reload keeps the draft.
+    await stub.waitForCall('GET /api/system-profile', 2);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('form', { name: 'System profile' })).toBe(form);
+    expect(name).toHaveValue('Acme Enclave draft');
+    // A hidden panel reads nothing.
+    expect(stub.sent('GET /api/assessment')).toHaveLength(1);
 
     await user.click(tab('Lint & export'));
-    expect(stub.sent('GET /api/assessment')).toHaveLength(1);
-    expect(stub.sent('GET /api/system-profile')).toHaveLength(1);
+    await stub.waitForCall('GET /api/assessment', 2);
+    expect(stub.sent('GET /api/system-profile')).toHaveLength(2);
     // Each panel is labelled by its tab, and the tab controls it.
     expect(tab('Lint & export')).toHaveAttribute('aria-controls', exportPanel.id);
+  });
+
+  it('a panel re-reads only when shown again, never on its first visit or a re-click', async () => {
+    const stub = api();
+    const user = userEvent.setup();
+    const page = renderSsp();
+    await screen.findByRole('form', { name: 'System profile' });
+    expect(stub.sent('GET /api/system-profile')).toHaveLength(1);
+
+    // Clicking the selected tab is not a visit.
+    await user.click(tab('Identification & roles'));
+    await user.click(tab('Lint & export'));
+    await stub.waitForCall('GET /api/assessment');
+    expect(stub.sent('GET /api/system-profile')).toHaveLength(1);
+    await user.click(tab('Lint & export'));
+    expect(stub.sent('GET /api/assessment')).toHaveLength(1);
+
+    // Back to a visited tab is a visit too.
+    await page.back();
+    await stub.waitForCall('GET /api/system-profile', 2);
+    expect(stub.sent('GET /api/assessment')).toHaveLength(1);
+  });
+
+  it('the browser tab coming back re-reads the selected panel only', async () => {
+    const stub = api();
+    const user = userEvent.setup();
+    renderSsp();
+    await screen.findByRole('form', { name: 'System profile' });
+    await user.click(tab('Lint & export'));
+    await stub.waitForCall('GET /api/assessment');
+
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    visibility.mockReturnValue('hidden');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(stub.sent('GET /api/assessment')).toHaveLength(1);
+    visibility.mockReturnValue('visible');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await stub.waitForCall('GET /api/assessment', 2);
+    expect(stub.sent('GET /api/system-profile')).toHaveLength(1);
+    visibility.mockRestore();
   });
 
   it('title', async () => {

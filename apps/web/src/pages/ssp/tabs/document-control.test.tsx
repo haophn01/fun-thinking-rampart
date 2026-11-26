@@ -317,6 +317,45 @@ describe('record of changes', () => {
   });
 });
 
+describe('after an export', () => {
+  it('selecting Document control again shows the new "Exported as" row and keeps drafts (stale tab repro B)', async () => {
+    const state = { current: control({ revisions: [REVISION, EXPORT_REVISION] }) };
+    const stub = api(state);
+    const user = userEvent.setup();
+    await open();
+    const region = section(/Record of changes/);
+    await within(region).findByText('Rewrote the boundary');
+    expect(within(region).getAllByRole('row')).toHaveLength(3);
+    const form = await screen.findByRole('form', { name: 'Add a change' });
+    await user.type(within(form).getByLabelText('Description'), 'Half-written');
+
+    await user.click(screen.getByRole('tab', { name: 'Lint & export' }));
+    const exportPanel = await screen.findByRole('tabpanel', { name: 'Lint & export' });
+    // jsdom can't download; the click still happens, its navigation is dropped.
+    const noNavigation = (event: Event) => {
+      event.preventDefault();
+    };
+    document.addEventListener('click', noNavigation, { once: true });
+    await user.click(within(exportPanel).getByRole('link', { name: 'Export SSP (.docx)' }));
+    // The export appends a revision on the server.
+    state.current = control({
+      revisions: [
+        REVISION,
+        EXPORT_REVISION,
+        { ...EXPORT_REVISION, id: 'rev-3', date: TODAY, description: 'Exported as ssp-v3.docx' },
+      ],
+    });
+    const before = stub.sent(GET).length;
+
+    await user.click(screen.getByRole('tab', { name: 'Document control' }));
+    expect(await within(region).findByText('Exported as ssp-v3.docx')).toBeVisible();
+    expect(within(region).getAllByRole('row')).toHaveLength(4);
+    expect(stub.sent(GET).length).toBe(before + 1);
+    // The panel stayed mounted, so the draft is still there.
+    expect(within(form).getByLabelText('Description')).toHaveValue('Half-written');
+  });
+});
+
 describe('approvals admin', () => {
   const route = (key: string, handler: () => Response): Routes => ({ [key]: handler });
 
