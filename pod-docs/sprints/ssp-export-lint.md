@@ -8,8 +8,8 @@ _From plan: pod-docs/plans/ssp-export-v2.md · Slug: ssp-export-lint · Status: 
 |------|-------|-------|--------|----|--------|------------|------------|
 | 1 | L5 | SSP lint rules package and its contract mirror | ssp-export-lint-l5 | #20 | done | b1bfc2f | — |
 | 1 | X2 | Export v2: NIST outline, CMMC sections, appendices, images, signature lines | ssp-export-lint-x2 | #20 | done | b1bfc2f | — |
-| 2 | A12 | API: `GET /api/ssp/lint`; the export's record-of-changes entry | ssp-export-lint-a12 | — | pending | — | L5, X2 |
-| 2 | W17 | Web: live pre-export check on Lint & export | ssp-export-lint-w17 | — | pending | — | L5, X2 |
+| 2 | A12 | API: `GET /api/ssp/lint`; the export's record-of-changes entry | ssp-export-lint-a12 | #21 | done | 52bb27a | L5, X2 |
+| 2 | W17 | Web: live pre-export check on Lint & export | ssp-export-lint-w17 | #21 | done | 52bb27a | L5, X2 |
 | 3 | E4 | E2E smoke and look for lint and export v2; docs | ssp-export-lint-e4 | — | pending | — | L5, X2, A12, W17 |
 
 Plan branch `ssp-export-v2`; wave heads `ssp-export-lint-w1`, `ssp-export-lint-w2`, `ssp-export-lint-w3`. Merge target `main`. This is the plan's last sprint. The human pre-approved the final merge, provided the plan review passes and CI is green.
