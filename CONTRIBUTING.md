@@ -57,6 +57,12 @@ lockfile. New versions must be at least a day old (`minimumReleaseAge` in `pnpm-
   from the release (`git ls-remote --tags https://github.com/<owner>/<repo>`; for an annotated
   tag take the `^{}` line); never type one from memory. `tests/repo/ci-workflow.test.ts` fails on
   an unpinned line.
+- **pnpm guards** (`pnpm-workspace.yaml`): only the packages in `allowBuilds` (`better-sqlite3`,
+  `@node-rs/argon2`, `esbuild`) run install scripts, and `strictDepBuilds` fails the install when
+  any other one has a build script. Review that package before adding it to the list.
+  `minimumReleaseAge` holds back versions under a day old, `trustPolicy: no-downgrade` refuses a
+  version published with weaker provenance than an earlier one, and `blockExoticSubdeps` refuses
+  transitive dependencies from git or tarball URLs.
 
 ## No CUI
 

@@ -2,9 +2,21 @@ packages:
   - packages/*
   - apps/*
 
-onlyBuiltDependencies:
-  - better-sqlite3
-  - esbuild
+# Supply-chain guards (CONTRIBUTING.md, "Supply chain"); tests/repo/supply-chain.test.ts pins them.
 
-# Supply-chain guard: never resolve a version published less than a day ago.
+# Only these may run install scripts. Any other dependency with a build script fails the install
+# (strictDepBuilds) until it has been reviewed and added here.
+allowBuilds:
+  '@node-rs/argon2': true
+  better-sqlite3: true
+  esbuild: true
+strictDepBuilds: true
+
+# Never resolve a version published less than a day ago (minutes).
 minimumReleaseAge: 1440
+
+# Refuse a version published with weaker provenance than an earlier one of the same package.
+trustPolicy: no-downgrade
+
+# A transitive dependency may not come from git or a tarball URL.
+blockExoticSubdeps: true
