@@ -10,7 +10,7 @@ _From plan: pod-docs/plans/ssp-export-v2.md · Slug: ssp-export-lint · Status: 
 | 1 | X2 | Export v2: NIST outline, CMMC sections, appendices, images, signature lines | ssp-export-lint-x2 | #20 | done | b1bfc2f | — |
 | 2 | A12 | API: `GET /api/ssp/lint`; the export's record-of-changes entry | ssp-export-lint-a12 | #21 | done | 52bb27a | L5, X2 |
 | 2 | W17 | Web: live pre-export check on Lint & export | ssp-export-lint-w17 | #21 | done | 52bb27a | L5, X2 |
-| 3 | E4 | E2E smoke and look for lint and export v2; docs | ssp-export-lint-e4 | — | pending | — | L5, X2, A12, W17 |
+| 3 | E4 | E2E smoke and look for lint and export v2; docs | ssp-export-lint-e4 | #22 | done | 74b2ef8 | L5, X2, A12, W17 |
 
 Plan branch `ssp-export-v2`; wave heads `ssp-export-lint-w1`, `ssp-export-lint-w2`, `ssp-export-lint-w3`. Merge target `main`. This is the plan's last sprint. The human pre-approved the final merge, provided the plan review passes and CI is green.
 
@@ -301,3 +301,29 @@ Everything in the archived Shared contracts still holds, and every `ssp-data` ro
 - **Depends on:** L5, X2, A12, W17
 - **One-way door:** none
 - **Model:** opus
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date (`main` has no new commits since 440ff09).
+- **Slices shipped:** L5 and X2 (PR #20, b1bfc2f); A12 and W17 (PR #21, 52bb27a); E4 (PR #22, 74b2ef8), all into `ssp-export-v2`. No one-way doors. Each export now appends one record-of-changes entry, append-only by design.
+- **Queue and decisions:**
+  - X2's wording PENDINGs ("every 1 month", the CUI file-version line) and E4's W17 drift PENDING (loading and Export-note wording) were taken as defaults in decisions.md (2026-11-25 and 2026-11-26).
+  - The missing live summary was fixed in the wave 3 merge (`aria-live="polite"`).
+  - A12 resolved the `actorOf` part of the someday duplication item for `ssp-data`. The V1 copies (assessment, evidence, poam, policies, system-profile) remain.
+- **Slice log:**
+  - L5: opus · high · test-first yes (16 tests, one per rule) · runtime: real catalog, 112 errors and 1 warning · two tool-encoding workarounds · time lost: none
+  - X2: opus · medium · test-first yes · runtime: browser export, an altered PNG referenced with a warning; Word via COM opened it with no repair prompt (3,303 paragraphs, 20 tables, 1 image) · 2 PENDINGs, taken as defaults · per-document drawing IDs make renders deterministic · time lost: none
+  - A12: opus · medium · test-first mostly (the actorOf red was a TypeError; "failures write nothing" was a guard) · runtime: lint 113/0 then 112/1; 5 export revisions still there after a restart · the first `vi.mock` in the api tests · time lost: none
+  - W17: sonnet · medium · test-first yes · runtime: "113 errors · 0 warnings"; measured look at 1280 and 375 · drifted from the contract in three places (raised by E4) · time lost: none
+  - E4: opus · medium · test-first for 3 of 5 (2 were existing checks) · runtime: the panel equals the api, "Show all 109", an export adds a revision · e2e went from 12 to 15 tests · time lost: none
+  - Stalls: none. Usage-limit stops: none this sprint.
+- **Wave fixes:**
+  - Wave 1: the mirror test imports the shared image limits.
+  - Wave 2: prettier on `src/ssp/routes.ts` (verify had failed on formatting).
+  - Wave 3: `aria-live` on the lint summary (red, then green).
+- **Wave checks:** each wave passed verify (901, then 915, then 915), e2e (12, 12, then 15) and root tsc. CI was green on both OSes for #20, #21 and #22.
+- **Agent context at hand-back:** about 1,050,000 tokens (sum of each agent's `subagent_tokens`, its final context size, not tokens billed).
+- **For plan complete:**
+  - Every item in the plan's Verification is covered by unit tests plus `e2e/smoke.spec.ts` and `e2e/look.spec.ts` (15 e2e tests in CI on ubuntu and windows).
+  - features.md rows are updated (System profile, SSP export) and added (SSP workspace, Pre-export check).
+  - The human's app runs migration 0005 and is healthy. Its pre-0005 backup is `apps/api/data/rampart.pre-0005.sqlite`.
