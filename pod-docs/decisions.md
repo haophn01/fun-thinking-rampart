@@ -72,3 +72,8 @@ Consequences: near the end of the US day, countdowns and "due today" can be off 
 - **What:** SSP workspace panels still mount once and stay mounted, so drafts survive. They now **re-read their data each time their tab is shown again** (re-select, Back, or the browser tab regaining focus). There's no separate reload on the export click, because a plain download link would race the write; Document control reloads when you return to it.
 - **Embeddable:** a diagram is embeddable only if its stored bytes read as PNG or JPEG, not just its file name.
 - **Why:** these came from the round-1 plan review of #23 (FIX 1 and FIX 2), fixed by F2.
+
+## 2026-11-26 — zod runs jitless in the browser (orchestrator)
+
+- **What:** the web app calls `configureZodForBrowser()` (`z.config({ jitless: true })`) before anything renders. The api keeps zod's JIT.
+- **Why:** zod v4 probes `Function('')` on its first parse to decide whether to JIT. The strict web CSP (`script-src 'self'`, no `unsafe-eval`) blocks the probe and logs a `securitypolicyviolation` on every page. The app still worked, but the CSP would never be clean. Running jitless in the browser removes the probe without weakening the CSP or changing the lockfile. Found by E1 (plan `security-hardening`, sprint `sec-baseline`).
