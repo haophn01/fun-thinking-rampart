@@ -2,8 +2,9 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { openDb, runMigrations, type AppDb, type DbHandle } from '../../db/client';
 import { createMemoryStore, type MemoryFileStore } from '../../storage';
 import { buildApp } from '../app';
-import { loadConfig, type LogLevel } from '../config';
-import { CSRF_HEADER, SESSION_COOKIE, sessionResponseSchema, type SessionUser } from '../contract';
+import { sessionCookieName } from '../auth/cookie';
+import { loadConfig, type Config, type LogLevel } from '../config';
+import { CSRF_HEADER, sessionResponseSchema, type SessionUser } from '../contract';
 
 /** The admin `setupAdmin()` creates unless told otherwise. */
 export const ADMIN = {
@@ -66,6 +67,8 @@ export interface Clock {
 
 export interface Harness {
   app: FastifyInstance;
+  /** The config the app was built with, env overrides applied. */
+  config: Config;
   /** The app's file store: a fresh memory store unless one was passed in. */
   store: MemoryFileStore;
   db: AppDb;
@@ -83,8 +86,14 @@ export interface Harness {
 }
 
 export interface HarnessOptions {
-  /** Defaults to `info`, captured in `logs`. */
+  /** Defaults to `info`, captured in `logs`. An `env.LOG_LEVEL` wins over it. */
   logLevel?: LogLevel;
+  /**
+   * Merged over the harness's env (`DATABASE_PATH=:memory:`, `RATE_LIMIT_MULTIPLIER=1000` so
+   * suites don't trip limits) before `loadConfig`. Rate-limit tests pass
+   * `{ RATE_LIMIT_MULTIPLIER: '1' }`; hosted tests pass `{ HOSTED: 'true' }`.
+   */
+  env?: Record<string, string>;
   start?: Date;
   store?: MemoryFileStore;
 }
@@ -94,12 +103,16 @@ const FILE_NAME_HEADER = 'x-file-name';
 
 const COOKIE_VALUE = /^[^=]+=([^;]*)/;
 
-function cookieFrom(response: LightMyRequestResponse, current: string | null): string | null {
+function cookieFrom(
+  response: LightMyRequestResponse,
+  name: string,
+  current: string | null,
+): string | null {
   const header = response.headers['set-cookie'];
   const lines = header === undefined ? [] : Array.isArray(header) ? header : [header];
   let cookie = current;
   for (const line of lines) {
-    if (!line.startsWith(`${SESSION_COOKIE}=`)) continue;
+    if (!line.startsWith(`${name}=`)) continue;
     const value = COOKIE_VALUE.exec(line)?.[1] ?? '';
     const cleared =
       value === '' || /Max-Age=0\b/i.test(line) || /Expires=Thu, 01 Jan 1970/i.test(line);
@@ -124,7 +137,14 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     },
   };
   const logs: Record<string, unknown>[] = [];
-  const config = loadConfig({ DATABASE_PATH: ':memory:', LOG_LEVEL: options.logLevel ?? 'info' });
+  const config = loadConfig({
+    DATABASE_PATH: ':memory:',
+    LOG_LEVEL: options.logLevel ?? 'info',
+    RATE_LIMIT_MULTIPLIER: '1000',
+    ...options.env,
+  });
+  // The client keeps whichever session cookie the app's mode uses.
+  const cookieName = sessionCookieName(config);
   const app = buildApp({
     config,
     db: handle.db,
@@ -144,7 +164,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
       user: null,
       async request(method, url, { body, rawBody, headers = {} } = {}) {
         const sent: Record<string, string> = {};
-        if (self.cookie !== null) sent.cookie = `${SESSION_COOKIE}=${self.cookie}`;
+        if (self.cookie !== null) sent.cookie = `${cookieName}=${self.cookie}`;
         if (self.csrfToken !== null) sent[CSRF_HEADER] = self.csrfToken;
         const payload = payloadOf(body, rawBody);
         if (rawBody === undefined && body !== undefined) sent['content-type'] = 'application/json';
@@ -158,7 +178,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
           headers: sent,
           ...(payload === undefined ? {} : { payload }),
         });
-        self.cookie = cookieFrom(response, self.cookie);
+        self.cookie = cookieFrom(response, cookieName, self.cookie);
         if (self.cookie === null) {
           self.csrfToken = null;
           self.user = null;
@@ -211,6 +231,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
 
   return {
     app,
+    config,
     store,
     db: handle.db,
     handle,

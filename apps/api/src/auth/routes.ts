@@ -5,7 +5,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { assessment, user } from '../../db/schema';
 import { recordAudit } from '../audit/record';
 import {
-  SESSION_COOKIE,
   sessionResponseSchema,
   setupRequestSchema,
   signInRequestSchema,
@@ -14,34 +13,15 @@ import {
 import { AppError } from '../errors';
 import { respond } from '../respond';
 import type { ApiDeps } from '../routes';
-import { sessionToken } from './guard';
+import { clearSessionCookie, readSessionToken, setSessionCookie } from './cookie';
 import { hashPassword, verifyPassword } from './password';
-import {
-  SESSION_MAX_AGE_SECONDS,
-  createSession,
-  deleteSession,
-  deleteSessionByToken,
-  type SessionStore,
-} from './sessions';
+import { createSession, deleteSession, deleteSessionByToken, type SessionStore } from './sessions';
 
 /** The 5th consecutive failure locks the account. */
 export const MAX_FAILED_SIGN_INS = 5;
 export const LOCK_MS = 15 * 60 * 1000;
 
 const INVALID_CREDENTIALS = 'Email or password is incorrect.';
-
-function setSessionCookie(reply: FastifyReply, token: string): void {
-  void reply.setCookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'strict',
-    path: '/',
-    maxAge: SESSION_MAX_AGE_SECONDS,
-  });
-}
-
-function clearSessionCookie(reply: FastifyReply): void {
-  void reply.clearCookie(SESSION_COOKIE, { httpOnly: true, sameSite: 'strict', path: '/' });
-}
 
 function setupRequired(db: SessionStore): boolean {
   const row = db
@@ -130,7 +110,7 @@ async function signIn(
       .where(eq(user.id, account.id))
       .run();
     // No fixation: the cookie's old session, whoever it belonged to, is gone.
-    deleteSessionByToken(tx, sessionToken(request));
+    deleteSessionByToken(tx, readSessionToken(request, deps));
     recordAudit(tx, {
       at: now,
       actorUserId: account.id,
@@ -143,7 +123,7 @@ async function signIn(
     });
     return createSession(tx, account.id, now);
   });
-  setSessionCookie(reply, created.token);
+  setSessionCookie(reply, deps, created.token);
   return {
     setupRequired: false,
     user: {
@@ -171,7 +151,7 @@ async function setup(
   const result = deps.db.transaction((tx) => {
     // Checked again inside the transaction, so two racing setups can't both win.
     if (!setupRequired(tx)) throw complete();
-    deleteSessionByToken(tx, sessionToken(request));
+    deleteSessionByToken(tx, readSessionToken(request, deps));
     const userId = randomUUID();
     const admin = {
       email: body.email,
@@ -219,7 +199,7 @@ async function setup(
     return { userId, session: createSession(tx, userId, now) };
   });
 
-  setSessionCookie(reply, result.session.token);
+  setSessionCookie(reply, deps, result.session.token);
   return {
     setupRequired: false,
     user: { id: result.userId, email: body.email, displayName: body.displayName, role: 'admin' },
@@ -244,7 +224,7 @@ function signOut(deps: ApiDeps, request: FastifyRequest, reply: FastifyReply): v
       });
     });
   }
-  clearSessionCookie(reply);
+  clearSessionCookie(reply, deps);
 }
 
 /** Session status, setup, sign-in and sign-out. All public; the guard still reads the cookie. */

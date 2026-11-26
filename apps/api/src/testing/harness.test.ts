@@ -149,4 +149,57 @@ describe('harness', () => {
     expect(h.store).toBe(store);
     expect(h.store.keys()).toHaveLength(1);
   });
+
+  describe('env overrides and hosted cookie', () => {
+    it('defaults the rate-limit multiplier to 1000 and stays local', () => {
+      expect(harness().config).toMatchObject({
+        rateLimitMultiplier: 1000,
+        hosted: false,
+        databasePath: ':memory:',
+        logLevel: 'info',
+      });
+    });
+
+    it('merges env over its defaults', () => {
+      const h = harness({ env: { RATE_LIMIT_MULTIPLIER: '1', HOSTED: 'true', SERVE_WEB: 'true' } });
+      expect(h.config).toMatchObject({
+        rateLimitMultiplier: 1,
+        hosted: true,
+        serveWeb: true,
+        databasePath: ':memory:',
+      });
+      // An env LOG_LEVEL wins over the option, since env is the more specific of the two.
+      expect(harness({ logLevel: 'warn', env: { LOG_LEVEL: 'error' } }).config).toMatchObject({
+        logLevel: 'error',
+      });
+      expect(harness({ logLevel: 'warn' }).config).toMatchObject({ logLevel: 'warn' });
+    });
+
+    it('a bad env value fails like the server would', () => {
+      expect(() => harness({ env: { HOSTED: 'yes' } })).toThrow(/HOSTED/);
+    });
+
+    it('keeps the hosted session cookie and sends it back under its own name', async () => {
+      const h = harness({ env: { HOSTED: 'true' } });
+      h.app.get('/test/cookie', (request) => ({ cookie: request.headers.cookie ?? null }));
+      const admin = await h.setupAdmin();
+      expect(admin.cookie).not.toBeNull();
+      expect(admin.csrfToken).not.toBeNull();
+      const users = await admin.get('/api/users');
+      expect(users.statusCode).toBe(200);
+      const echoed = (await admin.get('/test/cookie')).json<{ cookie: string | null }>();
+      expect(echoed.cookie).toBe(`__Host-rampart_session=${admin.cookie ?? ''}`);
+      // Sign-out clears it, so the client is signed out too.
+      expect((await admin.delete('/api/session')).statusCode).toBe(204);
+      expect(admin.cookie).toBeNull();
+      expect((await admin.get('/api/users')).statusCode).toBe(401);
+    });
+
+    it('signIn works hosted too', async () => {
+      const h = harness({ env: { HOSTED: 'true' } });
+      await h.setupAdmin();
+      const again = await h.signIn('admin@example.com', 'correct horse battery');
+      expect((await again.get('/api/users')).statusCode).toBe(200);
+    });
+  });
 });

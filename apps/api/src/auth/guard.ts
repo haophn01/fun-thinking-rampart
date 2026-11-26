@@ -1,7 +1,8 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { CSRF_HEADER, SESSION_COOKIE, type ErrorCode, type Role } from '../contract';
+import type { FastifyInstance } from 'fastify';
+import { CSRF_HEADER, type ErrorCode, type Role } from '../contract';
 import { AppError } from '../errors';
 import type { ApiDeps } from '../routes';
+import { readSessionToken } from './cookie';
 import { csrfMatches, resolveSession, type ActiveSession } from './sessions';
 
 declare module 'fastify' {
@@ -49,11 +50,6 @@ const MESSAGES: Partial<Record<ErrorCode, string>> = {
   forbidden: 'Your role does not allow this.',
 };
 
-/** The cookie's session token, if the request sent one. */
-export function sessionToken(request: FastifyRequest): string | undefined {
-  return request.cookies[SESSION_COOKIE];
-}
-
 /**
  * Deny by default: every route registered in the same plugin needs a session unless it sets
  * `config: { public: true }`. Register it inside an encapsulated plugin so health and unknown
@@ -64,7 +60,7 @@ export function registerGuard(app: FastifyInstance, deps: ApiDeps): void {
   app.addHook('onRequest', (request, _reply, done) => {
     try {
       const config = request.routeOptions.config;
-      request.auth = resolveSession(deps.db, sessionToken(request), deps.now());
+      request.auth = resolveSession(deps.db, readSessionToken(request, deps), deps.now());
       const refusal = checkAccess({
         method: request.method,
         auth: request.auth,
