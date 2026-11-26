@@ -1,7 +1,11 @@
-import type { RequirementState } from '@rampart/api/contract';
+import {
+  NIST_STATUS_LABELS,
+  nistImplementationStatus,
+  type RequirementState,
+} from '@rampart/api/contract';
 import type { Requirement } from '@rampart/catalog';
-import type { ImplementationLevel, ObjectiveStatus } from '@rampart/rules';
-import { useState } from 'react';
+import type { ImplementationLevel, ObjectiveStatus, RequirementOutcome } from '@rampart/rules';
+import { useId, useState } from 'react';
 import { Link } from 'react-router';
 import { Button, Select, TextArea } from '../../look';
 import { ObjectiveRow } from './ObjectiveRow';
@@ -37,6 +41,8 @@ export interface RequirementDetailProps {
   isSaving: (objectiveId: string) => boolean;
   /** The level as shown (what-if, then stored). */
   level: ImplementationLevel | null;
+  /** The saved outcome (never the what-if's); null when there is none. */
+  outcome: Pick<RequirementOutcome, 'status' | 'allNa'> | null;
   patching: boolean;
   backTo: string;
   onStatus: (objectiveId: string, status: ObjectiveStatus) => void;
@@ -44,11 +50,65 @@ export interface RequirementDetailProps {
   onLevel: (level: ImplementationLevel | null) => void;
   onStatement: (statement: string | null) => void;
   onOwner: (ownerId: string | null) => void;
+  onPlanned: (text: string | null) => void;
+  onNaRationale: (text: string | null) => void;
+}
+
+const PLANNED_HINT = 'What will be done, and when. The SSP prints it for Not Met requirements.';
+const NA_HINT = "Why the objectives marked N/A don't apply.";
+
+/** A text field that saves on its own button; drafts follow the stored value. */
+function SavedText(props: {
+  label: string;
+  saveLabel: string;
+  hint: string;
+  hintId: string;
+  maxLength: number;
+  stored: string;
+  disabled: boolean;
+  onSave: (text: string | null) => void;
+}) {
+  const { stored } = props;
+  const [draft, setDraft] = useState(stored);
+  const [seen, setSeen] = useState(stored);
+  if (seen !== stored) {
+    setSeen(stored);
+    setDraft(stored);
+  }
+  return (
+    <div className={styles.block}>
+      <TextArea
+        label={props.label}
+        value={draft}
+        maxLength={props.maxLength}
+        rows={5}
+        disabled={props.disabled}
+        aria-describedby={props.hintId}
+        onChange={(event) => {
+          setDraft(event.target.value);
+        }}
+      />
+      <p id={props.hintId} className={styles.hint}>
+        {props.hint}
+      </p>
+      <div>
+        <Button
+          disabled={props.disabled || draft.trim() === stored.trim()}
+          onClick={() => {
+            props.onSave(draft.trim() === '' ? null : draft);
+          }}
+        >
+          {props.saveLabel}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /** One requirement: facts, objectives, implementation statement, level and owner. */
 export function RequirementDetail(props: RequirementDetailProps) {
-  const { requirement, state, users, whatIf, patching } = props;
+  const { requirement, state, users, whatIf, patching, outcome } = props;
+  const hintBase = useId();
   const credit = partialCredit(requirement);
   const stored = state?.implementationStatement ?? '';
   const [draft, setDraft] = useState(stored);
@@ -118,6 +178,35 @@ export function RequirementDetail(props: RequirementDetailProps) {
           </Button>
         </div>
       </div>
+
+      <p className={styles.sspStatus}>
+        SSP status:{' '}
+        {outcome === null
+          ? NIST_STATUS_LABELS.not_assessed
+          : NIST_STATUS_LABELS[nistImplementationStatus(outcome)]}
+      </p>
+
+      <SavedText
+        label="Planned implementation"
+        saveLabel="Save planned implementation"
+        hint={PLANNED_HINT}
+        hintId={`${hintBase}-planned`}
+        maxLength={20000}
+        stored={state?.plannedImplementation ?? ''}
+        disabled={whatIf || patching}
+        onSave={props.onPlanned}
+      />
+
+      <SavedText
+        label="N/A rationale"
+        saveLabel="Save N/A rationale"
+        hint={NA_HINT}
+        hintId={`${hintBase}-na`}
+        maxLength={4000}
+        stored={state?.naRationale ?? ''}
+        disabled={whatIf || patching}
+        onSave={props.onNaRationale}
+      />
 
       {credit && (
         <Select
