@@ -175,6 +175,16 @@ describe('log redaction', () => {
     expectNoSecrets(h.logs, secrets);
   });
 
+  it('a rejected request logs its error code, not hidden by the code redaction', async () => {
+    const h = harness({ logLevel: 'info' });
+    await h.app.ready();
+    const res = await h.app.inject({ method: 'GET', url: '/api/assessment' });
+    expect(res.statusCode).toBe(401);
+    const rejected = h.logs.filter((line) => line.msg === 'request rejected');
+    expect(rejected.length).toBeGreaterThan(0);
+    expect(rejected.at(-1)?.errorCode).toBe('unauthenticated');
+  });
+
   it('expectNoSecrets catches and guards', () => {
     const secret = 'planted-session-token';
     const logs = [
