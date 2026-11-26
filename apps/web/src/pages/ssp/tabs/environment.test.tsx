@@ -247,6 +247,33 @@ describe('Environment tab', () => {
     expect(none.getByText('Referenced')).toBeInTheDocument();
   });
 
+  it('a file named .png whose bytes are not an image is badged Referenced', async () => {
+    // The api settles `embeddable` from the bytes: a GIF named fake.png answers false.
+    const diagrams = [
+      link({
+        id: 'd5',
+        caption: 'Old map',
+        resolved: {
+          version: 1,
+          kind: 'file',
+          fileName: 'fake.png',
+          size: 14,
+          sha256: SHA,
+          location: null,
+          createdAt: AT,
+        },
+        embeddable: false,
+      }),
+    ];
+    stubApi(baseRoutes(() => diagrams));
+    renderSsp('environment');
+    await screen.findByText('Old map');
+    const row = within(rowOf('Old map'));
+    expect(row.getByText(/fake\.png/)).toBeInTheDocument();
+    expect(row.getByText('Referenced')).toBeInTheDocument();
+    expect(row.queryByText('Embedded image')).toBeNull();
+  });
+
   it('link diagram', async () => {
     let stored: DiagramLink[] = [];
     const api = stubApi(

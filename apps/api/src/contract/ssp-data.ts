@@ -507,7 +507,8 @@ export type ResolvedDiagram = z.infer<typeof resolvedDiagramSchema>;
 /**
  * A diagram link. `version` null follows the item's newest version; `resolved` is the version in
  * use, or null while the item has none. `embeddable`: resolved is a file, the item isn't flagged
- * "contains CUI", and `isEmbeddableImage(fileName)`.
+ * "contains CUI", `isEmbeddableImage(fileName)`, and its stored bytes read as a PNG or JPEG
+ * (cached by SHA-256; a file that can't be read keeps the name's verdict).
  */
 export const diagramLinkSchema = z.object({
   id: z.string(),

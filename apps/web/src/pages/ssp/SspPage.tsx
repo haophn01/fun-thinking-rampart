@@ -1,6 +1,7 @@
-import { useId, useState, type ComponentType, type KeyboardEvent } from 'react';
+import { useEffect, useId, useState, type ComponentType, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router';
 import { usePageTitle } from '../usePageTitle';
+import { PanelVisit } from './kit';
 import styles from './ssp.module.css';
 import { SSP_TABS, stepTab, tabFromParam, type SspTabId } from './tabs';
 import { AssetsTab } from './tabs/AssetsTab';
@@ -37,7 +38,8 @@ function keyTarget(key: string, from: SspTabId): SspTabId | null {
 
 /**
  * The SSP workspace: one tab per SSP section, chosen by `?tab=`. A panel mounts on its first
- * visit and stays mounted while hidden, so a draft survives a tab switch.
+ * visit and stays mounted while hidden, so a draft survives a tab switch. Each later visit,
+ * and the browser tab coming back, bumps the panel's `PanelVisit`, so its reads run again.
  */
 export function SspPage() {
   usePageTitle('SSP');
@@ -47,6 +49,23 @@ export function SspPage() {
   const [visited, setVisited] = useState<ReadonlySet<SspTabId>>(() => new Set([selected]));
   // Adjusting state while rendering: the newly selected panel joins the mounted ones.
   if (!visited.has(selected)) setVisited(new Set([...visited, selected]));
+  const [visits, setVisits] = useState<Partial<Record<SspTabId, number>>>({});
+  const [shown, setShown] = useState(selected);
+  // Adjusting state while rendering: a mounted panel selected again counts one more visit.
+  if (shown !== selected) {
+    setShown(selected);
+    if (visited.has(selected)) setVisits({ ...visits, [selected]: (visits[selected] ?? 0) + 1 });
+  }
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState !== 'visible') return;
+      setVisits((all) => ({ ...all, [selected]: (all[selected] ?? 0) + 1 }));
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [selected]);
 
   const tabId = (id: SspTabId) => `${baseId}-tab-${id}`;
   const panelId = (id: SspTabId) => `${baseId}-panel-${id}`;
@@ -102,7 +121,9 @@ export function SspPage() {
             className={styles.panel}
             hidden={tab.id !== selected}
           >
-            <Panel />
+            <PanelVisit value={visits[tab.id] ?? 0}>
+              <Panel />
+            </PanelVisit>
           </div>
         );
       })}

@@ -1,5 +1,6 @@
 // The SSP tabs' shared kit.
 export { useLoad, type Loaded } from './useLoad';
+export { PanelVisit } from './panelVisit';
 export { Section, LoadError } from './Section';
 export {
   SspProfileForm,

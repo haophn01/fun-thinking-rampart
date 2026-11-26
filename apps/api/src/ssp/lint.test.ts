@@ -43,6 +43,11 @@ const CONTRIBUTOR = {
   password: 'a long enough password',
 };
 
+/** GIF bytes: a picture the export can't embed, whatever its name says. */
+const GIF_BYTES = new Uint8Array([
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x3b,
+]);
+
 const harnesses: Harness[] = [];
 afterEach(async () => {
   for (const h of harnesses.splice(0)) await h.close();
@@ -269,5 +274,27 @@ describe('GET /api/ssp/lint', () => {
     const third = await lint(admin);
     expect(diagramRule(third.findings)).toEqual([]);
     expect(third.counts.errors).toBe(second.counts.errors - 1);
+  });
+
+  it('a GIF named .png takes no embed slot', async () => {
+    const { admin } = await world();
+    const fake = await fileItem(admin, 'Old map', GIF_BYTES, 'fake.png');
+    await link(admin, fake, 'network', 'Map 00 fake');
+    for (let i = 0; i < SSP_MAX_EMBEDDED_IMAGES; i += 1) {
+      const item = await fileItem(
+        admin,
+        `Map ${String(i)}`,
+        pngOf(2 + i, 2),
+        `map-${String(i)}.png`,
+      );
+      await link(admin, item, 'data_flow', `Map ${String(i + 1).padStart(2, '0')}`);
+    }
+    const answer = await lint(admin);
+    expect(rulesOf(answer.findings)).not.toContain('image_limit');
+    // The web runs the same lint over the list, and agrees.
+    const { diagrams } = diagramsResponseSchema.parse(
+      ok(await admin.get('/api/ssp/diagrams')).json(),
+    );
+    expect(diagrams.filter((d) => d.embeddable)).toHaveLength(SSP_MAX_EMBEDDED_IMAGES);
   });
 });

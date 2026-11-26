@@ -25,6 +25,11 @@ vi.mock('../../ssp', async (importOriginal) => {
   return { ...real, exportSsp: vi.fn(real.exportSsp) };
 });
 
+/** GIF bytes: a picture the export can't embed, whatever its name says. */
+const GIF_BYTES = new Uint8Array([
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x3b,
+]);
+
 const URL = '/api/ssp/export';
 // Late evening in California is already the next day in UTC: the file is dated by UTC.
 const START = new Date('2026-11-24T23:30:00-08:00');
@@ -349,6 +354,32 @@ describe('GET /api/ssp/export', () => {
         ),
       ),
     ).toHaveLength(1);
+  });
+
+  it('a GIF named .png is referenced and takes no embed slot', async () => {
+    const { store, reads } = spyStore();
+    const { admin } = await world(store);
+    const fake = await fileItem(admin, 'Old map', GIF_BYTES, 'fake.png');
+    const fakeLink = await link(admin, fake, 'network', 'Map 00 fake');
+    expect(fakeLink.embeddable).toBe(false);
+    for (let i = 0; i < SSP_MAX_EMBEDDED_IMAGES; i += 1) {
+      const item = await fileItem(
+        admin,
+        `Map ${String(i)}`,
+        pngOf(2 + i, 2),
+        `map-${String(i)}.png`,
+      );
+      await link(admin, item, 'network', `Map ${String(i + 1).padStart(2, '0')}`);
+    }
+    reads.length = 0;
+    const { lines, bytes } = await exported(admin);
+    // Every real PNG is embedded: the GIF didn't take a slot.
+    expect(docxMedia(bytes)).toHaveLength(SSP_MAX_EMBEDDED_IMAGES);
+    expect(lines).toContain(
+      `Map 00 fake — Network diagram: Old map v1, fake.png, SHA-256 ${shaOf(fake)}, ${TODAY}`,
+    );
+    expect(lines.filter((line) => line.includes('(referenced:'))).toEqual([]);
+    expect(reads).not.toContain(shaOf(fake));
   });
 
   it('export records a revision', async () => {
