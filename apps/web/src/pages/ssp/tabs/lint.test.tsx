@@ -287,9 +287,9 @@ describe('Lint panel', () => {
   it('summary', async () => {
     open();
     const section = await lintSection();
-    expect(
-      await within(section).findByText('No findings. Every check passes.'),
-    ).toBeInTheDocument();
+    const summary = await within(section).findByText('No findings. Every check passes.');
+    // Screen readers hear the summary when a check finishes.
+    expect(summary).toHaveAttribute('aria-live', 'polite');
     expect(groups(section)).toHaveLength(0);
   });
 
