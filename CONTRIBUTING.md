@@ -49,6 +49,34 @@ installs with `pnpm install --frozen-lockfile`, so a lockfile that disagrees wit
 `package.json` fails the build. Install with pnpm only (through corepack); never add a second
 lockfile. New versions must be at least a day old (`minimumReleaseAge` in `pnpm-workspace.yaml`).
 
+## Supply chain
+
+- **Actions are pinned by commit.** Every `uses:` in `.github/workflows/` names a full 40-hex
+  commit SHA with a `# v<version>` comment, and every container image is pinned
+  `@sha256:<digest>`. A tag or a branch can be moved after review; a SHA can't. Look the SHA up
+  from the release (`git ls-remote --tags https://github.com/<owner>/<repo>`; for an annotated
+  tag take the `^{}` line); never type one from memory. `tests/repo/ci-workflow.test.ts` fails on
+  an unpinned line.
+- **pnpm guards** (`pnpm-workspace.yaml`): only the packages in `allowBuilds` (`better-sqlite3`,
+  `@node-rs/argon2`, `esbuild`) run install scripts, and `strictDepBuilds` fails the install when
+  any other one has a build script. Review that package before adding it to the list.
+  `minimumReleaseAge` holds back versions under a day old, `trustPolicy: no-downgrade` refuses a
+  version published with weaker provenance than an earlier one, and `blockExoticSubdeps` refuses
+  transitive dependencies from git or tarball URLs.
+- **Audit gate** (`node scripts/audit-gate.ts`, the `audit` CI job): `pnpm audit` fails the build
+  on any high or critical advisory. Moderate, low and info pass. Output it can't read (not JSON,
+  a network error) fails too. Fix a finding by upgrading the package within its range. If no fix
+  exists, add `{ "id": "<GHSA id>", "reason": "<why it's safe for now>", "until": "YYYY-MM-DD" }`
+  to `audit-allowlist.json`, with `until` at most 30 days ahead. After that UTC date the entry
+  fails the gate until it is fixed, renewed or removed. An entry that matches nothing passes with
+  a warning; remove it. CI also runs the gate with `--expect-findings` on
+  `tests/fixtures/supply-chain/vulnerable`, a lockfile with a known high advisory, to prove the
+  gate still fails. Never install that fixture.
+- **Semgrep** (the `semgrep` CI job): the OSS CLI with the `p/default`, `p/typescript` and
+  `p/react` rulesets fails on any ERROR-severity finding. Fix the code. When a rule is wrong for
+  this code, add `--exclude-rule <id>` to the job with a comment saying why. Skipped paths are in
+  `.semgrepignore`. CodeQL isn't used: it needs paid GitHub Advanced Security on a private repo.
+
 ## No CUI
 
 Never commit, upload or paste Controlled Unclassified Information, real or sample. V1 is not built

@@ -1,0 +1,35 @@
+{
+  "actions": [],
+  "muted": [],
+  "advisories": {
+    "1096305": {
+      "id": 1096305,
+      "github_advisory_id": "GHSA-xvch-5gv4-984h",
+      "severity": "critical",
+      "module_name": "minimist",
+      "title": "Prototype Pollution in minimist",
+      "url": "https://github.com/advisories/GHSA-xvch-5gv4-984h",
+      "vulnerable_versions": "<1.0.0",
+      "patched_versions": ">=1.0.0",
+      "findings": [
+        {
+          "version": "0.9.0",
+          "paths": [".>minimist"]
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 1
+    },
+    "dependencies": 10,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 10
+  }
+}
