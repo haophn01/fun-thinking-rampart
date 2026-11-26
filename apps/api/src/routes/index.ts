@@ -10,6 +10,7 @@ import { registerAuthRoutes } from '../auth/routes';
 import { registerEvidenceRoutes } from '../evidence/routes';
 import { registerPoamRoutes } from '../poam/routes';
 import { registerPolicyRoutes } from '../policies/routes';
+import { markGuardedScope } from '../security/route-table';
 import { registerSspDataRoutes } from '../ssp-data/routes';
 import { registerSspRoutes } from '../ssp/routes';
 import { registerSystemProfileRoutes } from '../system-profile/routes';
@@ -33,6 +34,8 @@ export interface ApiDeps {
  */
 export function registerApiRoutes(app: FastifyInstance, deps: ApiDeps): void {
   void app.register(async (api) => {
+    // Before any route here, so the route table lists each of them as guarded.
+    markGuardedScope(api);
     // Loaded first, so `request.cookies` is set before the guard's hook reads it.
     await api.register(cookie);
     registerGuard(api, deps);

@@ -13,6 +13,7 @@ import { registerApiRoutes } from './routes';
 import type { SecurityContext } from './security/context';
 import { registerSecurityHeaders } from './security/headers';
 import { registerRateLimit } from './security/rate-limit';
+import { registerRouteTable } from './security/route-table';
 import { registerWebApp } from './security/web-app';
 
 /** JSON bodies over 1 MiB are refused with 413. */
@@ -58,6 +59,9 @@ export function buildApp({
     trustProxy: config.hosted ? '127.0.0.1' : false,
   });
   const ctx: SecurityContext = { config, now };
+
+  // First, so it sees every route, the ones below and the plugins' alike.
+  registerRouteTable(app);
 
   app.addHook('onRequest', (request, reply, done) => {
     void reply.header('x-request-id', request.id);
