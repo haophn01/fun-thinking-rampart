@@ -20,6 +20,14 @@ export interface Config {
   /** Absolute: the evidence store's folder, created on its first write. */
   storagePath: string;
   logLevel: LogLevel;
+  /** `HOSTED`: the api sits behind one local reverse proxy that terminates HTTPS. */
+  hosted: boolean;
+  /** `SERVE_WEB`: the api serves the built web app as well as `/api`. */
+  serveWeb: boolean;
+  /** Absolute: the built web app `SERVE_WEB` serves. */
+  webDistPath: string;
+  /** Scales every rate limit's `max`; 1 is the real limits, and hosted mode needs it. */
+  rateLimitMultiplier: number;
 }
 
 /** Thrown when the environment is invalid. `keys` names every bad variable, sorted. */
@@ -46,6 +54,15 @@ const pathSetting = (fallback: string) =>
       .default(fallback),
   );
 
+/** Exactly `true` or `false`: `TRUE`, `1`, `yes` and padded values are refused. */
+const booleanSetting = z.preprocess(
+  unsetIfEmpty,
+  z
+    .enum(['true', 'false'], { error: 'must be true or false' })
+    .default('false')
+    .transform((value) => value === 'true'),
+);
+
 const envSchema = z.object({
   API_PORT: z.preprocess(
     unsetIfEmpty,
@@ -60,8 +77,20 @@ const envSchema = z.object({
       .default(3001),
   ),
   DATABASE_PATH: pathSetting('data/rampart.sqlite'),
+  HOSTED: booleanSetting,
   LOG_LEVEL: z.preprocess(unsetIfEmpty, z.enum(LOG_LEVELS).default('info')),
+  RATE_LIMIT_MULTIPLIER: z.preprocess(
+    unsetIfEmpty,
+    z
+      .string()
+      .regex(/^\d+$/, 'must be an integer from 1 to 1000')
+      .transform(Number)
+      .pipe(z.number().int().min(1, 'must be from 1 to 1000').max(1000, 'must be from 1 to 1000'))
+      .default(1),
+  ),
+  SERVE_WEB: booleanSetting,
   STORAGE_PATH: pathSetting('data/files'),
+  WEB_DIST_PATH: pathSetting('../web/dist'),
 });
 
 function resolveDatabasePath(value: string): string {
@@ -70,7 +99,7 @@ function resolveDatabasePath(value: string): string {
 }
 
 /** Relative paths resolve against `apps/api`, never the working directory. */
-function resolveStoragePath(value: string): string {
+function resolveApiPath(value: string): string {
   return resolve(API_ROOT, value);
 }
 
@@ -91,7 +120,11 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     host: '127.0.0.1',
     port: result.data.API_PORT,
     databasePath: resolveDatabasePath(result.data.DATABASE_PATH),
-    storagePath: resolveStoragePath(result.data.STORAGE_PATH),
+    storagePath: resolveApiPath(result.data.STORAGE_PATH),
     logLevel: result.data.LOG_LEVEL,
+    hosted: result.data.HOSTED,
+    serveWeb: result.data.SERVE_WEB,
+    webDistPath: resolveApiPath(result.data.WEB_DIST_PATH),
+    rateLimitMultiplier: result.data.RATE_LIMIT_MULTIPLIER,
   };
 }

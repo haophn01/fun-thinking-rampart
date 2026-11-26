@@ -1,0 +1,67 @@
+{
+  "actions": [],
+  "muted": [],
+  "advisories": {
+    "1000001": {
+      "id": 1000001,
+      "github_advisory_id": "GHSA-aaaa-bbbb-cccc",
+      "severity": "low",
+      "module_name": "example-low",
+      "title": "A low-severity example",
+      "url": "https://github.com/advisories/GHSA-aaaa-bbbb-cccc",
+      "vulnerable_versions": "<1.0.0",
+      "patched_versions": ">=1.0.0",
+      "findings": [
+        {
+          "version": "0.9.0",
+          "paths": [".>example-low"]
+        }
+      ]
+    },
+    "1000002": {
+      "id": 1000002,
+      "github_advisory_id": "GHSA-dddd-eeee-ffff",
+      "severity": "info",
+      "module_name": "example-info",
+      "title": "An informational example",
+      "url": "https://github.com/advisories/GHSA-dddd-eeee-ffff",
+      "vulnerable_versions": "<1.0.0",
+      "patched_versions": ">=1.0.0",
+      "findings": [
+        {
+          "version": "0.9.0",
+          "paths": [".>example-info"]
+        }
+      ]
+    },
+    "1102341": {
+      "id": 1102341,
+      "github_advisory_id": "GHSA-67mh-4wv8-2f99",
+      "severity": "moderate",
+      "module_name": "esbuild",
+      "title": "esbuild dev server reads any request",
+      "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+      "vulnerable_versions": "<1.0.0",
+      "patched_versions": ">=1.0.0",
+      "findings": [
+        {
+          "version": "0.9.0",
+          "paths": [".>esbuild"]
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 1,
+      "low": 1,
+      "moderate": 1,
+      "high": 0,
+      "critical": 0
+    },
+    "dependencies": 10,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 10
+  }
+}

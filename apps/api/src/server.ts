@@ -3,11 +3,14 @@ import { createLocalStore } from '../storage';
 import { buildApp } from './app';
 import { loadConfig } from './config';
 import { createLogger } from './logger';
+import { assertSafeStartup } from './security/startup';
 
-// Start-up order: config, open the DB, migrate, listen. The file store creates its folder on
+// Start-up order: config, the startup check, open the DB, migrate, listen. An unsafe config stops
+// before the DB opens, so it never creates a database file. The file store creates its folder on
 // the first upload, so start-up never writes to STORAGE_PATH. Any failure logs and exits 1.
 try {
   const config = loadConfig(process.env);
+  assertSafeStartup(config);
   const handle = openDb(config.databasePath);
   runMigrations(handle.db);
 

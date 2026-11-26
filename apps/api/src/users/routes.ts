@@ -4,10 +4,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { user } from '../../db/schema';
 import { recordAudit } from '../audit/record';
+import { clearSessionCookie } from '../auth/cookie';
 import { hashPassword } from '../auth/password';
 import { deleteUserSessions, type SessionStore } from '../auth/sessions';
 import {
-  SESSION_COOKIE,
   createUserRequestSchema,
   updateUserRequestSchema,
   userResponseSchema,
@@ -178,7 +178,7 @@ async function updateUser(
     return { row: updated, endedOwnSession: endsSessions && id === actorUserId };
   });
   if (endedOwnSession) {
-    void reply.clearCookie(SESSION_COOKIE, { httpOnly: true, sameSite: 'strict', path: '/' });
+    clearSessionCookie(reply, deps);
   }
   return row;
 }
