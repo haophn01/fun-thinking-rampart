@@ -6,8 +6,8 @@ _From plan: pod-docs/plans/security-hardening.md · Slug: sec-baseline · Status
 
 | Wave | Slice | Title | Branch | PR | Status | Confidence | Depends on |
 |------|-------|-------|--------|----|--------|------------|------------|
-| 1 | S1 | Supply-chain CI: SHA-pinned actions, audit gate, Semgrep, pnpm settings, the one dependency add | sec-baseline-s1 | — | pending | — | — |
-| 1 | C1 | Security config, `HOSTED` mode, startup checks, app seams, route table, harness options | sec-baseline-c1 | — | pending | — | — |
+| 1 | S1 | Supply-chain CI: SHA-pinned actions, audit gate, Semgrep, pnpm settings, the one dependency add | sec-baseline-s1 | #28 | done | 78d507f | — |
+| 1 | C1 | Security config, `HOSTED` mode, startup checks, app seams, route table, harness options | sec-baseline-c1 | #28 | done | 78d507f | — |
 | 2 | H1 | Security headers: web CSP vs api CSP, HSTS hosted-only, Permissions-Policy | sec-baseline-h1 | — | pending | — | C1 |
 | 2 | P1 | Production web serving from the api, and `pnpm start` on the production path | sec-baseline-p1 | — | pending | — | C1 |
 | 2 | T1 | Rate limiting on every request, tight limits on setup and sign-in | sec-baseline-t1 | — | pending | — | S1, C1 |
