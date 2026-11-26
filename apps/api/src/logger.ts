@@ -2,6 +2,22 @@ import type { FastifyBaseLogger, FastifyReply, FastifyRequest } from 'fastify';
 import { pino, type DestinationStream } from 'pino';
 import type { LogLevel } from './config';
 
+/**
+ * Keys whose value is a credential wherever it shows up: passwords, the CSRF and session tokens,
+ * and the MFA codes and secrets later sprints add. `code` is censored too, so a log field holding
+ * an error code needs another name (`errorCode`).
+ */
+export const SECRET_KEYS = [
+  'password',
+  'currentPassword',
+  'newPassword',
+  'csrfToken',
+  'token',
+  'code',
+  'recoveryCode',
+  'secret',
+] as const;
+
 /** Secrets that must never reach a log line. */
 export const REDACT_PATHS = [
   'req.headers.cookie',
@@ -10,6 +26,8 @@ export const REDACT_PATHS = [
   // Bound to the session, so not a credential alone, but it never belongs in a log.
   'req.headers["x-csrf-token"]',
   'res.headers["set-cookie"]',
+  // Credential keys a log call might carry, at the top level and one level down (`body.x`).
+  ...SECRET_KEYS.flatMap((key) => [key, `*.${key}`]),
 ];
 
 function serializeRequest(request: FastifyRequest) {
