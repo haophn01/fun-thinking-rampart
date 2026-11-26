@@ -1,0 +1,59 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Security Hardening Overview</title>
+<style>:root{--bg:#F2F1EC;--sheet:#fff;--ink:#111;--muted:#6B6B66;--red:#E10600;--blue:#1F4BFF}*{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,Segoe UI,sans-serif;padding:32px 16px}main{max-width:1100px;margin:0 auto}h1{font:800 34px/1.15 system-ui;margin:8px 0}h2{font:700 21px system-ui;margin:32px 0 12px;padding-top:10px;border-top:1.5px solid var(--ink)}p{max-width:860px;margin-bottom:10px}.mono{font-family:ui-monospace,Consolas,monospace;color:var(--muted)}table{width:100%;border-collapse:collapse;background:var(--sheet);border:1.5px solid var(--ink)}th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #d6d2c6;vertical-align:top}th{background:var(--ink);color:#fff}td:first-child{font-weight:700;white-space:nowrap}.wrap{overflow-x:auto}.diagram{background:var(--sheet);border:1.5px solid var(--ink);padding:16px;overflow-x:auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.sp{background:var(--sheet);border:1.5px solid var(--ink);padding:14px}.sp b{display:block;font-family:ui-monospace,Consolas,monospace;color:var(--red)}.note{border:1.5px solid var(--ink);border-left:10px solid var(--red);background:var(--sheet);padding:12px 14px;margin-top:12px}</style></head><body><main>
+<p class="mono">pod-docs/plans/security-hardening.md · 4 sprints · 2026-11-26</p>
+<h1>Security hardening: Rampart as a Security Protection Asset</h1>
+<p>Rampart meets the NIST SP 800-171 requirements it touches: <b>MFA for every user</b>, session controls and lock, password policy, sign-in notice and a tamper-evident audit log. It also closes the web-app gaps: access-control tests on every route, supply-chain CI, CSP on the served pages, rate limits and upload hardening. Local use is unchanged except for MFA, and a <span class="mono">HOSTED=true</span> mode is ready for deployment.</p>
+<h2>Parts</h2><div class="wrap"><table><tr><th>Part</th><th>Does</th></tr><tr><td>auth controls</td><td>Sessions 30 min / 8 h, rotation, sign out everywhere; blocklist; no reuse of the last 5; temporary password; sign-in notice; 15-min lock screen</td></tr><tr><td>mfa</td><td>TOTP for every user, 10 recovery codes, replay guard, encrypted secrets, admin reset</td></tr><tr><td>http hardening</td><td>Production web served by the API with a strict CSP and headers; HOSTED mode (__Host- Secure cookie, HSTS, trustProxy); rate limits</td></tr><tr><td>uploads</td><td>Byte-based allowlist (PDF, PNG, JPEG, DOCX, XLSX, TXT/CSV), zip-bomb guard, filename sanitizing</td></tr><tr><td>audit chain</td><td>Hash-chained audit log with Verify in Settings (migration 0006)</td></tr><tr><td>CI supply chain</td><td>SHA-pinned actions, OSV/pnpm audit, Semgrep, pnpm allowBuilds / minimumReleaseAge / trustPolicy</td></tr><tr><td>tests</td><td>Every-route authz/CSRF/IDOR matrix, header, rate-limit, upload and redaction tests, e2e MFA sign-in</td></tr><tr><td>FIPS + docs</td><td>FIPS_MODE check, PBKDF2 option; SECURITY.md with disclosure, STRIDE and the 800-171 self-mapping</td></tr></table></div>
+<h2>How they connect</h2><div class="diagram"><pre class="mermaid">flowchart LR
+  browser --&gt;|HTTPS in hosted mode| proxy[reverse proxy, optional]
+  proxy --&gt; api
+  browser --&gt;|same origin| api
+  api --&gt;|serves the built web with CSP| web[web build]
+  api --&gt; headers[helmet + CSP]
+  api --&gt; ratelimit[rate limit]
+  api --&gt; auth[auth: sessions, passwords, notice]
+  auth --&gt; mfa[mfa: TOTP, recovery codes]
+  api --&gt; uploads[upload guard: bytes, zip bomb]
+  api --&gt; audit[audit chain]
+  auth --&gt; db[(SQLite)]
+  mfa --&gt; db
+  audit --&gt; db
+  uploads --&gt; store[evidence store]
+  ci[CI: OSV, Semgrep, pinned actions, gitleaks] -.guards.-&gt; api
+</pre></div>
+<h2>Main flow: sign in with MFA</h2><div class="diagram"><pre class="mermaid">sequenceDiagram
+  actor User
+  participant web
+  participant api
+  participant db
+  User-&gt;&gt;web: open Rampart
+  web-&gt;&gt;api: GET /api/session
+  api--&gt;&gt;web: sign-in notice text
+  User-&gt;&gt;web: acknowledge notice, email + password
+  web-&gt;&gt;api: POST /api/session (rate limited)
+  api-&gt;&gt;db: argon2 verify, lockout check
+  api--&gt;&gt;web: mfa_required (pending session)
+  User-&gt;&gt;web: 6-digit TOTP or recovery code
+  web-&gt;&gt;api: POST /api/session/mfa
+  api-&gt;&gt;db: verify TOTP, step not reused, rotate session id
+  api--&gt;&gt;web: session cookie (__Host- and Secure when hosted)
+  Note over web: 15 min without input shows the lock screen; the password unlocks it
+</pre></div>
+<h2>Data (one additive migration, 0006)</h2><div class="diagram"><pre class="mermaid">erDiagram
+  USER ||--o{ PASSWORD_HISTORY : "had"
+  USER ||--o{ MFA_RECOVERY_CODE : "holds"
+  USER {
+    string mfa_secret_enc "new, AES-GCM with the server key"
+    int mfa_last_step "new, replay guard"
+    datetime mfa_enrolled_at "new"
+    bool must_change_password "new"
+    datetime password_changed_at "new"
+  }
+  PASSWORD_HISTORY { string hash }
+  MFA_RECOVERY_CODE { string hash datetime used_at }
+  AUDIT_EVENT { string prev_hash "new" string hash "new" }
+  SETTINGS { string sign_in_notice "new" }
+</pre></div>
+<h2>Sprints</h2><div class="grid"><div class="sp"><b>1. sec-baseline</b>Route matrix tests, supply-chain CI, production serving with CSP, HOSTED mode, rate limits, redaction</div><div class="sp"><b>2. sec-auth</b>Migration 0006, sessions, password policy and change page, temporary password, sign-in notice, lock screen</div><div class="sp"><b>3. sec-mfa</b>TOTP enrollment and challenge for everyone, recovery codes, replay guard, admin reset, e2e</div><div class="sp"><b>4. sec-integrity</b>Upload hardening, audit hash chain + Verify, FIPS check, SECURITY.md and docs</div></div>
+<div class="note"><b>Your account:</b> at your next sign-in you'll acknowledge the notice and enroll an authenticator app (with recovery codes); your password and data stay. <b>Parked for later:</b> WebAuthn, a signed audit export, virus scanning, SQLite encryption, hosting and Microsoft 365.</div>
+</main><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs';mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#FFFFFF',primaryBorderColor:'#111111',primaryTextColor:'#111111',lineColor:'#111111',fontSize:'16px'}});</script></body></html>

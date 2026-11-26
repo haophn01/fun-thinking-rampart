@@ -27,7 +27,23 @@ h1{font-size:32px;margin-bottom:4px}
 <h1>Parked ideas</h1>
 <p class="sub">pod brings these back when a plan or task touches them.</p>
 <div class="board">
-  <section class="col"><h2>Parked <span>5</span></h2>
+  <section class="col"><h2>Parked <span>9</span></h2>
+    <a class="card" href="webauthn-passkeys.md"><h3>WebAuthn / passkeys MFA</h3>
+      <p>Phishing-resistant MFA with passkeys or security keys, alongside TOTP.</p>
+      <dl><dt>Why it waits</dt><dd>TOTP first; WebAuthn needs a stable HTTPS origin.</dd>
+      <dt>Worth building when</dt><dd>Hosting is decided, or someone asks for phishing-resistant MFA.</dd></dl></a>
+    <a class="card" href="signed-audit-export.md"><h3>Signed audit-log export</h3>
+      <p>Sign and export the audit chain's head outside the DB, so even a full table rewrite is detectable.</p>
+      <dl><dt>Why it waits</dt><dd>The in-DB hash chain comes first.</dd>
+      <dt>Worth building when</dt><dd>There's an external place for anchors, or an assessor asks.</dd></dl></a>
+    <a class="card" href="upload-virus-scanning.md"><h3>Virus scanning of uploads</h3>
+      <p>Scan evidence and policy uploads with ClamAV and quarantine detections.</p>
+      <dl><dt>Why it waits</dt><dd>The byte allowlist and zip-bomb guard come first.</dd>
+      <dt>Worth building when</dt><dd>It's hosted or shared, or uploads come from outside the team.</dd></dl></a>
+    <a class="card" href="sqlite-encryption.md"><h3>Encrypt the SQLite database file</h3>
+      <p>Encrypt the DB file itself (SQLCipher-style) with key management.</p>
+      <dl><dt>Why it waits</dt><dd>Host disk encryption is the documented answer; native builds are harder.</dd>
+      <dt>Worth building when</dt><dd>A host lacks disk encryption, or CUI storage requires it.</dd></dl></a>
     <a class="card" href="m365-app-deployment.md"><h3>Deploy as a Microsoft 365 app (plus a hosted demo)</h3>
       <p>Host Rampart (web on Vercel, API container with a volume), then ship it as a Teams/Outlook/Microsoft 365 tab app with Entra SSO, and later a Copilot plugin and POA&amp;M reminders.</p>
       <dl><dt>Why it waits</dt><dd>Circle back after a successful V1 demo. Needs a host first, and stays demo-only (no CUI) until GCC High plus a FedRAMP-equivalent host.</dd>
@@ -49,7 +65,12 @@ h1{font-size:32px;margin-bottom:4px}
       <dl><dt>Why it waits</dt><dd>V1 is local and stores no real CUI.</dd>
       <dt>Worth building when</dt><dd>Hosting is decided and CUI evidence needs to sit beside the assessment.</dd></dl></a>
   </section>
-  <section class="col"><h2>Planned <span>0</span></h2><p class="empty">None yet</p></section>
+  <section class="col"><h2>Planned <span>1</span></h2>
+    <a class="card" href="security-hardening.md"><h3>Security hardening of Rampart</h3>
+      <p>Web security headers and CSP, Secure cookie, rate limits and MFA, upload sniffing, supply-chain checks in CI, a tamper-evident audit log, a threat model, and security regression tests.</p>
+      <dl><dt>Why it waits</dt><dd>Planned: pod-docs/plans/security-hardening.md (2026-11-26).</dd>
+      <dt>Worth building when</dt><dd>Now. It's a prerequisite for hosting and Microsoft 365.</dd></dl></a>
+  </section>
   <section class="col"><h2>Built <span>0</span></h2><p class="empty">None yet</p></section>
   <section class="col"><h2>Dropped <span>0</span></h2><p class="empty">None yet</p></section>
 </div>
