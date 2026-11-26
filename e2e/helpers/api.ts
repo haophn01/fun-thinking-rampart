@@ -4,7 +4,12 @@ import type { APIRequestContext, APIResponse, Page } from '@playwright/test';
 import {
   CSRF_HEADER,
   FILE_NAME_HEADER,
+  diagramResponseSchema,
+  evidenceItemResponseSchema,
   sessionResponseSchema,
+  type DiagramKind,
+  type DiagramLink,
+  type EvidenceItem,
 } from '../../apps/api/src/contract/index.ts';
 
 type Method = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -74,4 +79,43 @@ export async function api(target: Page | APIRequestContext): Promise<Api> {
         await (await ensureOk(await send(method, path, body), `${method} ${path}`)).json(),
       ),
   };
+}
+
+/** A new evidence item (not flagged CUI) holding one uploaded file; the item as the upload left it. */
+export async function uploadEvidence(
+  client: Api,
+  evidence: { title: string; fileName: string; bytes: Uint8Array; description?: string },
+): Promise<EvidenceItem> {
+  const { item } = await client.write(
+    'POST',
+    '/api/evidence',
+    {
+      title: evidence.title,
+      description: evidence.description ?? null,
+      containsCui: false,
+      objectiveIds: [],
+    },
+    evidenceItemResponseSchema,
+  );
+  const response = await ensureOk(
+    await client.upload(`/api/evidence/${item.id}/versions`, evidence.fileName, evidence.bytes),
+    `upload ${evidence.fileName}`,
+  );
+  return evidenceItemResponseSchema.parse(await response.json()).item;
+}
+
+/** Links an evidence item as an SSP diagram that always follows its newest version. */
+export async function linkDiagram(
+  client: Api,
+  evidenceId: string,
+  kind: DiagramKind,
+  caption: string,
+): Promise<DiagramLink> {
+  const { diagram } = await client.write(
+    'POST',
+    '/api/ssp/diagrams',
+    { evidenceId, kind, caption, version: null },
+    diagramResponseSchema,
+  );
+  return diagram;
 }

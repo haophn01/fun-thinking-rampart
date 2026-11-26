@@ -10,7 +10,7 @@
 | `assets` | Assets | the asset inventory, one table per CMMC asset category |
 | `providers` | Service providers & matrix | 1 service providers, 2 the responsibility matrix (110 rows under family headings) |
 | `document-control` | Document control | 1 review status and schedule, 2 record of changes, 3 approvals |
-| `export` | Lint & export | 1 readiness, 2 "Export SSP (.docx)" |
+| `export` | Lint & export | 1 readiness, 2 the pre-export check (see [ssp-lint](ssp-lint.md)), 3 "Export SSP (.docx)", always enabled (see [ssp-export](ssp-export.md)) |
 
 ## How it works
 ```mermaid
@@ -36,7 +36,7 @@ flowchart LR
 - Every table is an `SspTable`, so each one stacks into labelled cards on phones (`max-width: 767px`) the same way.
 
 ## Watch out
-- Every tab's loading text starts with "Loading": `e2e/look.spec.ts` waits for it to go before it measures a page. A new tab or section must keep that.
+- Every tab's loading text starts with "Loading": `e2e/look.spec.ts` waits for it to go before it measures a page. A new tab or section must keep that. The pre-export check breaks it ("Running the pre-export check…"), so the look spec waits for a finding on the export tab instead.
 - "Today" for revision and approval dates, and for the review countdown, is the UTC date.
 - A provider named on matrix rows can't be removed (409 `provider_in_use`); point those rows elsewhere first.
 - Two profile forms sit on Identification & roles on two routes (`/api/system-profile` and `/api/ssp/profile`); see [system profile](system-profile.md).
@@ -44,3 +44,4 @@ flowchart LR
 
 ## History
 - 2026-11-25 · plan ssp-export-v2 · built (ssp-workspace sprint, PRs #17 and #18; look spec and docs in E3)
+- 2026-11-25 · plan ssp-export-v2 · Lint & export gains the pre-export check (ssp-export-lint sprint, W17 in PR #21; e2e and docs in E4)
