@@ -319,15 +319,32 @@ describe('SSP page', () => {
     await user.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('form', { name: 'System profile' })).toBeInTheDocument();
     expect(api.sent('GET /api/system-profile')).toHaveLength(2);
-    // The default tab never asks for the readiness.
+    // The default tab never asks for the readiness or the pre-export check's reads.
     expect(api.sent('GET /api/assessment')).toHaveLength(0);
+    expect(api.sent('GET /api/ssp/assets')).toHaveLength(0);
+    expect(api.sent('GET /api/ssp/diagrams')).toHaveLength(0);
+    expect(api.sent('GET /api/ssp/document-control')).toHaveLength(0);
   });
 });
+
+const EXPORT_NOTE = "Findings don't block the export. Fix them first, or export as is.";
+const EMPTY_CONTROL = {
+  reviewCadenceMonths: 12,
+  nextReviewDate: null,
+  nextReviewDue: null,
+  daysToReview: null,
+  reviewOverdue: false,
+  revisions: [],
+  approvals: [],
+};
 
 describe('SSP export tab', () => {
   it('export tab', async () => {
     sspApi(SAVED_PROFILE, {
       'GET /api/assessment': () => json(200, assessmentView('not_met', 3)),
+      'GET /api/ssp/assets': () => json(200, { assets: [] }),
+      'GET /api/ssp/diagrams': () => json(200, { diagrams: [] }),
+      'GET /api/ssp/document-control': () => json(200, EMPTY_CONTROL),
     });
     renderSsp('export');
     const panel = await screen.findByRole('tabpanel', { name: 'Lint & export' });
@@ -347,12 +364,12 @@ describe('SSP export tab', () => {
       '/assessment',
     );
 
-    // Section 2: the placeholder and the download link.
-    const exportSection = within(panel).getByRole('region', { name: /Export/ });
-    expect(within(exportSection).getByText('2')).toBeInTheDocument();
-    expect(within(exportSection).getByRole('status')).toHaveTextContent(
-      'The pre-export check comes in a later release.',
-    );
+    // Section 2 is the pre-export check (its own tests: tabs/lint.test.tsx); section 3 the export.
+    expect(within(panel).getByRole('region', { name: /Pre-export check/ })).toBeInTheDocument();
+    const exportSection = within(panel).getByRole('region', { name: /^3\s*Export/ });
+    expect(within(exportSection).getByText('3')).toBeInTheDocument();
+    expect(within(exportSection).getByText(EXPORT_NOTE)).toBeInTheDocument();
+    expect(within(panel).queryByText(/comes in a later release/)).not.toBeInTheDocument();
     const link = within(exportSection).getByRole('link', { name: 'Export SSP (.docx)' });
     expect(link).toHaveAttribute('href', '/api/ssp/export');
     // A plain download, not a route change.
