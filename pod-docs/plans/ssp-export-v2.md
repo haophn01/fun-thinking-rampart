@@ -1,6 +1,6 @@
 # Plan: SSP export v2 — an assessor-ready System Security Plan
 
-_Generated: 2026-11-25 · Status: active · Grilled-with: pod (fast)_
+_Generated: 2026-11-25 · Status: archived · Grilled-with: pod (fast)_
 
 Port base: 3200
 
