@@ -23,6 +23,10 @@ describe('config', () => {
       databasePath: join(apiRoot, 'data', 'rampart.sqlite'),
       storagePath: join(apiRoot, 'data', 'files'),
       logLevel: 'info',
+      hosted: false,
+      serveWeb: false,
+      webDistPath: resolve(apiRoot, '..', 'web', 'dist'),
+      rateLimitMultiplier: 1,
     });
 
     // Port boundaries.
@@ -99,5 +103,79 @@ describe('config', () => {
 
   it('ignores unrelated env keys', () => {
     expect(loadConfig({ PATH: '/bin', WEB_PORT: 'nope' }).port).toBe(3001);
+  });
+
+  describe('hosted, serve-web, dist path and rate-limit multiplier', () => {
+    it('defaults: local, no web serving, the web build next door, real limits', () => {
+      const config = loadConfig({});
+      expect(config.hosted).toBe(false);
+      expect(config.serveWeb).toBe(false);
+      expect(config.webDistPath).toBe(resolve(apiRoot, '..', 'web', 'dist'));
+      expect(config.rateLimitMultiplier).toBe(1);
+    });
+
+    it('an empty value is unset', () => {
+      const config = loadConfig({
+        HOSTED: '',
+        SERVE_WEB: '',
+        WEB_DIST_PATH: '',
+        RATE_LIMIT_MULTIPLIER: '',
+      });
+      expect(config.hosted).toBe(false);
+      expect(config.serveWeb).toBe(false);
+      expect(config.webDistPath).toBe(resolve(apiRoot, '..', 'web', 'dist'));
+      expect(config.rateLimitMultiplier).toBe(1);
+    });
+
+    it('the booleans take exactly true or false', () => {
+      expect(loadConfig({ HOSTED: 'true' }).hosted).toBe(true);
+      expect(loadConfig({ HOSTED: 'false' }).hosted).toBe(false);
+      expect(loadConfig({ SERVE_WEB: 'true' }).serveWeb).toBe(true);
+      expect(loadConfig({ SERVE_WEB: 'false' }).serveWeb).toBe(false);
+      for (const bad of ['TRUE', 'True', '1', '0', 'yes', 'no', ' true', 'true ', 'on']) {
+        expect(configError({ HOSTED: bad }).keys, `HOSTED=${bad}`).toEqual(['HOSTED']);
+        expect(configError({ SERVE_WEB: bad }).keys, `SERVE_WEB=${bad}`).toEqual(['SERVE_WEB']);
+      }
+    });
+
+    it('the dist path resolves against apps/api; absolute is kept; blank is refused', () => {
+      expect(loadConfig({ WEB_DIST_PATH: 'build/web' }).webDistPath).toBe(
+        join(apiRoot, 'build', 'web'),
+      );
+      const absolute = resolve(apiRoot, '..', 'somewhere', 'dist');
+      expect(loadConfig({ WEB_DIST_PATH: absolute }).webDistPath).toBe(absolute);
+      for (const blank of [' ', '	']) {
+        expect(configError({ WEB_DIST_PATH: blank }).keys).toEqual(['WEB_DIST_PATH']);
+      }
+    });
+
+    it('the multiplier is digits only, from 1 to 1000', () => {
+      expect(loadConfig({ RATE_LIMIT_MULTIPLIER: '1' }).rateLimitMultiplier).toBe(1);
+      expect(loadConfig({ RATE_LIMIT_MULTIPLIER: '100' }).rateLimitMultiplier).toBe(100);
+      expect(loadConfig({ RATE_LIMIT_MULTIPLIER: '1000' }).rateLimitMultiplier).toBe(1000);
+      for (const bad of ['0', '1001', '1.5', '-1', '1e2', '+5', ' 5', '5 ', '0x10', 'abc']) {
+        expect(configError({ RATE_LIMIT_MULTIPLIER: bad }).keys, bad).toEqual([
+          'RATE_LIMIT_MULTIPLIER',
+        ]);
+      }
+    });
+
+    it('one error names every bad new key, with the old ones', () => {
+      const error = configError({
+        HOSTED: 'yes',
+        SERVE_WEB: '1',
+        WEB_DIST_PATH: ' ',
+        RATE_LIMIT_MULTIPLIER: '0',
+        API_PORT: 'abc',
+      });
+      expect(error.keys).toEqual([
+        'API_PORT',
+        'HOSTED',
+        'RATE_LIMIT_MULTIPLIER',
+        'SERVE_WEB',
+        'WEB_DIST_PATH',
+      ]);
+      for (const key of error.keys) expect(error.message).toContain(key);
+    });
   });
 });
