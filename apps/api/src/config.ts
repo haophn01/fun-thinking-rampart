@@ -85,9 +85,7 @@ const envSchema = z.object({
       .string()
       .regex(/^\d+$/, 'must be an integer from 1 to 1000')
       .transform(Number)
-      .pipe(
-        z.number().int().min(1, 'must be from 1 to 1000').max(1000, 'must be from 1 to 1000'),
-      )
+      .pipe(z.number().int().min(1, 'must be from 1 to 1000').max(1000, 'must be from 1 to 1000'))
       .default(1),
   ),
   SERVE_WEB: booleanSetting,
