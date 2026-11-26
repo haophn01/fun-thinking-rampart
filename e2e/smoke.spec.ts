@@ -8,9 +8,8 @@ import { loadCatalog, type Requirement } from '@rampart/catalog';
 import { scoreMax } from '@rampart/rules';
 import { REGULATION } from '@rampart/rules/poam';
 import {
+  NIST_STATUS_LABELS,
   PRODUCT_NAME,
-  REQUIREMENT_NOT_APPLICABLE_LABEL,
-  REQUIREMENT_STATUS_LABELS,
   SYSTEM_PROFILE_FIELDS,
   assessmentViewSchema,
   auditPageSchema,
@@ -23,6 +22,7 @@ import {
   sspFileName,
   type AssessmentView,
   type AuditEvent,
+  nistImplementationStatus,
   type SystemProfileFieldKey,
 } from '../apps/api/src/contract/index.ts';
 import { api, type Api } from './helpers/api';
@@ -561,16 +561,29 @@ test.describe('verification path', () => {
   });
 });
 
-/** The lines from a requirement's heading (its ID alone on a line) up to the next one. */
-function sectionOf(lines: readonly string[], id: string): string[] {
-  const ids = new Set(catalog.requirements.map((r) => r.id));
-  const start = lines.indexOf(id);
-  if (start < 0) return [];
-  const end = lines.findIndex((line, i) => i > start && ids.has(line));
-  return lines.slice(start, end < 0 ? undefined : end);
+/** Section 3's lines: from "3. Requirements" up to "4. Record of changes". */
+function requirementsSection(lines: readonly string[]): readonly string[] {
+  const start = lines.indexOf('3. Requirements');
+  const end = lines.indexOf('4. Record of changes');
+  expect(start, 'section 3 heading').toBeGreaterThanOrEqual(0);
+  expect(end, 'section 4 after section 3').toBeGreaterThan(start);
+  return lines.slice(start, end);
 }
 
-/** Each requirement appears with its status label (as the api derives it) and its statement. */
+/**
+ * The lines from a requirement's heading (its ID alone on a line) up to the next one, inside
+ * section 3: the matrix and the appendices list requirement IDs too.
+ */
+function sectionOf(lines: readonly string[], id: string): string[] {
+  const ids = new Set(catalog.requirements.map((r) => r.id));
+  const section = requirementsSection(lines);
+  const start = section.indexOf(id);
+  if (start < 0) return [];
+  const end = section.findIndex((line, i) => i > start && ids.has(line));
+  return section.slice(start, end < 0 ? undefined : end);
+}
+
+/** Each requirement appears with its NIST status (as the api derives it) and its statement. */
 function expectEveryRequirement(lines: readonly string[], view: AssessmentView) {
   const outcomes = new Map(view.evaluation.outcomes.map((o) => [o.requirementId, o]));
   for (const requirement of catalog.requirements) {
@@ -578,12 +591,12 @@ function expectEveryRequirement(lines: readonly string[], view: AssessmentView) 
     expect(section.length, `${requirement.id} has a section`).toBeGreaterThan(0);
     const outcome = outcomes.get(requirement.id);
     const label =
-      outcome === undefined
-        ? REQUIREMENT_STATUS_LABELS.not_assessed
-        : outcome.allNa
-          ? REQUIREMENT_NOT_APPLICABLE_LABEL
-          : REQUIREMENT_STATUS_LABELS[outcome.status];
+      NIST_STATUS_LABELS[
+        outcome === undefined ? 'not_assessed' : nistImplementationStatus(outcome)
+      ];
     expect(section, `${requirement.id} status`).toContain(`Status: ${label}`);
-    expect(section, `${requirement.id} statement`).toContain(statementFor(requirement));
+    const current = section.indexOf('Current implementation:');
+    expect(current, `${requirement.id} current implementation`).toBeGreaterThanOrEqual(0);
+    expect(section[current + 1], `${requirement.id} statement`).toBe(statementFor(requirement));
   }
 }
