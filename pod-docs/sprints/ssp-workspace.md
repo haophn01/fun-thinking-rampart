@@ -8,9 +8,9 @@ _From plan: pod-docs/plans/ssp-export-v2.md · Slug: ssp-workspace · Status: ac
 
 | Wave | Slice | Title | Branch | PR | Status | Confidence | Depends on |
 |------|-------|-------|--------|----|--------|------------|------------|
-| 1 | W9 | SSP workspace frame: tabs, shared kit, Lint & export tab | ssp-workspace-w9 | — | pending | — | — |
-| 1 | W10 | Assessment: planned implementation, N/A rationale, SSP status | ssp-workspace-w10 | — | pending | — | — |
-| 1 | W11 | Dashboard: "SSP review overdue" in Needs attention | ssp-workspace-w11 | — | pending | — | — |
+| 1 | W9 | SSP workspace frame: tabs, shared kit, Lint & export tab | ssp-workspace-w9 | #17 | done | af68e15 | — |
+| 1 | W10 | Assessment: planned implementation, N/A rationale, SSP status | ssp-workspace-w10 | #17 | done | af68e15 | — |
+| 1 | W11 | Dashboard: "SSP review overdue" in Needs attention | ssp-workspace-w11 | #17 | done | af68e15 | — |
 | 2 | W12 | Tab: Identification & roles | ssp-workspace-w12 | — | pending | — | W9 |
 | 2 | W13 | Tab: Environment (CUI description, narratives, diagrams) | ssp-workspace-w13 | — | pending | — | W9 |
 | 2 | W14 | Tab: Assets | ssp-workspace-w14 | — | pending | — | W9 |
