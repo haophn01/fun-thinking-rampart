@@ -1,12 +1,13 @@
 import type { SystemProfile } from '@rampart/api/contract';
 import { loadCatalog } from '@rampart/catalog';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthedApp } from '../../App';
 
 // A page test waits for real requests; keep the timeout above the 5 s waits.
+configure({ asyncUtilTimeout: 5000 });
 vi.setConfig({ testTimeout: 15_000 });
 
 interface Call {
@@ -142,9 +143,9 @@ function sspApi(
   return { sent: (key: string) => calls.filter((c) => `${c.method} ${c.path}` === key) };
 }
 
-function renderSsp() {
+function renderSsp(tab?: string) {
   render(
-    <MemoryRouter initialEntries={['/ssp']}>
+    <MemoryRouter initialEntries={[tab === undefined ? '/ssp' : `/ssp?tab=${tab}`]}>
       <AuthedApp />
     </MemoryRouter>,
   );
@@ -270,34 +271,6 @@ describe('SSP page', () => {
     expect(within(form).getByLabelText('System name')).toHaveValue('');
   });
 
-  it('readiness', async () => {
-    sspApi(SAVED_PROFILE, {
-      'GET /api/assessment': () => json(200, assessmentView('not_met', 3)),
-    });
-    await renderLoaded();
-    const section = await screen.findByRole('region', { name: /Readiness/ });
-    expect(await within(section).findByText('Not Met')).toBeInTheDocument();
-    expect(within(section).getByText(/CA\.L2-3\.12\.4/)).toBeInTheDocument();
-    expect(
-      within(section).getByText(
-        `3 of ${String(TOTAL)} requirements have an implementation statement`,
-      ),
-    ).toBeInTheDocument();
-    expect(within(section).getByRole('link', { name: /Assessment/ })).toHaveAttribute(
-      'href',
-      '/assessment',
-    );
-  });
-
-  it('export link', async () => {
-    sspApi(SAVED_PROFILE);
-    await renderLoaded();
-    const link = screen.getByRole('link', { name: 'Export SSP (.docx)' });
-    expect(link).toHaveAttribute('href', '/api/ssp/export');
-    // A plain download, not a route change.
-    expect(link).toHaveAttribute('download');
-  });
-
   it('loading and error', async () => {
     const user = userEvent.setup();
     let release: (response: Response) => void = () => undefined;
@@ -307,10 +280,9 @@ describe('SSP page', () => {
         if (fail) return new Promise<Response>((resolve) => (release = resolve));
         return json(200, { profile: SAVED_PROFILE });
       },
-      'GET /api/assessment': () => apiError(500, 'internal'),
     });
     renderSsp();
-    // The h1 shows at once, before either request has answered.
+    // The h1 shows at once, before the profile has answered.
     expect(await screen.findByRole('heading', { level: 1, name: 'SSP' })).toBeInTheDocument();
     expect(screen.getByText('Loading the system profile…')).toBeInTheDocument();
 
@@ -325,12 +297,70 @@ describe('SSP page', () => {
     await user.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('form', { name: 'System profile' })).toBeInTheDocument();
     expect(api.sent('GET /api/system-profile')).toHaveLength(2);
+    // The default tab never asks for the readiness.
+    expect(api.sent('GET /api/assessment')).toHaveLength(0);
+  });
+});
 
-    // The readiness section fails on its own, with its own Retry; the form is unaffected.
-    const readiness = await screen.findByRole('region', { name: /Readiness/ });
+describe('SSP export tab', () => {
+  it('export tab', async () => {
+    sspApi(SAVED_PROFILE, {
+      'GET /api/assessment': () => json(200, assessmentView('not_met', 3)),
+    });
+    renderSsp('export');
+    const panel = await screen.findByRole('tabpanel', { name: 'Lint & export' });
+
+    // Section 1: the readiness, as before.
+    const section = within(panel).getByRole('region', { name: /Readiness/ });
+    expect(within(section).getByText('1')).toBeInTheDocument();
+    expect(await within(section).findByText('Not Met')).toBeInTheDocument();
+    expect(within(section).getByText(/CA\.L2-3\.12\.4/)).toBeInTheDocument();
+    expect(
+      within(section).getByText(
+        `3 of ${String(TOTAL)} requirements have an implementation statement`,
+      ),
+    ).toBeInTheDocument();
+    expect(within(section).getByRole('link', { name: /Assessment/ })).toHaveAttribute(
+      'href',
+      '/assessment',
+    );
+
+    // Section 2: the placeholder and the download link.
+    const exportSection = within(panel).getByRole('region', { name: /Export/ });
+    expect(within(exportSection).getByText('2')).toBeInTheDocument();
+    expect(within(exportSection).getByRole('status')).toHaveTextContent(
+      'The pre-export check comes in a later release.',
+    );
+    const link = within(exportSection).getByRole('link', { name: 'Export SSP (.docx)' });
+    expect(link).toHaveAttribute('href', '/api/ssp/export');
+    // A plain download, not a route change.
+    expect(link).toHaveAttribute('download');
+    // The profile form isn't loaded on this tab.
+    expect(screen.queryByRole('form', { name: 'System profile' })).not.toBeInTheDocument();
+  });
+
+  it('readiness fails on its own with Retry', async () => {
+    const user = userEvent.setup();
+    let release: (response: Response) => void = () => undefined;
+    let answer = (): Response | Promise<Response> =>
+      new Promise<Response>((resolve) => (release = resolve));
+    const api = sspApi(SAVED_PROFILE, { 'GET /api/assessment': () => answer() });
+    renderSsp('export');
+    const panel = await screen.findByRole('tabpanel', { name: 'Lint & export' });
+    await waitFor(() => {
+      expect(api.sent('GET /api/assessment')).toHaveLength(1);
+    });
+    expect(within(panel).getByText(/^Loading/)).toBeInTheDocument();
+    release(apiError(500, 'internal'));
+
+    const readiness = within(panel).getByRole('region', { name: /Readiness/ });
     expect(await within(readiness).findByText("Can't load the readiness")).toBeInTheDocument();
-    expect(within(readiness).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
-    // The export link doesn't wait on either load.
-    expect(screen.getByRole('link', { name: 'Export SSP (.docx)' })).toBeInTheDocument();
+    // The export link doesn't wait on the load.
+    expect(within(panel).getByRole('link', { name: 'Export SSP (.docx)' })).toBeInTheDocument();
+
+    answer = () => json(200, assessmentView('met', 3));
+    await user.click(within(readiness).getByRole('button', { name: 'Retry' }));
+    expect(await within(readiness).findByText('Met')).toBeInTheDocument();
+    expect(api.sent('GET /api/assessment')).toHaveLength(2);
   });
 });

@@ -5,26 +5,54 @@
   min-width: 0;
 }
 
-.section {
-  display: grid;
-  gap: 20px;
-  min-width: 0;
-  padding-top: 12px;
-  border-top: var(--rp-rule) solid var(--rp-ink);
-}
-
-.sectionHead {
-  font-family: var(--rp-font-mono);
-  font-size: var(--rp-text-label);
-  font-weight: 400;
-}
-
 .muted {
+  margin: 0;
   color: var(--rp-graphite);
 }
 
-.retry {
-  margin-top: 12px;
+/* The section tabs, as in the Inspection draft: Graphite at rest, Ink with a red underline when selected. */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+}
+
+.tab {
+  min-height: var(--rp-control-min);
+  padding: 10px 14px;
+  color: var(--rp-graphite);
+  background: none;
+  border: 0;
+  font-family: var(--rp-font-body);
+  font-size: var(--rp-text-body);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tab:hover,
+.tab[aria-selected='true'] {
+  color: var(--rp-ink);
+}
+
+.tab[aria-selected='true'] {
+  box-shadow: inset 0 -2px 0 var(--rp-red);
+}
+
+.tab:focus-visible {
+  outline: var(--rp-focus-width) solid var(--rp-ink);
+  outline-offset: calc(-1 * var(--rp-focus-width));
+}
+
+.panel {
+  display: grid;
+  gap: 32px;
+  min-width: 0;
+}
+
+.panel[hidden] {
+  display: none;
 }
 
 .form {
@@ -107,7 +135,12 @@
 }
 
 @media (max-width: 767px) {
-  .page {
+  .page,
+  .panel {
     gap: 24px;
+  }
+
+  .tab {
+    padding: 10px 12px;
   }
 }
