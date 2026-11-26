@@ -29,6 +29,7 @@ import { respond } from '../respond';
 import type { ApiDeps } from '../routes';
 import { loadAssets } from '../ssp-data/assets/repository';
 import { actorOf, utcDate } from '../ssp-data/common';
+import { checkDiagramImages } from '../ssp-data/diagrams/embeddable';
 import { loadDiagramLinks } from '../ssp-data/diagrams/repository';
 import { appendExportRevision, loadDocumentControl } from '../ssp-data/document-control/repository';
 import { loadSspProfile } from '../ssp-data/profile/repository';
@@ -41,18 +42,22 @@ import { attachmentDisposition } from '../uploads/upload';
 /**
  * The pre-export check, `GET /api/ssp/lint`: the rules over the same reads the web makes. The
  * reads run in one synchronous pass; `readView` throws `not_found` first with no assessment.
+ * Then the diagrams' `embeddable` is settled from their bytes, as `GET /api/ssp/diagrams` does.
  */
-export function readSspLint(db: AppDb, now: Date): SspLintResponse {
+export async function readSspLint(
+  db: AppDb,
+  store: FileStore,
+  now: Date,
+): Promise<SspLintResponse> {
   const view = readView(db, now);
   const assessmentId = view.assessment.id;
+  const assets = loadAssets(db, assessmentId);
+  const links = loadDiagramLinks(db, assessmentId);
+  const review = loadDocumentControl(db, now);
+  const { diagrams } = await checkDiagramImages(db, store, links);
   const findings: SspLintFinding[] = lintSspFrom(
     loadCatalog(),
-    {
-      view,
-      assets: loadAssets(db, assessmentId),
-      diagrams: loadDiagramLinks(db, assessmentId),
-      review: loadDocumentControl(db, now),
-    },
+    { view, assets, diagrams, review },
     { maxEmbeddedImages: SSP_MAX_EMBEDDED_IMAGES, largeImageBytes: SSP_LARGE_IMAGE_BYTES },
   );
   return {
@@ -98,19 +103,26 @@ function readSspRecords(db: AppDb, now: Date): SspRecords {
 
 /**
  * The bytes of the links the export may embed, read through the hash-checked evidence read. Only
- * the first `SSP_MAX_EMBEDDED_IMAGES` embeddable, non-CUI files are read. A read the app refuses
- * (a missing or altered file) leaves that link out, so it is referenced, and logs a warning that
- * names the link and no path.
+ * the first `SSP_MAX_EMBEDDED_IMAGES` embeddable, non-CUI files are read, and none that `known`
+ * (the embeddable check's reads) already holds. A read the app refuses (a missing or altered
+ * file) leaves that link out, so it is referenced, and logs a warning that names the link and no
+ * path.
  */
 async function readImages(
   db: AppDb,
   store: FileStore,
   links: readonly DiagramLink[],
+  known: ReadonlyMap<string, Uint8Array>,
   log: FastifyBaseLogger,
 ): Promise<Map<string, Uint8Array>> {
   const images = new Map<string, Uint8Array>();
   for (const link of embedCandidates(links, SSP_MAX_EMBEDDED_IMAGES)) {
     if (link.resolved === null) continue;
+    const held = known.get(link.id);
+    if (held !== undefined) {
+      images.set(link.id, held);
+      continue;
+    }
     try {
       const file = await readFileVersion(db, store, link.evidence.id, link.resolved.version);
       images.set(link.id, file.bytes);
@@ -146,8 +158,16 @@ function exportEntryOf(profile: SspRecords['profile'], now: Date, madeBy: string
 async function exportAndRecord(request: FastifyRequest, deps: ApiDeps): Promise<SspExport> {
   const actor = actorOf(request, deps);
   const madeBy = request.auth?.user.displayName ?? '';
-  const records = readSspRecords(deps.db, actor.now);
-  const images = await readImages(deps.db, deps.store, records.diagrams, request.log);
+  const read = readSspRecords(deps.db, actor.now);
+  const checked = await checkDiagramImages(deps.db, deps.store, read.diagrams);
+  const records = { ...read, diagrams: checked.diagrams };
+  const images = await readImages(
+    deps.db,
+    deps.store,
+    records.diagrams,
+    checked.bytes,
+    request.log,
+  );
   const exportEntry = exportEntryOf(records.profile, actor.now, madeBy);
   const result = await exportSsp({ ...records, images, exportEntry }, actor.now);
   deps.db.transaction((tx) => {
@@ -167,7 +187,9 @@ async function exportAndRecord(request: FastifyRequest, deps: ApiDeps): Promise<
  * so the guard's hooks apply.
  */
 export function registerSspRoutes(api: FastifyInstance, deps: ApiDeps): void {
-  api.get('/api/ssp/lint', () => respond(sspLintResponseSchema, readSspLint(deps.db, deps.now())));
+  api.get('/api/ssp/lint', async () =>
+    respond(sspLintResponseSchema, await readSspLint(deps.db, deps.store, deps.now())),
+  );
 
   api.get('/api/ssp/export', async (request, reply) => {
     const { fileName, bytes } = await exportAndRecord(request, deps);

@@ -66,3 +66,9 @@ Consequences: near the end of the US day, countdowns and "due today" can be off 
 - **Wording kept as built (W17):** the panel shows "Running the pre-export check…" while it loads, not "Loading…". The Export note reads "Findings don't block the export. Fix them first, or export as is.", not the contract's "The check only warns. You can export at any time." Both say the same thing.
 - **Fixed in the wave merge:** the summary line was not announced to screen readers. It now has `aria-live="polite"`. `role="status"` would have collided with the info Alerts, which already use that role.
 - **Why:** E4 raised these as PENDING (plan `ssp-export-v2`, sprint `ssp-export-lint`). The orchestrator took the wording as a default and fixed the accessibility gap.
+
+## 2026-11-26 — SSP panels re-read when shown again (review fix)
+
+- **What:** SSP workspace panels still mount once and stay mounted, so drafts survive. They now **re-read their data each time their tab is shown again** (re-select, Back, or the browser tab regaining focus). There's no separate reload on the export click, because a plain download link would race the write; Document control reloads when you return to it.
+- **Embeddable:** a diagram is embeddable only if its stored bytes read as PNG or JPEG, not just its file name.
+- **Why:** these came from the round-1 plan review of #23 (FIX 1 and FIX 2), fixed by F2.

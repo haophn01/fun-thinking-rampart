@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { openDb, runMigrations, type DbHandle } from '../../../db/client';
 import { auditEvent, diagramLink } from '../../../db/schema';
 import { createMemoryStore } from '../../../storage';
+import { jpegOf, pngOf } from '../../../ssp/testing/docx-text';
 import { buildApp } from '../../app';
 import { loadConfig } from '../../config';
 import {
@@ -80,6 +81,23 @@ async function uploadFile(client: Client, item: EvidenceItem, text: string, file
   expect(response.statusCode, response.body).toBe(201);
 }
 
+async function uploadBytes(client: Client, item: EvidenceItem, bytes: Uint8Array, name: string) {
+  const response = await client.upload(`/api/evidence/${item.id}/versions`, bytes, name);
+  expect(response.statusCode, response.body).toBe(201);
+}
+
+/** A real PNG: the export can embed it. */
+const PNG = pngOf(4, 4);
+
+/** A GIF header: a picture, but not one the export can embed. */
+const GIF_BYTES = new Uint8Array([
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x3b,
+]);
+/** A WebP header ("RIFF", size, "WEBP", "VP8 "). */
+const WEBP_BYTES = new Uint8Array([
+  0x52, 0x49, 0x46, 0x46, 0x0c, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20,
+]);
+
 async function addReference(client: Client, item: EvidenceItem, location: string) {
   const response = await client.post(`/api/evidence/${item.id}/references`, {
     location,
@@ -115,7 +133,7 @@ describe('diagram links', () => {
   it('embeddable', async () => {
     const { h, admin } = await world();
     const png = await evidence(admin, 'Network map', false);
-    await uploadFile(admin, png, 'png bytes', 'network.PNG');
+    await uploadBytes(admin, png, PNG, 'network.PNG');
     const pdf = await evidence(admin, 'Data flow', false);
     await uploadFile(admin, pdf, 'pdf bytes', 'flow.pdf');
     const cui = await evidence(admin, 'Enclave drawing', true);
@@ -132,8 +150,8 @@ describe('diagram links', () => {
         version: 1,
         kind: 'file',
         fileName: 'network.PNG',
-        size: bytesOf('png bytes').length,
-        sha256: sha256(bytesOf('png bytes')),
+        size: PNG.length,
+        sha256: sha256(PNG),
         location: null,
         createdAt: START.toISOString(),
       },
@@ -167,9 +185,56 @@ describe('diagram links', () => {
     expect(listed.find((d) => d.id === pngLink.id)).toEqual(pngLink);
     expect(listed.filter((d) => d.embeddable).map((d) => d.id)).toEqual([pngLink.id]);
 
-    // The link never reads the file bytes: corrupted stored files change nothing in the list.
+    // Each file's bytes are checked once: corrupted stored files change nothing in the list.
     for (const key of h.store.keys()) h.store.corrupt(key);
     expect(await list(admin)).toEqual(listed);
+  });
+
+  it('embeddable follows the bytes, not the name', async () => {
+    const { admin } = await world();
+    const gif = await evidence(admin, 'Old map', false);
+    await uploadBytes(admin, gif, GIF_BYTES, 'fake.png');
+    const webp = await evidence(admin, 'Flow', false);
+    await uploadBytes(admin, webp, WEBP_BYTES, 'flow.jpg');
+    const real = await evidence(admin, 'Real map', false);
+    await uploadBytes(admin, real, pngOf(4, 3), 'real.png');
+
+    const gifLink = await link(admin, gif);
+    const webpLink = await link(admin, webp, { kind: 'data_flow', caption: 'Flow' });
+    const realLink = await link(admin, real, { caption: 'Real' });
+    expect([gifLink.embeddable, webpLink.embeddable, realLink.embeddable]).toEqual([
+      false,
+      false,
+      true,
+    ]);
+    expect(gifLink.resolved).toMatchObject({ kind: 'file', fileName: 'fake.png' });
+    // A pinned version is checked the same way.
+    const pinned = diagramOf(await admin.patch(`${URL}/${gifLink.id}`, { version: 1 }));
+    expect(pinned.embeddable).toBe(false);
+
+    const listed = await list(admin);
+    expect(listed.filter((d) => d.embeddable).map((d) => d.id)).toEqual([realLink.id]);
+
+    // A real JPEG is embeddable whatever its case.
+    const jpeg = await evidence(admin, 'Photo', false);
+    await uploadBytes(admin, jpeg, jpegOf(5, 5), 'photo.JPEG');
+    expect((await link(admin, jpeg, { caption: 'Photo' })).embeddable).toBe(true);
+  });
+
+  it('a file that cannot be read keeps the name verdict until it reads', async () => {
+    const { h, admin } = await world();
+    const item = await evidence(admin, 'Map', false);
+    await uploadBytes(admin, item, GIF_BYTES, 'map.png');
+    const [key] = h.store.keys();
+    h.store.corrupt(key ?? '');
+    // Unreadable: the export will say it couldn't be read, so the list doesn't guess.
+    const linked = await link(admin, item);
+    expect(linked.embeddable).toBe(true);
+    expect((await list(admin))[0]?.embeddable).toBe(true);
+    // Once the stored file is whole again (a put replaces a file whose hash is wrong), it is
+    // read, and the bytes decide.
+    await h.store.put(GIF_BYTES);
+    expect((await list(admin))[0]?.embeddable).toBe(false);
   });
 
   it('version resolution', async () => {
@@ -180,7 +245,7 @@ describe('diagram links', () => {
     const early = await link(admin, item);
     expect(early).toMatchObject({ version: null, resolved: null, embeddable: false });
 
-    await uploadFile(admin, item, 'first', 'map.png');
+    await uploadBytes(admin, item, PNG, 'map.png');
     const pinned = await link(admin, item, { version: 1, caption: 'Pinned' });
     expect(pinned.resolved).toMatchObject({ version: 1, fileName: 'map.png' });
 
@@ -212,7 +277,7 @@ describe('diagram links', () => {
   it('link validation', async () => {
     const { h, admin } = await world();
     const item = await evidence(admin, 'Network map', false);
-    await uploadFile(admin, item, 'one', 'map.png');
+    await uploadBytes(admin, item, PNG, 'map.png');
 
     // Unknown evidence: 400 on evidenceId; a non-UUID is a 400 too.
     for (const evidenceId of [MISSING_ID, 'not-a-uuid']) {
@@ -277,7 +342,7 @@ describe('diagram links', () => {
       h.handle.sqlite.prepare('SELECT id FROM assessment').get() as { id: string }
     ).id;
     const item = await evidence(admin, 'Network map', false);
-    await uploadFile(admin, item, 'one', 'map.png');
+    await uploadBytes(admin, item, PNG, 'map.png');
 
     const made = await link(admin, item, { caption: ' Main network ', version: 1 });
     expect(made.caption).toBe('Main network');

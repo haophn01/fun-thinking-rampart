@@ -14,24 +14,33 @@ import {
   patchDiagramLink,
   removeDiagramLink,
 } from './repository';
+import { checkDiagramImage, checkDiagramImages } from './embeddable';
 
 const URL = '/api/ssp/diagrams';
 const itemParams = z.object({ id: z.string() });
 
-/** Diagram links, under `/api/ssp/diagrams`: any signed-in user reads and writes them. */
+/**
+ * Diagram links, under `/api/ssp/diagrams`: any signed-in user reads and writes them. Every
+ * answer's `embeddable` is settled from the file bytes.
+ */
 export const registerDiagramLinkRoutes: SspDataRoutes = (api, deps) => {
-  api.get(URL, () => respond(diagramsResponseSchema, { diagrams: listDiagramLinks(deps.db) }));
+  api.get(URL, async () => {
+    const { diagrams } = await checkDiagramImages(deps.db, deps.store, listDiagramLinks(deps.db));
+    return respond(diagramsResponseSchema, { diagrams });
+  });
 
-  api.post(URL, (request, reply) => {
+  api.post(URL, async (request, reply) => {
     const body = createDiagramLinkRequestSchema.parse(request.body);
-    const diagram = createDiagramLink(deps.db, body, actorOf(request, deps));
+    const created = createDiagramLink(deps.db, body, actorOf(request, deps));
+    const diagram = await checkDiagramImage(deps.db, deps.store, created);
     return reply.code(201).send(respond(diagramResponseSchema, { diagram }));
   });
 
-  api.patch(`${URL}/:id`, (request) => {
+  api.patch(`${URL}/:id`, async (request) => {
     const { id } = itemParams.parse(request.params);
     const body = patchDiagramLinkRequestSchema.parse(request.body);
-    const diagram = patchDiagramLink(deps.db, id, body, actorOf(request, deps));
+    const patched = patchDiagramLink(deps.db, id, body, actorOf(request, deps));
+    const diagram = await checkDiagramImage(deps.db, deps.store, patched);
     return respond(diagramResponseSchema, { diagram });
   });
 

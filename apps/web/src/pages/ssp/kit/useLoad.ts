@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { apiGet, type ResponseSchema } from '../../../api/client';
+import { PanelVisit } from './panelVisit';
 
 export interface Loaded<T> {
   /** `null` until the first load answers. */
@@ -10,7 +11,10 @@ export interface Loaded<T> {
   replace: (data: T) => void;
 }
 
-/** Loads one GET on mount. A failed reload keeps the data it had; only a first load shows the error. */
+/**
+ * Loads one GET on mount, and again each time the enclosing SSP panel is shown again
+ * (`PanelVisit`). A failed reload keeps the data it had; only a first load shows the error.
+ */
 export function useLoad<T>(path: string, schema: ResponseSchema<T>): Loaded<T> {
   const [data, setData] = useState<T | null>(null);
   const [failed, setFailed] = useState(false);
@@ -40,5 +44,14 @@ export function useLoad<T>(path: string, schema: ResponseSchema<T>): Loaded<T> {
       latest.current += 1;
     };
   }, [reload]);
+  // A panel shown again re-reads what may have changed while it was hidden. The first value
+  // is the mount's own load above.
+  const visit = useContext(PanelVisit);
+  const seenVisit = useRef(visit);
+  useEffect(() => {
+    if (seenVisit.current === visit) return;
+    seenVisit.current = visit;
+    void reload();
+  }, [visit, reload]);
   return { data, failed, reload, replace };
 }
