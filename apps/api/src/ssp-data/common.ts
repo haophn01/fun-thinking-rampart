@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import type { FastifyRequest } from 'fastify';
 import type { AppDb } from '../../db/client';
-import { findActiveAssessment } from '../assessment/repository';
+import { findActiveAssessment, type Actor } from '../assessment/repository';
 import { AppError } from '../errors';
+import type { ApiDeps } from '../routes';
 
 // Helpers every `ssp-data` module shares, so the SSP data routes stop copying them. Older modules
 // keep their own copies.
@@ -45,4 +47,13 @@ export function changedFields<T extends Record<string, unknown>>(
 /** A new row ID: a random v4 UUID. */
 export function newId(): string {
   return randomUUID();
+}
+
+/**
+ * The signed-in writer: the user, the app clock's now and the request id. The guard has already
+ * refused a request without a session; this throws `unauthenticated` if one gets through.
+ */
+export function actorOf(request: FastifyRequest, deps: ApiDeps): Actor {
+  if (!request.auth) throw new AppError('unauthenticated', 'Sign in to continue.');
+  return { userId: request.auth.user.id, now: deps.now(), requestId: request.id };
 }
