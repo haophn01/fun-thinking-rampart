@@ -54,3 +54,9 @@ Consequences: near the end of the US day, countdowns and "due today" can be off 
 - **Tab history:** clicking an SSP tab pushes a history entry, and clicking the selected tab adds none. Arrow, Home and End keys **replace** the `?tab=` entry, so Back doesn't step through every tab the keys passed.
 - **Categorization reset:** clearing the categorization when it already holds the default counts as no change, so Save stays disabled. This follows the API's effective-value rule; the default is stored as null.
 - **Why:** these match the WAI-ARIA tabs pattern and the API's rules. Raised as PENDING by W9 (plan `ssp-export-v2`, sprint `ssp-workspace`) and taken as defaults by the orchestrator. The human can change them.
+
+## 2026-11-25 — SSP export v2 wording (agent default)
+
+- **Cadence wording:** the record of changes says "every 1 month" when the cadence is 1, and "every <n> months" otherwise.
+- **CUI file version line:** a file version on a CUI-flagged item prints `<caption> — <kind>: <title> v<n>, contains CUI, <fileName>, SHA-256 <sha>, <date>`, with no "(referenced: …)" suffix. The api never produces this case.
+- **Why:** these were raised as PENDING by X2 (plan `ssp-export-v2`, sprint `ssp-export-lint`) and taken as defaults by the orchestrator. The human can change them.
