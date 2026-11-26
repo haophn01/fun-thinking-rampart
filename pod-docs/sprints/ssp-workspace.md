@@ -2,7 +2,7 @@
 
 _From plan: pod-docs/plans/ssp-export-v2.md · Slug: ssp-workspace · Status: active · Generated: 2026-11-25_
 
-<!-- autopilot-run: started=2026-11-25T10:00:00-08:00 sprints=1 waves=3 -->
+<!-- autopilot-run: started=2026-11-25T10:00:00-08:00 sprints=1 waves=4 -->
 
 ## Status board
 
@@ -11,11 +11,11 @@ _From plan: pod-docs/plans/ssp-export-v2.md · Slug: ssp-workspace · Status: ac
 | 1 | W9 | SSP workspace frame: tabs, shared kit, Lint & export tab | ssp-workspace-w9 | #17 | done | af68e15 | — |
 | 1 | W10 | Assessment: planned implementation, N/A rationale, SSP status | ssp-workspace-w10 | #17 | done | af68e15 | — |
 | 1 | W11 | Dashboard: "SSP review overdue" in Needs attention | ssp-workspace-w11 | #17 | done | af68e15 | — |
-| 2 | W12 | Tab: Identification & roles | ssp-workspace-w12 | — | pending | — | W9 |
-| 2 | W13 | Tab: Environment (CUI description, narratives, diagrams) | ssp-workspace-w13 | — | pending | — | W9 |
-| 2 | W14 | Tab: Assets | ssp-workspace-w14 | — | pending | — | W9 |
-| 2 | W15 | Tab: Service providers & matrix | ssp-workspace-w15 | — | pending | — | W9 |
-| 2 | W16 | Tab: Document control | ssp-workspace-w16 | — | pending | — | W9 |
+| 2 | W12 | Tab: Identification & roles | ssp-workspace-w12 | #18 | done | b7985c4 | W9 |
+| 2 | W13 | Tab: Environment (CUI description, narratives, diagrams) | ssp-workspace-w13 | #18 | done | b7985c4 | W9 |
+| 2 | W14 | Tab: Assets | ssp-workspace-w14 | #18 | done | b7985c4 | W9 |
+| 2 | W15 | Tab: Service providers & matrix | ssp-workspace-w15 | #18 | done | b7985c4 | W9 |
+| 2 | W16 | Tab: Document control | ssp-workspace-w16 | #18 | done | b7985c4 | W9 |
 | 3 | E3 | Look spec on every tab, demo screenshots, docs | ssp-workspace-e3 | — | pending | — | W9, W10, W11, W12, W13, W14, W15, W16 |
 
 Plan branch `ssp-export-v2`; wave heads `ssp-workspace-w1`, `ssp-workspace-w2`, `ssp-workspace-w3`. Merge target `main`. Web only: no api, contract, DB or dependency change. Out of this sprint: the lint package, `GET /api/ssp/lint`, the live lint panel and export v2 (sprint `ssp-export-lint`).
