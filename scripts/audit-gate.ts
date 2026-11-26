@@ -7,7 +7,6 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pnpmCommand } from './start.ts';
 
 export interface AllowlistEntry {
   /** The advisory's GHSA id (`GHSA-xxxx-xxxx-xxxx`) or its numeric npm id. */
@@ -240,25 +239,40 @@ export function runGate(argv: string[], deps: GateDeps): number {
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** The real deps: pnpm through the same launcher scripts/start.ts uses. */
+/**
+ * How to start pnpm without a shell: the entry file pnpm set in `npm_execpath` when it launched
+ * this script, else corepack's pnpm entry next to Node (on Windows the only other pnpm is a .cmd,
+ * which needs a shell), else `pnpm` on PATH (CI, after `corepack enable`).
+ */
+export function pnpmLauncher(
+  env: NodeJS.ProcessEnv,
+  execPath: string,
+  exists: (path: string) => boolean,
+): { command: string; prefix: string[] } {
+  const entry = env.npm_execpath;
+  if (entry !== undefined && entry !== '') {
+    return /.[cm]?js$/i.test(entry)
+      ? { command: execPath, prefix: [entry] }
+      : { command: entry, prefix: [] };
+  }
+  const corepackPnpm = join(dirname(execPath), 'node_modules', 'corepack', 'dist', 'pnpm.js');
+  if (exists(corepackPnpm)) return { command: execPath, prefix: [corepackPnpm] };
+  return { command: 'pnpm', prefix: [] };
+}
+
+/** The real deps. */
 export function realDeps(): GateDeps {
-  const pnpm = pnpmCommand(process.env, process.execPath, process.platform);
+  const pnpm = pnpmLauncher(process.env, process.execPath, existsSync);
   return {
     runAudit: (dir, args) => {
-      const words = [pnpm.command, ...pnpm.prefix, ...args];
-      // With a shell, Node wants one command line; every word here is fixed, so no quoting.
-      const child = pnpm.shell
-        ? spawnSync(words.join(' '), {
-            cwd: dir,
-            shell: true,
-            encoding: 'utf8',
-            maxBuffer: 1 << 26,
-          })
-        : spawnSync(words[0] ?? 'pnpm', words.slice(1), {
-            cwd: dir,
-            encoding: 'utf8',
-            maxBuffer: 1 << 26,
-          });
+      const child = spawnSync(pnpm.command, [...pnpm.prefix, ...args], {
+        cwd: dir,
+        encoding: 'utf8',
+        maxBuffer: 1 << 26,
+      });
+      if (child.error !== undefined)
+        process.stderr.write(`${child.error.message}
+`);
       if (child.stderr !== '') process.stderr.write(child.stderr);
       return { stdout: child.stdout, status: child.status };
     },

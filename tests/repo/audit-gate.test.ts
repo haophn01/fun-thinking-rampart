@@ -6,6 +6,7 @@ import {
   evaluateAudit,
   gateExitCode,
   parseGateArgs,
+  pnpmLauncher,
   runGate,
   type AllowlistEntry,
   type AuditRun,
@@ -219,6 +220,27 @@ describe('audit gate', () => {
     expect(fixture.recorded.runs[0]?.args).toContain('--ignore-workspace');
     // Findings are printed so the CI log says what failed.
     expect(fixture.recorded.logs.join('\n')).toContain('GHSA-35jh-r3h4-6jhm');
+  });
+
+  it('launches pnpm without a shell', () => {
+    const node = join('opt', 'node', 'node.exe');
+    // Started through pnpm: that pnpm's entry file, run by this Node.
+    expect(pnpmLauncher({ npm_execpath: 'C:\\corepack\\pnpm.cjs' }, node, () => false)).toEqual({
+      command: node,
+      prefix: ['C:\\corepack\\pnpm.cjs'],
+    });
+    // Plain `node scripts/audit-gate.ts`: corepack's pnpm entry next to Node, so Windows needs
+    // neither the .cmd shim nor a shell.
+    const corepackPnpm = join('opt', 'node', 'node_modules', 'corepack', 'dist', 'pnpm.js');
+    expect(pnpmLauncher({}, node, (path) => path === corepackPnpm)).toEqual({
+      command: node,
+      prefix: [corepackPnpm],
+    });
+    // Neither: pnpm on PATH, as in CI after `corepack enable`.
+    expect(pnpmLauncher({ npm_execpath: '' }, node, () => false)).toEqual({
+      command: 'pnpm',
+      prefix: [],
+    });
   });
 
   it('the vulnerable fixture pins a version with a known high advisory', () => {
