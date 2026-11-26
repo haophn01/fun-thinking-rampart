@@ -1,14 +1,23 @@
 import { loadCatalog } from '@rampart/catalog';
+import { SSP_LINT_VERSION, lintSspFrom, type SspLintFinding } from '@rampart/rules';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { embedCandidates, exportSsp, type SspSource } from '../../ssp';
 import type { AppDb } from '../../db/client';
 import type { FileStore } from '../../storage';
 import { readView } from '../assessment/repository';
-import { SSP_CONTENT_TYPE, SSP_MAX_EMBEDDED_IMAGES, type DiagramLink } from '../contract';
+import {
+  SSP_CONTENT_TYPE,
+  SSP_LARGE_IMAGE_BYTES,
+  SSP_MAX_EMBEDDED_IMAGES,
+  sspLintResponseSchema,
+  type DiagramLink,
+  type SspLintResponse,
+} from '../contract';
 import { AppError } from '../errors';
 import { listEvidence, readFileVersion } from '../evidence/repository';
 import { readPoamView } from '../poam/repository';
 import { listPolicies } from '../policies/repository';
+import { respond } from '../respond';
 import type { ApiDeps } from '../routes';
 import { loadAssets } from '../ssp-data/assets/repository';
 import { loadDiagramLinks } from '../ssp-data/diagrams/repository';
@@ -19,6 +28,33 @@ import { loadResponsibilityMatrix } from '../ssp-data/responsibilities/repositor
 import { loadSystemRoles, roleTotals } from '../ssp-data/roles/repository';
 import { loadSystemProfile } from '../system-profile/repository';
 import { attachmentDisposition } from '../uploads/upload';
+
+/**
+ * The pre-export check, `GET /api/ssp/lint`: the rules over the same reads the web makes. The
+ * reads run in one synchronous pass; `readView` throws `not_found` first with no assessment.
+ */
+export function readSspLint(db: AppDb, now: Date): SspLintResponse {
+  const view = readView(db, now);
+  const assessmentId = view.assessment.id;
+  const findings: SspLintFinding[] = lintSspFrom(
+    loadCatalog(),
+    {
+      view,
+      assets: loadAssets(db, assessmentId),
+      diagrams: loadDiagramLinks(db, assessmentId),
+      review: loadDocumentControl(db, now),
+    },
+    { maxEmbeddedImages: SSP_MAX_EMBEDDED_IMAGES, largeImageBytes: SSP_LARGE_IMAGE_BYTES },
+  );
+  return {
+    version: SSP_LINT_VERSION,
+    findings,
+    counts: {
+      errors: findings.filter((f) => f.severity === 'error').length,
+      warnings: findings.filter((f) => f.severity === 'warning').length,
+    },
+  };
+}
 
 /** The SSP's sources apart from the image bytes, which are read after them. */
 type SspRecords = Omit<SspSource, 'images'>;
@@ -86,6 +122,8 @@ async function readImages(
  * records no audit event. Called inside the guarded api plugin, so the guard's hooks apply.
  */
 export function registerSspRoutes(api: FastifyInstance, deps: ApiDeps): void {
+  api.get('/api/ssp/lint', () => respond(sspLintResponseSchema, readSspLint(deps.db, deps.now())));
+
   api.get('/api/ssp/export', async (request, reply) => {
     const now = deps.now();
     const records = readSspRecords(deps.db, now);
