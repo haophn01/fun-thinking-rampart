@@ -105,7 +105,7 @@ function Group({ rule, findings }: { rule: SspLintRule; findings: readonly SspLi
 function Results({ findings }: { findings: readonly SspLintFinding[] }) {
   return (
     <>
-      <p className={styles.summary}>
+      <p className={styles.summary} aria-live="polite">
         {findings.length === 0 ? 'No findings. Every check passes.' : summarize(findings)}
       </p>
       {SSP_LINT_RULES.map((rule) => {
