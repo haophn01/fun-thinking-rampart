@@ -25,8 +25,29 @@ interface Workflow {
 
 const workflowPath = join(import.meta.dirname, '..', '..', '.github', 'workflows', 'pod-ci.yml');
 
+function workflowText(): string {
+  return readFileSync(workflowPath, 'utf8');
+}
+
 function loadWorkflow(): Workflow {
-  return parse(readFileSync(workflowPath, 'utf8')) as Workflow;
+  return parse(workflowText()) as Workflow;
+}
+
+/**
+ * A pinned `uses:` line names an action by a full 40-hex commit SHA, followed by a
+ * `# v<version>` comment saying which release that commit is. A tag or a branch can be moved to
+ * other code after review; a commit SHA can't.
+ */
+const PINNED_USES =
+  /^\s*(?:-\s+)?uses:\s*[\w.-]+\/[\w./-]+@[0-9a-f]{40}\s+#\s*v\d+(?:\.\d+)*\s*$/;
+
+function isPinnedUsesLine(line: string): boolean {
+  return PINNED_USES.test(line);
+}
+
+/** Every raw `uses:` line in the workflow (comments are lost once the YAML is parsed). */
+function usesLines(text: string): string[] {
+  return text.split(/\r?\n/).filter((line) => /^\s*(?:-\s+)?uses:/.test(line));
 }
 
 function job(name: string): Job {
@@ -41,6 +62,38 @@ function actions(steps: Step[] | undefined): string[] {
 }
 
 describe('pod-ci workflow', () => {
+  it('every action is pinned to a commit SHA', () => {
+    // The check itself: a tag, a branch, a short SHA, a local path or a missing or non-version
+    // comment fails.
+    for (const bad of [
+      'uses: actions/checkout@v5',
+      'uses: actions/checkout@main',
+      'uses: actions/checkout@v5.1.0 # v5.1.0',
+      'uses: actions/checkout@fbc6f39 # v5.1.0',
+      'uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09',
+      'uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # main',
+      'uses: ./local-action',
+    ]) {
+      expect(isPinnedUsesLine(bad), bad).toBe(false);
+    }
+    expect(
+      isPinnedUsesLine(
+        '      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0',
+      ),
+    ).toBe(true);
+
+    const lines = usesLines(workflowText());
+    // Every step with `uses` is its own `uses:` line, so none escapes the line check.
+    const parsedUses = Object.values(loadWorkflow().jobs ?? {}).flatMap((found) =>
+      (found.steps ?? []).filter((step) => step.uses !== undefined),
+    );
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines).toHaveLength(parsedUses.length);
+    for (const line of lines) {
+      expect(isPinnedUsesLine(line), line.trim()).toBe(true);
+    }
+  });
+
   it('triggers on pull_request and push to main', () => {
     const workflow = loadWorkflow();
     expect(workflow.on).toHaveProperty('pull_request');
@@ -110,13 +163,17 @@ describe('pod-ci workflow', () => {
     expect(upload?.with?.path).toEqual(expect.stringContaining('playwright-report'));
   });
 
-  it('secrets job runs gitleaks v2 with fetch-depth 0', () => {
+  it('secrets job runs gitleaks with fetch-depth 0', () => {
     const secrets = job('secrets');
     expect(secrets['runs-on']).toBe('ubuntu-latest');
     expect(actions(secrets.steps)).toEqual(['actions/checkout', 'gitleaks/gitleaks-action']);
     const [checkout, gitleaks] = secrets.steps ?? [];
     expect(checkout?.with?.['fetch-depth']).toBe(0);
-    expect(gitleaks?.uses).toBe('gitleaks/gitleaks-action@v2');
+    // Still v2, now pinned by the commit of a v2 release.
+    const gitleaksLine = usesLines(workflowText()).find((line) =>
+      line.includes('gitleaks/gitleaks-action@'),
+    );
+    expect(gitleaksLine).toMatch(/gitleaks\/gitleaks-action@[0-9a-f]{40}\s+#\s*v2\./);
     expect(gitleaks?.env?.GITHUB_TOKEN).toBe('${{ secrets.GITHUB_TOKEN }}');
   });
 });
