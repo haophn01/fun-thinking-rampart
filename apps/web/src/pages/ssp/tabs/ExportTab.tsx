@@ -1,10 +1,17 @@
-import { assessmentViewSchema, type AssessmentView } from '@rampart/api/contract';
+import {
+  assessmentViewSchema,
+  assetsResponseSchema,
+  diagramsResponseSchema,
+  documentControlSchema,
+  type AssessmentView,
+} from '@rampart/api/contract';
 import { loadCatalog } from '@rampart/catalog';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { Alert, StatusChip } from '../../../look';
+import { StatusChip } from '../../../look';
 import { LoadError, Section, useLoad } from '../kit';
 import styles from '../ssp.module.css';
+import { LintPanel } from './LintPanel';
 
 const TOTAL_REQUIREMENTS = loadCatalog().requirements.length;
 /** The SSP requirement: no SPRS score without it. */
@@ -40,6 +47,9 @@ function Readiness({ view }: { view: AssessmentView }) {
 /** Lint & export: how ready the plan is, and the .docx export. */
 export function ExportTab() {
   const assessment = useLoad('/api/assessment', assessmentViewSchema);
+  const assets = useLoad('/api/ssp/assets', assetsResponseSchema);
+  const diagrams = useLoad('/api/ssp/diagrams', diagramsResponseSchema);
+  const control = useLoad('/api/ssp/document-control', documentControlSchema);
 
   let readiness: ReactNode;
   if (assessment.data !== null) {
@@ -62,8 +72,11 @@ export function ExportTab() {
       <Section number={1} title="Readiness">
         {readiness}
       </Section>
-      <Section number={2} title="Export">
-        <Alert tone="info">The pre-export check comes in a later release.</Alert>
+      <LintPanel loads={{ view: assessment, assets, diagrams, control }} />
+      <Section number={3} title="Export">
+        <p className={styles.muted}>
+          Findings don&apos;t block the export. Fix them first, or export as is.
+        </p>
         <a className={styles.export} href="/api/ssp/export" download>
           Export SSP (.docx)
         </a>
