@@ -1,21 +1,29 @@
 import type { LightMyRequestResponse } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
-import { SSP_OUTLINE } from '../../ssp';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SSP_OUTLINE, exportSsp } from '../../ssp';
 import { docxMedia, docxText, pngOf } from '../../ssp/testing/docx-text';
 import { createMemoryStore, type MemoryFileStore } from '../../storage';
 import {
   SSP_CONTENT_TYPE,
   SSP_MAX_EMBEDDED_IMAGES,
   diagramResponseSchema,
+  documentControlSchema,
   errorEnvelopeSchema,
   evidenceItemResponseSchema,
   sspFileName,
   userResponseSchema,
   type DiagramLink,
   type EvidenceItem,
+  type SspRevision,
 } from '../contract';
-import { createHarness, type Client, type Harness } from '../testing/harness';
+import { ADMIN, createHarness, type Client, type Harness } from '../testing/harness';
 import { attachmentDisposition } from '../uploads/upload';
+
+// The real export, wrapped so one test can make the render fail: no stored data makes it throw.
+vi.mock('../../ssp', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../ssp')>();
+  return { ...real, exportSsp: vi.fn(real.exportSsp) };
+});
 
 const URL = '/api/ssp/export';
 // Late evening in California is already the next day in UTC: the file is dated by UTC.
@@ -32,6 +40,7 @@ const CONTRIBUTOR = {
 const harnesses: Harness[] = [];
 afterEach(async () => {
   for (const h of harnesses.splice(0)) await h.close();
+  vi.mocked(exportSsp).mockClear();
 });
 
 /** A memory store that records the SHA-256 of every file the app asks it for. */
@@ -50,8 +59,11 @@ function spyStore(): { store: MemoryFileStore; reads: string[] } {
   };
 }
 
-async function world(store?: MemoryFileStore): Promise<{ h: Harness; admin: Client }> {
-  const h = createHarness({ start: START, ...(store ? { store } : {}) });
+async function world(
+  store?: MemoryFileStore,
+  start = START,
+): Promise<{ h: Harness; admin: Client }> {
+  const h = createHarness({ start, ...(store ? { store } : {}) });
   harnesses.push(h);
   const admin = await h.setupAdmin();
   return { h, admin };
@@ -124,6 +136,39 @@ async function exported(client: Client): Promise<{ lines: string[]; bytes: Uint8
   const response = ok(await client.get(URL));
   const bytes = new Uint8Array(response.rawPayload);
   return { bytes, lines: docxText(bytes).split('\n') };
+}
+
+/** The stored revisions, through the route the web reads. */
+async function revisionsOf(client: Client): Promise<SspRevision[]> {
+  return documentControlSchema.parse(ok(await client.get('/api/ssp/document-control')).json())
+    .revisions;
+}
+
+interface RevisionEvent {
+  action: string;
+  entityId: string;
+  after: unknown;
+}
+
+function revisionEvents(h: Harness): RevisionEvent[] {
+  const rows = h.handle.sqlite
+    .prepare(
+      `select action, entity_id as entityId, after from audit_event
+       where entity_type = 'ssp_revision' order by id`,
+    )
+    .all() as { action: string; entityId: string; after: string }[];
+  return rows.map((row) => ({ ...row, after: JSON.parse(row.after) as unknown }));
+}
+
+/** The rows of the record-of-changes table, as [date, description, made by]. */
+function changeRows(lines: readonly string[]): string[][] {
+  const section = lines.slice(lines.indexOf('4. Record of changes'), lines.indexOf('Approvals'));
+  const header = section.indexOf('Date');
+  expect(section.slice(header, header + 3)).toEqual(['Date', 'Description', 'Made by']);
+  const cells = section.slice(header + 3);
+  const rows: string[][] = [];
+  for (let i = 0; i < cells.length; i += 3) rows.push(cells.slice(i, i + 3));
+  return rows;
 }
 
 /** Each heading of the outline appears once, in order. */
@@ -306,38 +351,123 @@ describe('GET /api/ssp/export', () => {
     ).toHaveLength(1);
   });
 
-  it('access and no side effects', async () => {
+  it('export records a revision', async () => {
+    // Just before UTC midnight: still the 25th in UTC, mid-afternoon in California.
+    const { h, admin } = await world(undefined, new Date(`${TODAY}T23:59:00.000Z`));
+    ok(await admin.patch('/api/system-profile', { systemIdentifier: 'ENCLAVE-01' }));
+    h.clock.set(new Date(`${TODAY}T23:59:59.999Z`));
+    const fileName = sspFileName('ENCLAVE-01', TODAY);
+    const eventsBefore = revisionEvents(h).length;
+
+    const response = ok(await admin.get(URL));
+    expect(response.headers['content-disposition']).toBe(attachmentDisposition(fileName));
+
+    const revisions = await revisionsOf(admin);
+    expect(revisions).toHaveLength(1);
+    const [revision] = revisions;
+    expect(revision).toMatchObject({
+      kind: 'export',
+      date: TODAY,
+      description: `Exported as ${fileName}`,
+      madeBy: ADMIN.displayName,
+      createdAt: `${TODAY}T23:59:59.999Z`,
+    });
+    expect(revisionEvents(h).slice(eventsBefore)).toEqual([
+      {
+        action: 'ssp_revision.created',
+        entityId: revision?.id,
+        after: {
+          kind: 'export',
+          date: TODAY,
+          description: `Exported as ${fileName}`,
+          madeBy: ADMIN.displayName,
+        },
+      },
+    ]);
+
+    // The record of changes the file prints ends with the entry that was stored.
+    const lines = docxText(new Uint8Array(response.rawPayload)).split('\n');
+    expect(changeRows(lines)).toEqual([[TODAY, `Exported as ${fileName}`, ADMIN.displayName]]);
+    expect(lines).not.toContain('No changes recorded.');
+  });
+
+  it('repeats and roles', async () => {
+    const { h, admin } = await world();
+    ok(
+      await admin.post('/api/ssp/revisions', {
+        date: '2026-11-01',
+        description: 'First draft',
+        madeBy: 'Pat Owner',
+      }),
+      201,
+    );
+    const created = userResponseSchema.parse((await admin.post('/api/users', CONTRIBUTOR)).json());
+    expect(created.user.role).toBe('contributor');
+    const carl = await h.signIn(CONTRIBUTOR.email, CONTRIBUTOR.password);
+    // No identifier saved: the file is named for the system.
+    const fileName = `SSP-system-${TODAY}.docx`;
+    const entry = (madeBy: string) => [TODAY, `Exported as ${fileName}`, madeBy];
+    const draft = ['2026-11-01', 'First draft', 'Pat Owner'];
+
+    const first = await exported(admin);
+    expect(changeRows(first.lines)).toEqual([draft, entry(ADMIN.displayName)]);
+    h.clock.advance(1000);
+    const second = await exported(admin);
+    expect(changeRows(second.lines)).toEqual([
+      draft,
+      entry(ADMIN.displayName),
+      entry(ADMIN.displayName),
+    ]);
+    h.clock.advance(1000);
+    // A contributor's export is made by the contributor.
+    const third = await exported(carl);
+    expect(changeRows(third.lines).at(-1)).toEqual(entry(CONTRIBUTOR.displayName));
+
+    const revisions = await revisionsOf(admin);
+    expect(revisions.map((r) => [r.kind, r.date, r.description, r.madeBy])).toEqual([
+      ['manual', ...draft],
+      ['export', ...entry(ADMIN.displayName)],
+      ['export', ...entry(ADMIN.displayName)],
+      ['export', ...entry(CONTRIBUTOR.displayName)],
+    ]);
+    // Each write added exactly one event, for its own entry.
+    expect(revisionEvents(h).map((e) => e.entityId)).toEqual(revisions.map((r) => r.id));
+    // The printed table is what the api stores, row for row.
+    expect(changeRows(third.lines)).toEqual(
+      revisions.map((r) => [r.date, r.description, r.madeBy]),
+    );
+  });
+
+  it('failures write nothing', async () => {
     const { h, admin } = await world();
     ok(await admin.patch('/api/system-profile', { systemName: 'Enclave One' }));
+    const png = await fileItem(admin, 'Network map', pngOf(10, 10), 'network.png');
+    await link(admin, png, 'network', 'Boundary');
+    const before = snapshot(h);
 
     // Signed out.
     const signedOut = await h.client().get(URL);
     expect(signedOut.statusCode).toBe(401);
     expect(code(signedOut)).toBe('unauthenticated');
-
-    // A contributor exports, and the export writes nothing and audits nothing.
-    const created = userResponseSchema.parse((await admin.post('/api/users', CONTRIBUTOR)).json());
-    expect(created.user.role).toBe('contributor');
-    const carl = await h.signIn(CONTRIBUTOR.email, CONTRIBUTOR.password);
-    const png = await fileItem(admin, 'Network map', pngOf(10, 10), 'network.png');
-    await link(admin, png, 'network', 'Boundary');
-    const before = snapshot(h);
-    const response = ok(await carl.get(URL));
-    expect(response.headers['content-type']).toBe(SSP_CONTENT_TYPE);
-    // No identifier saved: the file is named for the system.
-    expect(response.headers['content-disposition']).toBe(
-      attachmentDisposition(`SSP-system-${TODAY}.docx`),
-    );
-    const { lines } = await exported(admin);
-    expect(lines).toContain('No changes recorded.');
     expect(snapshot(h)).toEqual(before);
 
-    // No assessment: 404.
+    // The render throws: 500, and no revision or event.
+    vi.mocked(exportSsp).mockRejectedValueOnce(new Error('render failed'));
+    const failed = await admin.get(URL);
+    expect(failed.statusCode).toBe(500);
+    expect(code(failed)).toBe('internal_error');
+    expect(vi.mocked(exportSsp)).toHaveBeenCalledTimes(1);
+    expect(snapshot(h)).toEqual(before);
+    expect(await revisionsOf(admin)).toEqual([]);
+
+    // No assessment: 404, and nothing written.
     h.handle.sqlite.pragma('foreign_keys = OFF');
     h.handle.sqlite.exec('DELETE FROM assessment');
     h.handle.sqlite.pragma('foreign_keys = ON');
+    const emptied = snapshot(h);
     const missing = await admin.get(URL);
     expect(missing.statusCode).toBe(404);
     expect(code(missing)).toBe('not_found');
+    expect(snapshot(h)).toEqual(emptied);
   });
 });

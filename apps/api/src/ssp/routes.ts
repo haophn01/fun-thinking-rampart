@@ -1,7 +1,14 @@
 import { loadCatalog } from '@rampart/catalog';
 import { SSP_LINT_VERSION, lintSspFrom, type SspLintFinding } from '@rampart/rules';
-import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
-import { embedCandidates, exportSsp, type SspSource } from '../../ssp';
+import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
+import {
+  embedCandidates,
+  exportRevisionDescription,
+  exportSsp,
+  type SspExport,
+  type SspExportEntry,
+  type SspSource,
+} from '../../ssp';
 import type { AppDb } from '../../db/client';
 import type { FileStore } from '../../storage';
 import { readView } from '../assessment/repository';
@@ -9,6 +16,7 @@ import {
   SSP_CONTENT_TYPE,
   SSP_LARGE_IMAGE_BYTES,
   SSP_MAX_EMBEDDED_IMAGES,
+  sspFileName,
   sspLintResponseSchema,
   type DiagramLink,
   type SspLintResponse,
@@ -20,8 +28,9 @@ import { listPolicies } from '../policies/repository';
 import { respond } from '../respond';
 import type { ApiDeps } from '../routes';
 import { loadAssets } from '../ssp-data/assets/repository';
+import { actorOf, utcDate } from '../ssp-data/common';
 import { loadDiagramLinks } from '../ssp-data/diagrams/repository';
-import { loadDocumentControl } from '../ssp-data/document-control/repository';
+import { appendExportRevision, loadDocumentControl } from '../ssp-data/document-control/repository';
 import { loadSspProfile } from '../ssp-data/profile/repository';
 import { loadProviders } from '../ssp-data/providers/repository';
 import { loadResponsibilityMatrix } from '../ssp-data/responsibilities/repository';
@@ -56,8 +65,8 @@ export function readSspLint(db: AppDb, now: Date): SspLintResponse {
   };
 }
 
-/** The SSP's sources apart from the image bytes, which are read after them. */
-type SspRecords = Omit<SspSource, 'images'>;
+/** The SSP's sources apart from the image bytes and this export's entry, read after them. */
+type SspRecords = Omit<SspSource, 'images' | 'exportEntry'>;
 
 /**
  * What the SSP is built from, through the same reads the other routes answer with. They run in
@@ -84,7 +93,6 @@ function readSspRecords(db: AppDb, now: Date): SspRecords {
     diagrams: loadDiagramLinks(db, assessmentId),
     documentControl: loadDocumentControl(db, now),
     maxEmbeddedImages: SSP_MAX_EMBEDDED_IMAGES,
-    exportEntry: null,
   };
 }
 
@@ -118,17 +126,55 @@ async function readImages(
 }
 
 /**
- * The SSP export, `GET /api/ssp/export`: any signed-in user downloads it. It writes nothing and
- * records no audit event. Called inside the guarded api plugin, so the guard's hooks apply.
+ * This export's own record-of-changes entry, as the file prints it and the api then stores it:
+ * dated the UTC day of `now`, described by the file name, made by the exporter.
+ */
+function exportEntryOf(
+  profile: SspRecords['profile'],
+  now: Date,
+  madeBy: string,
+): SspExportEntry {
+  const date = utcDate(now);
+  return {
+    date,
+    description: exportRevisionDescription(sspFileName(profile.systemIdentifier, date)),
+    madeBy,
+  };
+}
+
+/**
+ * Builds the SSP and records it: read the sources and images, render with this export's entry,
+ * and only after the render succeeds append that entry (and its `ssp_revision.created` event) in
+ * one transaction. A failed read or render throws before anything is written.
+ */
+async function exportAndRecord(request: FastifyRequest, deps: ApiDeps): Promise<SspExport> {
+  const actor = actorOf(request, deps);
+  const madeBy = request.auth?.user.displayName ?? '';
+  const records = readSspRecords(deps.db, actor.now);
+  const images = await readImages(deps.db, deps.store, records.diagrams, request.log);
+  const exportEntry = exportEntryOf(records.profile, actor.now, madeBy);
+  const result = await exportSsp({ ...records, images, exportEntry }, actor.now);
+  deps.db.transaction((tx) => {
+    appendExportRevision(tx, {
+      assessmentId: records.view.assessment.id,
+      actor,
+      description: exportEntry.description,
+    });
+  });
+  return result;
+}
+
+/**
+ * The SSP export, `GET /api/ssp/export`: any signed-in user downloads it, and each download
+ * appends one export entry to the record of changes. The session cookie is `SameSite=Strict`, so
+ * a cross-site GET carries no session and can't add one. Called inside the guarded api plugin,
+ * so the guard's hooks apply.
  */
 export function registerSspRoutes(api: FastifyInstance, deps: ApiDeps): void {
   api.get('/api/ssp/lint', () => respond(sspLintResponseSchema, readSspLint(deps.db, deps.now())));
 
   api.get('/api/ssp/export', async (request, reply) => {
-    const now = deps.now();
-    const records = readSspRecords(deps.db, now);
-    const images = await readImages(deps.db, deps.store, records.diagrams, request.log);
-    const { fileName, bytes } = await exportSsp({ ...records, images }, now);
+    const { fileName, bytes } = await exportAndRecord(request, deps);
     const body = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return reply
       .code(200)
