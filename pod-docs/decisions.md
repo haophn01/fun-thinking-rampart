@@ -48,3 +48,9 @@ Consequences: an admin can sign themself out with one click. Adding a confirm di
 Context: the plan review found that POA&M due dates, the 180-day clock and the closeout checks use the UTC calendar date. For a US user after about 4–5 pm local time, they read one day ahead.
 Decision: keep UTC days, as `contract/poam.ts` documents.
 Consequences: near the end of the US day, countdowns and "due today" can be off by one. Fixing it needs the user's time zone (a setting, or the browser's offset sent with requests).
+
+## 2026-11-25 — SSP workspace tab keys and categorization reset (agent default)
+
+- **Tab history:** clicking an SSP tab pushes a history entry, and clicking the selected tab adds none. Arrow, Home and End keys **replace** the `?tab=` entry, so Back doesn't step through every tab the keys passed.
+- **Categorization reset:** clearing the categorization when it already holds the default counts as no change, so Save stays disabled. This follows the API's effective-value rule; the default is stored as null.
+- **Why:** these match the WAI-ARIA tabs pattern and the API's rules. Raised as PENDING by W9 (plan `ssp-export-v2`, sprint `ssp-workspace`) and taken as defaults by the orchestrator. The human can change them.
