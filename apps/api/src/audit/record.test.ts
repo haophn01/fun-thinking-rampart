@@ -79,6 +79,8 @@ describe('recordAudit', () => {
           before: null,
           after: '{"email":"admin@example.com","role":"admin","active":true}',
           requestId: 'req-1',
+          prevHash: null,
+          hash: null,
         },
       ]);
 
