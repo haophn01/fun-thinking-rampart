@@ -2,12 +2,12 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { AppDb } from '../../db/client';
 import { session, user } from '../../db/schema';
-import type { SessionUser } from '../contract';
+import { SESSION_ABSOLUTE_LIMIT_MS, SESSION_IDLE_LIMIT_MS, type SessionUser } from '../contract';
 
-/** A session ends 2 h after its last request. */
-export const IDLE_LIMIT_MS = 2 * 60 * 60 * 1000;
-/** A session ends 12 h after sign-in, however busy. */
-export const ABSOLUTE_LIMIT_MS = 12 * 60 * 60 * 1000;
+/** A session ends 30 min after its last unlocked request. */
+export const IDLE_LIMIT_MS = SESSION_IDLE_LIMIT_MS;
+/** A session ends 8 h after sign-in, however busy. */
+export const ABSOLUTE_LIMIT_MS = SESSION_ABSOLUTE_LIMIT_MS;
 /** The cookie's Max-Age, equal to the absolute limit. */
 export const SESSION_MAX_AGE_SECONDS = ABSOLUTE_LIMIT_MS / 1000;
 

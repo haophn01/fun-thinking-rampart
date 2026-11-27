@@ -49,7 +49,7 @@ describe('first run setup', () => {
     expect(body.csrfToken).toEqual(expect.any(String));
 
     const cookie = response.cookies.find((item) => item.name === 'rampart_session');
-    expect(cookie).toMatchObject({ httpOnly: true, sameSite: 'Strict', path: '/', maxAge: 43200 });
+    expect(cookie).toMatchObject({ httpOnly: true, sameSite: 'Strict', path: '/', maxAge: 28800 });
     expect(String(response.headers['set-cookie'])).not.toMatch(/secure/i);
 
     const users = h.db.select().from(user).all();
