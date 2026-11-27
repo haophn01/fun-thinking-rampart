@@ -2,14 +2,18 @@
 // Pure: no DB, no config, no clock of its own (callers pass `at`). Replay protection is the
 // caller's: `matchTotp` returns the step it matched so the caller can refuse a step it has seen.
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import {
+  TOTP_DIGITS,
+  TOTP_PERIOD_SECONDS,
+  TOTP_SECRET_BYTES,
+  TOTP_WINDOW_STEPS,
+} from '../../contract/mfa';
 import { base32Encode } from './base32';
 
-// The contract's values (sprint sec-mfa, `contract/mfa.ts`): TOTP_DIGITS, TOTP_PERIOD_SECONDS,
-// TOTP_WINDOW_STEPS, TOTP_SECRET_BYTES.
-const DIGITS = 6;
-const PERIOD_SECONDS = 30;
-const WINDOW_STEPS = 1;
-const SECRET_BYTES = 20;
+const DIGITS = TOTP_DIGITS;
+const PERIOD_SECONDS = TOTP_PERIOD_SECONDS;
+const WINDOW_STEPS = TOTP_WINDOW_STEPS;
+const SECRET_BYTES = TOTP_SECRET_BYTES;
 
 /** RFC 4226: HMAC-SHA1 of the 8-byte big-endian counter, dynamic truncation, zero-padded. */
 export function hotp(secret: Uint8Array, counter: number, digits = DIGITS): string {

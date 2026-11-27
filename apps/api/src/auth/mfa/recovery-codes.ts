@@ -1,11 +1,10 @@
 // Recovery codes: 10 one-time codes shown once at enrollment, `xxxxx-xxxxx` from Crockford base32
 // (lowercase, without i, l, o or u). Stored only as an HMAC under the derived recovery-code key.
 import { createHmac, randomBytes } from 'node:crypto';
+import { RECOVERY_CODE_ALPHABET, RECOVERY_CODE_COUNT } from '../../contract/mfa';
 
-/** The contract's RECOVERY_CODE_ALPHABET (sprint sec-mfa, `contract/mfa.ts`). */
-export const RECOVERY_CODE_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
-/** The contract's RECOVERY_CODE_COUNT. */
-const CODE_COUNT = 10;
+export { RECOVERY_CODE_ALPHABET };
+const CODE_COUNT = RECOVERY_CODE_COUNT;
 const HALF_LENGTH = 5;
 const CODE_LENGTH = HALF_LENGTH * 2;
 /** The contract's recoveryCodeInputSchema takes at most this many characters before normalizing. */
