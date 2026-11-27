@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { AppDb } from '../../db/client';
 import { auditEvent } from '../../db/schema';
+import { auditHash, latestAuditHash } from './chain';
 
 /** One change to record. `before` and `after` hold only the fields that changed. */
 export interface AuditEventInput {
@@ -21,8 +22,8 @@ export interface AuditEventInput {
   requestId?: string | null;
 }
 
-/** The app's database or a transaction from `db.transaction(...)`. */
-export type AuditWriter = Pick<AppDb, 'insert'>;
+/** The app's database or a transaction from `db.transaction(...)`. It reads the chain's newest hash. */
+export type AuditWriter = Pick<AppDb, 'insert' | 'select'>;
 
 /** Keys removed from `before` and `after` at any depth, so secrets never reach the audit log. */
 export const SECRET_KEYS: ReadonlySet<string> = new Set([
@@ -38,6 +39,8 @@ export const SECRET_KEYS: ReadonlySet<string> = new Set([
 /**
  * Appends one audit event and returns its id. Pass the caller's transaction so the event and
  * the change commit or roll back together; an insert failure throws, which rolls both back.
+ * The event joins the hash chain: `prev_hash` is the newest hashed event's hash (null for the
+ * first), read in the same transaction, and `hash` is `auditHash` of the stored values.
  *
  * Returns null and writes nothing when `before` and `after` are both set and deep-equal (as JSON:
  * key order and undefined keys don't count), so repeating a write is free. An event where both
@@ -50,19 +53,21 @@ export function recordAudit(db: AuditWriter, event: AuditEventInput): number | n
   const after = toJson(event.after);
   if (before !== null && after !== null && isDeepStrictEqual(before, after)) return null;
 
+  const fields = {
+    prevHash: latestAuditHash(db),
+    at,
+    actorUserId: event.actorUserId,
+    assessmentId: event.assessmentId ?? null,
+    action: event.action,
+    entityType: event.entityType,
+    entityId: event.entityId,
+    before: before === null ? null : JSON.stringify(stripSecrets(before)),
+    after: after === null ? null : JSON.stringify(stripSecrets(after)),
+    requestId: event.requestId ?? null,
+  };
   const result = db
     .insert(auditEvent)
-    .values({
-      at,
-      actorUserId: event.actorUserId,
-      assessmentId: event.assessmentId ?? null,
-      action: event.action,
-      entityType: event.entityType,
-      entityId: event.entityId,
-      before: before === null ? null : JSON.stringify(stripSecrets(before)),
-      after: after === null ? null : JSON.stringify(stripSecrets(after)),
-      requestId: event.requestId ?? null,
-    })
+    .values({ ...fields, hash: auditHash(fields) })
     .run();
   return Number(result.lastInsertRowid);
 }
