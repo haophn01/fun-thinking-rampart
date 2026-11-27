@@ -172,7 +172,7 @@ describe('UsersPanel', () => {
     await user.type(within(form()).getByLabelText('Email'), 'Lee@Example.com');
     await user.type(within(form()).getByLabelText('Display name'), 'Lee');
     await user.selectOptions(within(form()).getByLabelText('Role'), 'admin');
-    await user.type(within(form()).getByLabelText('Password'), 'a long password');
+    await user.type(within(form()).getByLabelText('Temporary password'), 'a long password');
     await user.click(within(form()).getByRole('button', { name: 'Add user' }));
     expect(await screen.findByRole('listitem', { name: 'Lee' })).toBeInTheDocument();
     const [create] = api.sent('POST /api/users');
@@ -184,13 +184,13 @@ describe('UsersPanel', () => {
     });
     expect(create?.headers.get('x-csrf-token')).toBe('csrf-1');
     expect(within(form()).getByLabelText('Email')).toHaveValue('');
-    expect(within(form()).getByLabelText('Password')).toHaveValue('');
+    expect(within(form()).getByLabelText('Temporary password')).toHaveValue('');
     expect(screen.getByRole('status')).toHaveTextContent('Added Lee.');
 
     // A second add clears the old notice before it shows its own error.
     await user.type(within(form()).getByLabelText('Email'), 'lee@example.com');
     await user.type(within(form()).getByLabelText('Display name'), 'Lee Again');
-    await user.type(within(form()).getByLabelText('Password'), 'a long password');
+    await user.type(within(form()).getByLabelText('Temporary password'), 'a long password');
     await user.click(within(form()).getByRole('button', { name: 'Add user' }));
     expect(await within(form()).findByText('That email is already in use.')).toBeInTheDocument();
     expect(screen.queryByText('Added Lee.')).not.toBeInTheDocument();
@@ -234,15 +234,15 @@ describe('UsersPanel', () => {
 
     await user.type(within(form()).getByLabelText('Email'), 'kim@example.com');
     await user.type(within(form()).getByLabelText('Display name'), 'Kim Two');
-    await user.type(within(form()).getByLabelText('Password'), 'short');
+    await user.type(within(form()).getByLabelText('Temporary password'), 'short');
     await user.click(within(form()).getByRole('button', { name: 'Add user' }));
-    expect(within(form()).getByLabelText('Password')).toHaveAccessibleDescription(
+    expect(within(form()).getByLabelText('Temporary password')).toHaveAccessibleDescription(
       'Use 12 to 128 characters.',
     );
     expect(api.sent('POST /api/users')).toHaveLength(0);
 
-    await user.clear(within(form()).getByLabelText('Password'));
-    await user.type(within(form()).getByLabelText('Password'), 'a long password');
+    await user.clear(within(form()).getByLabelText('Temporary password'));
+    await user.type(within(form()).getByLabelText('Temporary password'), 'a long password');
     await user.click(within(form()).getByRole('button', { name: 'Add user' }));
     expect(api.sent('POST /api/users')).toHaveLength(1);
     expect(await screen.findByText('That email is already in use.')).toBeInTheDocument();
@@ -291,18 +291,66 @@ describe('UsersPanel', () => {
     expect(screen.getByText('Your session ended. Sign in again.')).toBeInTheDocument();
   });
 
-  it('demoting yourself hides the panel', async () => {
+  it('temporary passwords and role change', async () => {
+    const user = userEvent.setup();
+    const api = usersApi(ADA, {
+      'POST /api/users': () => apiError(400, 'password_too_common'),
+      'PATCH /api/users/u-2': () => apiError(400, 'password_too_common'),
+    });
+    await renderSettings();
+    await screen.findByRole('listitem', { name: 'Kim' });
+
+    // The create form says Temporary password, with its hint.
+    expect(within(form()).getByLabelText('Temporary password')).toBeInTheDocument();
+    expect(within(form()).queryByLabelText('Password')).not.toBeInTheDocument();
+    expect(within(form()).getByText('They choose their own at first sign-in.')).toBeInTheDocument();
+
+    // A too-common error lands on the field.
+    await user.type(within(form()).getByLabelText('Email'), 'lee@example.com');
+    await user.type(within(form()).getByLabelText('Display name'), 'Lee');
+    await user.type(within(form()).getByLabelText('Temporary password'), 'password1234');
+    await user.click(within(form()).getByRole('button', { name: 'Add user' }));
+    await vi.waitFor(() => {
+      expect(within(form()).getByLabelText('Temporary password')).toHaveAccessibleDescription(
+        'This password is too common. Choose another.',
+      );
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    // The same for a reset.
+    await user.click(within(row('Kim')).getByRole('button', { name: 'Reset password' }));
+    await user.type(within(row('Kim')).getByLabelText('New password'), 'password1234');
+    await user.click(within(row('Kim')).getByRole('button', { name: 'Save password' }));
+    await vi.waitFor(() => {
+      expect(within(row('Kim')).getByLabelText('New password')).toHaveAccessibleDescription(
+        'This password is too common. Choose another.',
+      );
+    });
+    expect(api.sent('PATCH /api/users/u-2')).toHaveLength(1);
+  });
+
+  it('a reset notice mentions the forced change', async () => {
+    const user = userEvent.setup();
+    usersApi(ADA);
+    await renderSettings();
+    await screen.findByRole('listitem', { name: 'Kim' });
+    await user.click(within(row('Kim')).getByRole('button', { name: 'Reset password' }));
+    await user.type(within(row('Kim')).getByLabelText('New password'), 'another long one');
+    await user.click(within(row('Kim')).getByRole('button', { name: 'Save password' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Password reset for Kim. Their sessions have ended, and they must choose a new password at next sign-in.',
+    );
+  });
+
+  it('changing your own role ends your session', async () => {
     const user = userEvent.setup();
     const api = usersApi(ADA);
     await renderSettings();
     await screen.findByRole('listitem', { name: 'Ada Admin' });
-    api.setMe({ ...ADA, role: 'contributor' });
+    api.signOut();
     await user.selectOptions(within(row('Ada Admin')).getByLabelText('Role'), 'contributor');
-    await vi.waitFor(() => {
-      expect(screen.queryByRole('heading', { name: /Users/ })).not.toBeInTheDocument();
-    });
-    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
-    expect(within(screen.getByRole('banner')).getByText('Contributor')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByText('Your session ended. Sign in again.')).toBeInTheDocument();
   });
 
   it('shows a load failure with Retry', async () => {
