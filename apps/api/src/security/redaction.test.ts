@@ -1,8 +1,13 @@
 import type { LightMyRequestResponse } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { sessionCookieName } from '../auth/cookie';
+import { base32Decode } from '../auth/mfa/base32';
+import { totpAt } from '../auth/mfa/totp';
+import { mfaEnrolledResponseSchema, mfaEnrollmentResponseSchema } from '../contract';
 import {
   ADMIN,
+  HARNESS_MFA_SECRET,
+  HARNESS_SECRET_KEY,
   createHarness,
   type Client,
   type Harness,
@@ -39,6 +44,16 @@ const NEW_FLOW_ROUTES = [
   'PUT /api/settings/sign-in-notice',
 ];
 
+/** sec-mfa's session routes, each of which must show in the logs it scans. */
+const MFA_FLOW_ROUTES = [
+  'POST /api/session/mfa/enroll',
+  'POST /api/session/mfa/enroll/confirm',
+  'POST /api/session/mfa/verify',
+];
+/** The admin reset of a user's MFA, by its URL with the id in it. */
+const MFA_RESET_URL = /^\/api\/users\/[^/]+\/mfa\/reset$/;
+const STEP_MS = 30_000;
+
 /** Every value a log line must never hold, gathered as the flows run. */
 class Secrets {
   readonly values = new Set<string>([
@@ -48,7 +63,23 @@ class Secrets {
     RESET_PASSWORD,
     TOO_COMMON_PASSWORD,
     CHANGED_PASSWORD,
+    HARNESS_SECRET_KEY,
+    HARNESS_MFA_SECRET,
   ]);
+
+  /** Keeps a TOTP code as it would sit in a JSON body: quoted, so 8 characters. */
+  code(code: string): string {
+    this.values.add(`"${code}"`);
+    return code;
+  }
+
+  /** Keeps each recovery code as shown and as normalized (no dash). */
+  recoveryCodes(codes: readonly string[]): void {
+    for (const code of codes) {
+      this.values.add(code);
+      this.values.add(code.replace('-', ''));
+    }
+  }
 
   /** Keeps the client's session token and CSRF token as they are now. */
   client(c: Client): void {
@@ -78,12 +109,31 @@ class Secrets {
  */
 async function runFlows(h: Harness): Promise<string[]> {
   const secrets = new Secrets();
+  secrets.values.add(h.keys.mfaSecret.toString('hex'));
+  secrets.values.add(h.keys.recoveryCode.toString('hex'));
   const cookieName = sessionCookieName(h.config);
 
   const setup = h.client();
   const made = secrets.response(await setup.post('/api/setup', ADMIN));
   expect(made.statusCode).toBe(201);
   expect(setup.cookie).not.toBeNull();
+  secrets.client(setup);
+
+  // Setup leaves the admin to enroll: a new secret, its URI, then confirm and the recovery codes.
+  const enrolling = secrets.response(await setup.post('/api/session/mfa/enroll'));
+  expect(enrolling.statusCode).toBe(200);
+  const enrollment = mfaEnrollmentResponseSchema.parse(enrolling.json());
+  secrets.values.add(enrollment.secret);
+  secrets.values.add(enrollment.otpauthUri);
+  secrets.values.add(enrollment.qr.path);
+  const adminSecret = base32Decode(enrollment.secret);
+  const codeNow = () => secrets.code(totpAt(adminSecret, h.clock.now()));
+  const confirmed = secrets.response(
+    await setup.post('/api/session/mfa/enroll/confirm', { code: codeNow() }),
+  );
+  expect(confirmed.statusCode).toBe(200);
+  const recoveryCodes = mfaEnrolledResponseSchema.parse(confirmed.json()).recoveryCodes;
+  secrets.recoveryCodes(recoveryCodes);
   secrets.client(setup);
 
   const wrong = h.client();
@@ -101,6 +151,30 @@ async function runFlows(h: Harness): Promise<string[]> {
   expect(admin.csrfToken).not.toBeNull();
   expect(signedIn.cookies.map((c) => c.name)).toEqual([cookieName]);
   secrets.client(admin);
+  // The challenge: a wrong code, then the next step's right one (each step is accepted once).
+  const wrongCode = secrets.response(
+    await admin.post('/api/session/mfa/verify', { code: secrets.code('000000') }),
+  );
+  expect(wrongCode.statusCode).toBe(401);
+  h.clock.advance(STEP_MS);
+  const verified = secrets.response(
+    await admin.post('/api/session/mfa/verify', { code: codeNow() }),
+  );
+  expect(verified.statusCode, verified.body).toBe(200);
+  secrets.client(admin);
+  // A second sign-in passes with a recovery code instead.
+  const byCode = h.client();
+  expect(
+    secrets.response(
+      await byCode.post('/api/session', { email: ADMIN.email, password: ADMIN.password }),
+    ).statusCode,
+  ).toBe(200);
+  secrets.client(byCode);
+  const recovered = secrets.response(
+    await byCode.post('/api/session/mfa/verify', { recoveryCode: recoveryCodes[0] }),
+  );
+  expect(recovered.statusCode, recovered.body).toBe(200);
+  secrets.client(byCode);
 
   const created = secrets.response(
     await admin.post('/api/users', {
@@ -152,6 +226,9 @@ async function runFlows(h: Harness): Promise<string[]> {
     await admin.patch(`/api/users/${userId}`, { password: RESET_PASSWORD }),
   );
   expect(reset.statusCode).toBe(200);
+  // An admin reset of the user's two-step sign-in (the harness enrolled them).
+  const mfaReset = secrets.response(await admin.post(`/api/users/${userId}/mfa/reset`));
+  expect(mfaReset.statusCode, mfaReset.body).toBe(200);
   const again = await h.signIn(USER_EMAIL, RESET_PASSWORD);
   secrets.client(again);
 
@@ -221,6 +298,8 @@ function expectRedactedTraffic(h: Harness): void {
     incoming.map((line) => `${line.req?.method ?? ''} ${line.req?.url ?? ''}`),
   );
   for (const route of NEW_FLOW_ROUTES) expect(routes, route).toContain(route);
+  for (const route of MFA_FLOW_ROUTES) expect(routes, route).toContain(route);
+  expect(incoming.some((line) => MFA_RESET_URL.test(line.req?.url ?? ''))).toBe(true);
   const withCookie = incoming.filter((line) => line.req?.headers?.cookie !== undefined);
   expect(withCookie.length).toBeGreaterThan(0);
   for (const line of withCookie) expect(line.req?.headers?.cookie).toBe('[Redacted]');

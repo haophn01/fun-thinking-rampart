@@ -312,6 +312,10 @@ describe('password change gate', () => {
       password: CARL.password,
     });
     expect(sessionResponseSchema.parse(signedIn.json()).mustChangePassword).toBe(true);
+    // The code comes first (MFA is gated before the password change), then the flag gates.
+    const verified = await fresh.post('/api/session/mfa/verify', { code: h.totp(CARL.email) });
+    expect(verified.statusCode, verified.body).toBe(200);
+    expect(sessionResponseSchema.parse(verified.json()).mustChangePassword).toBe(true);
 
     for (const client of [carl, fresh]) {
       const status = sessionResponseSchema.parse((await client.get('/api/session')).json());

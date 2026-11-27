@@ -126,7 +126,8 @@ async function changePassword(
     locked: false,
     mustChangePassword: false,
     signInNotice: getSignInNotice(deps.db),
-    mfa: 'none',
+    // Only a full session reaches the change (the guard's MFA gate), and rotation keeps it full.
+    mfa: auth.mfa,
   };
 }
 
@@ -188,7 +189,8 @@ async function unlock(
     locked: false,
     mustChangePassword: account.mustChangePassword,
     signInNotice: getSignInNotice(deps.db),
-    mfa: 'none',
+    // Unlocking doesn't finish the MFA step: a pending session stays pending.
+    mfa: auth.mfa,
   };
 }
 
