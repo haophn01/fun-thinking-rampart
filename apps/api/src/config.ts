@@ -11,6 +11,9 @@ const API_ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+export const FIPS_MODES = ['off', 'required'] as const;
+export type FipsMode = (typeof FIPS_MODES)[number];
+
 export interface Config {
   /** Fixed: the api never listens beyond this machine. */
   host: '127.0.0.1';
@@ -35,6 +38,11 @@ export interface Config {
   secretKeyHex: string | null;
   /** Absolute: the local key file `loadSecretKey` reads, or creates when it is missing. */
   secretKeyPath: string;
+  /**
+   * `FIPS_MODE`: `required` refuses to start unless Node's crypto is in FIPS mode, and new
+   * passwords are hashed with PBKDF2-SHA-256 instead of Argon2id.
+   */
+  fipsMode: FipsMode;
 }
 
 /** Thrown when the environment is invalid. `keys` names every bad variable, sorted. */
@@ -101,6 +109,11 @@ const envSchema = z.object({
       .default(3001),
   ),
   DATABASE_PATH: pathSetting('data/rampart.sqlite'),
+  // Exactly `off` or `required`: `on`, `REQUIRED`, `true` and padded values are refused.
+  FIPS_MODE: z.preprocess(
+    unsetIfEmpty,
+    z.enum(FIPS_MODES, { error: 'must be off or required' }).default('off'),
+  ),
   HOSTED: booleanSetting,
   LOG_LEVEL: z.preprocess(unsetIfEmpty, z.enum(LOG_LEVELS).default('info')),
   RAMPART_SECRET_KEY: secretKeySetting,
@@ -154,5 +167,6 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     rateLimitMultiplier: result.data.RATE_LIMIT_MULTIPLIER,
     secretKeyHex: result.data.RAMPART_SECRET_KEY ?? null,
     secretKeyPath: resolveApiPath(result.data.SECRET_KEY_PATH),
+    fipsMode: result.data.FIPS_MODE,
   };
 }

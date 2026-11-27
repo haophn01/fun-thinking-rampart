@@ -29,6 +29,7 @@ describe('config', () => {
       rateLimitMultiplier: 1,
       secretKeyHex: null,
       secretKeyPath: join(apiRoot, 'data', 'rampart-secret.key'),
+      fipsMode: 'off',
     });
 
     // Port boundaries.
@@ -230,6 +231,28 @@ describe('config', () => {
       for (const blank of [' ', '	']) {
         expect(configError({ SECRET_KEY_PATH: blank }).keys).toEqual(['SECRET_KEY_PATH']);
       }
+    });
+  });
+
+  describe('FIPS_MODE', () => {
+    it('unset and empty give off; off and required parse', () => {
+      expect(loadConfig({}).fipsMode).toBe('off');
+      expect(loadConfig({ FIPS_MODE: '' }).fipsMode).toBe('off');
+      expect(loadConfig({ FIPS_MODE: 'off' }).fipsMode).toBe('off');
+      expect(loadConfig({ FIPS_MODE: 'required' }).fipsMode).toBe('required');
+    });
+
+    it('on, REQUIRED, true and " required" are refused and named', () => {
+      for (const bad of ['on', 'REQUIRED', 'true', ' required', 'required ', 'Off', '1']) {
+        const error = configError({ FIPS_MODE: bad });
+        expect(error.keys, JSON.stringify(bad)).toEqual(['FIPS_MODE']);
+        expect(error.message).toContain('FIPS_MODE');
+      }
+      // Named alongside the other bad keys, sorted.
+      expect(configError({ FIPS_MODE: 'on', API_PORT: 'x' }).keys).toEqual([
+        'API_PORT',
+        'FIPS_MODE',
+      ]);
     });
   });
 });
