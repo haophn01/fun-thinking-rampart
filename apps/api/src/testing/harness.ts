@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, max } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { openDb, runMigrations, type AppDb, type DbHandle } from '../../db/client';
-import { session, user } from '../../db/schema';
+import { evidenceItem, evidenceVersion, session, user } from '../../db/schema';
 import { createMemoryStore, type MemoryFileStore } from '../../storage';
 import { buildApp } from '../app';
 import { sessionCookieName } from '../auth/cookie';
@@ -121,7 +121,19 @@ export interface Harness {
   signIn(email: string, password: string, options?: SignInOptions): Promise<Client>;
   /** The TOTP code for the user's stored secret at `at` (the harness clock by default). */
   totp(email: string, at?: Date): string;
+  /**
+   * Stores a file version on an evidence item as an upload from before the content guard did:
+   * the bytes go into the store and the row is inserted directly, so no check runs and no audit
+   * event is written. It is the item creator's, at the harness clock. Returns the version number.
+   */
+  seedFileVersion(input: SeedFileVersion): Promise<number>;
   close(): Promise<void>;
+}
+
+export interface SeedFileVersion {
+  evidenceItemId: string;
+  bytes: Uint8Array;
+  fileName: string;
 }
 
 export interface SignInOptions {
@@ -321,6 +333,37 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     return c;
   }
 
+  async function seedFileVersion({ evidenceItemId, bytes, fileName }: SeedFileVersion) {
+    const item = handle.db
+      .select({ createdBy: evidenceItem.createdBy })
+      .from(evidenceItem)
+      .where(eq(evidenceItem.id, evidenceItemId))
+      .get();
+    if (item === undefined) throw new Error(`no evidence item ${evidenceItemId}`);
+    const stored = await store.put(bytes);
+    const newest = handle.db
+      .select({ version: max(evidenceVersion.version) })
+      .from(evidenceVersion)
+      .where(eq(evidenceVersion.evidenceId, evidenceItemId))
+      .get();
+    const version = (newest?.version ?? 0) + 1;
+    handle.db
+      .insert(evidenceVersion)
+      .values({
+        evidenceId: evidenceItemId,
+        version,
+        containsCui: false,
+        fileName,
+        size: stored.size,
+        sha256: stored.sha256,
+        storageKey: stored.key,
+        createdBy: item.createdBy,
+        createdAt: clock.now().toISOString(),
+      })
+      .run();
+    return version;
+  }
+
   return {
     app,
     config,
@@ -334,6 +377,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     setupAdmin,
     signIn,
     totp,
+    seedFileVersion,
     async close() {
       await app.close();
       if (handle.sqlite.open) handle.sqlite.close();
