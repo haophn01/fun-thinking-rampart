@@ -60,7 +60,7 @@ describe('unsafe hosted combinations are refused', () => {
   });
 
   it('hosted-needs-secret-key fires alone, for a missing or empty key', () => {
-    const { RAMPART_SECRET_KEY: _key, ...withoutKey } = safeHosted;
+    const withoutKey = { HOSTED: 'true', SERVE_WEB: 'true' };
     for (const env of [withoutKey, { ...withoutKey, RAMPART_SECRET_KEY: '' }]) {
       const error = startupError(env);
       expect(error.rules).toEqual(['hosted-needs-secret-key']);
