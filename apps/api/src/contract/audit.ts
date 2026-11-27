@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { userRefSchema } from './common';
+import { sha256Schema } from './files';
 
 export const AUDIT_ACTIONS = [
   'user.created',
@@ -109,3 +110,37 @@ export const auditPageSchema = z.object({
   nextBefore: z.number().int().nullable(),
 });
 export type AuditPage = z.infer<typeof auditPageSchema>;
+
+/** Why `GET /api/audit/verify` stops at an event. */
+export const AUDIT_CHAIN_PROBLEMS = ['unchained', 'prev_mismatch', 'hash_mismatch'] as const;
+export type AuditChainProblem = (typeof AUDIT_CHAIN_PROBLEMS)[number];
+
+/**
+ * `GET /api/audit/verify`: the chain walked in id order, stopping at the first broken event.
+ * `headHash` is the newest event's stored hash (null when there are no events, or the newest has
+ * none), for the user to record: removing the newest events can't be detected from the DB alone.
+ * `at` and `action` are plain strings because a tampered row may hold anything.
+ */
+export const auditVerifyResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    checked: z.number().int().min(0),
+    total: z.number().int().min(0),
+    headHash: sha256Schema.nullable(),
+    firstBroken: z
+      .object({
+        id: z.number().int(),
+        at: z.string(),
+        action: z.string(),
+        problem: z.enum(AUDIT_CHAIN_PROBLEMS),
+      })
+      .nullable(),
+    verifiedAt: z.iso.datetime(),
+  })
+  .refine((value) => value.ok === (value.firstBroken === null), {
+    message: 'ok is true exactly when no event is broken',
+  })
+  .refine((value) => !value.ok || value.checked === value.total, {
+    message: 'an intact chain checks every event',
+  });
+export type AuditVerifyResponse = z.infer<typeof auditVerifyResponseSchema>;
