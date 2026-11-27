@@ -42,6 +42,11 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'ssp_approval.created': 'SSP approval created',
   'ssp_approval.updated': 'SSP approval changed',
   'ssp_approval.removed': 'SSP approval removed',
+  'auth.password_changed': 'Password changed',
+  'auth.session_locked': 'Session locked',
+  'auth.session_unlocked': 'Session unlocked',
+  'auth.notice_acknowledged': 'Sign-in notice acknowledged',
+  'settings.updated': 'Settings changed',
 };
 
 export const ENTITY_LABELS: Record<AuditEntityType, string> = {
@@ -61,4 +66,5 @@ export const ENTITY_LABELS: Record<AuditEntityType, string> = {
   diagram_link: 'Diagram link',
   ssp_revision: 'SSP revision',
   ssp_approval: 'SSP approval',
+  settings: 'Settings',
 };

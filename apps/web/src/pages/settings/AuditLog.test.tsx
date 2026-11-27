@@ -247,13 +247,30 @@ describe('AuditLog', () => {
       ssp_revision: 'SSP revision',
       ssp_approval: 'SSP approval',
     };
-    expect(AUDIT_ACTIONS.slice(-Object.keys(added).length)).toEqual(Object.keys(added));
-    expect(AUDIT_ENTITY_TYPES.slice(-Object.keys(addedEntities).length)).toEqual(
+    // sec-auth appends its actions and entity after them, each with its own label.
+    const secAuth = {
+      'auth.password_changed': 'Password changed',
+      'auth.session_locked': 'Session locked',
+      'auth.session_unlocked': 'Session unlocked',
+      'auth.notice_acknowledged': 'Sign-in notice acknowledged',
+      'settings.updated': 'Settings changed',
+    };
+    const secAuthEntities = { settings: 'Settings' };
+    expect(AUDIT_ACTIONS.slice(-Object.keys(secAuth).length)).toEqual(Object.keys(secAuth));
+    expect(AUDIT_ENTITY_TYPES.slice(-Object.keys(secAuthEntities).length)).toEqual(
+      Object.keys(secAuthEntities),
+    );
+    const ordered = (list: readonly string[], keys: string[]) => {
+      const start = list.indexOf(keys[0] ?? '');
+      return list.slice(start, start + keys.length);
+    };
+    expect(ordered(AUDIT_ACTIONS, Object.keys(added))).toEqual(Object.keys(added));
+    expect(ordered(AUDIT_ENTITY_TYPES, Object.keys(addedEntities))).toEqual(
       Object.keys(addedEntities),
     );
-    for (const [action, label] of Object.entries(added))
+    for (const [action, label] of Object.entries({ ...added, ...secAuth }))
       expect(actions[action], action).toBe(label);
-    for (const [type, label] of Object.entries(addedEntities)) {
+    for (const [type, label] of Object.entries({ ...addedEntities, ...secAuthEntities })) {
       expect(entities[type], type).toBe(label);
     }
     expect(actions['system_profile.updated']).toBe('System profile changed');
@@ -271,7 +288,7 @@ describe('AuditLog', () => {
       'All',
       ...AUDIT_ENTITY_TYPES.map((type) => entities[type]),
     ]);
-    for (const label of Object.values(addedEntities)) {
+    for (const label of Object.values({ ...addedEntities, ...secAuthEntities })) {
       expect(options.map((option) => option.textContent)).toContain(label);
     }
   });

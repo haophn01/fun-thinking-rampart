@@ -194,6 +194,11 @@ describe('contract schemas', () => {
       'ssp_approval.created',
       'ssp_approval.updated',
       'ssp_approval.removed',
+      'auth.password_changed',
+      'auth.session_locked',
+      'auth.session_unlocked',
+      'auth.notice_acknowledged',
+      'settings.updated',
     ]);
     expect(AUDIT_ENTITY_TYPES).toEqual([
       'user',
@@ -212,6 +217,7 @@ describe('contract schemas', () => {
       'diagram_link',
       'ssp_revision',
       'ssp_approval',
+      'settings',
     ]);
   });
 
