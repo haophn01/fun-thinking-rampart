@@ -202,10 +202,12 @@ describe('system profile migration', () => {
     const journal = readJournal();
     const at0003 = journal.entries.findIndex((entry) => entry.tag === '0003_poam_evidence');
     expect(at0003).toBe(3);
-    // 0004 is followed only by 0005_ssp_data, which has its own upgrade test (ssp-data.test.ts).
+    // 0004 is followed only by 0005_ssp_data and 0006_sec_auth, which have their own upgrade
+    // tests (ssp-data.test.ts and sec-auth.test.ts).
     expect(journal.entries.map((entry) => entry.tag).slice(4)).toEqual([
       '0004_system_profile',
       '0005_ssp_data',
+      '0006_sec_auth',
     ]);
     const at0004 = at0003 + 1;
 
