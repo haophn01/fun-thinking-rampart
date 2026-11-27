@@ -15,7 +15,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx db/migrate.ts"
+    "db:migrate": "tsx db/migrate.ts",
+    "admin:reset-mfa": "tsx src/auth/mfa/cli.ts"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",

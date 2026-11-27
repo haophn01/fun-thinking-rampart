@@ -1,7 +1,10 @@
+import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { user } from '../../db/schema';
-import { errorEnvelopeSchema } from '../contract';
+import { errorEnvelopeSchema, mfaEnrollmentResponseSchema } from '../contract';
 import { createHarness, type Client, type Harness } from '../testing/harness';
+import { base32Decode } from './mfa/base32';
+import { totpAt } from './mfa/totp';
 
 const harnesses: Harness[] = [];
 afterEach(async () => {
@@ -150,6 +153,74 @@ describe('csrf and check order', () => {
     // Public routes are never gated.
     expect((await carl.get('/api/session')).statusCode).toBe(200);
     expect((await h.client().get('/api/health')).statusCode).toBe(200);
+  });
+
+  it('guard order with MFA', async () => {
+    const { h, admin } = await world();
+    const noCsrf = { 'x-csrf-token': null };
+    // Pending sessions, as sign-in leaves them: Dana is unenrolled (enroll), the admin enrolled
+    // (challenge).
+    const dana = { ...NEW_USER, email: 'dana@example.com' };
+    expect((await admin.post('/api/users', dana)).statusCode).toBe(201);
+    h.db.update(user).set({ mustChangePassword: false }).run();
+    const pendingDana = h.client();
+    expect(
+      (await pendingDana.post('/api/session', { email: dana.email, password: dana.password }))
+        .statusCode,
+    ).toBe(200);
+    const pendingAdmin = h.client();
+    const adminSignIn = { email: 'admin@example.com', password: 'correct horse battery' };
+    expect((await pendingAdmin.post('/api/session', adminSignIn)).statusCode).toBe(200);
+
+    // Pending without CSRF: the token is checked before the MFA gate.
+    for (const c of [pendingDana, pendingAdmin]) {
+      const noToken = await c.post('/api/users', NEW_USER, { headers: noCsrf });
+      expect(noToken.statusCode).toBe(403);
+      expect(code(noToken.body)).toBe('csrf_failed');
+      const onMfaRoute = await c.post('/api/session/mfa/enroll', undefined, { headers: noCsrf });
+      expect(code(onMfaRoute.body)).toBe('csrf_failed');
+    }
+
+    // Pending as a contributor on an admin route: MFA comes before the role.
+    const carlAdminRoute = await pendingDana.post('/api/users', { bad: true });
+    expect(carlAdminRoute.statusCode).toBe(403);
+    expect(code(carlAdminRoute.body)).toBe('mfa_required');
+    // On its own routes the body is checked: 400, not a gate.
+    const badBody = await pendingAdmin.post('/api/session/mfa/verify', { bad: true });
+    expect(badBody.statusCode).toBe(400);
+    expect(code(badBody.body)).toBe('validation_failed');
+
+    // Locked and pending: the lock wins, and only lock and unlock answer.
+    expect((await pendingAdmin.post('/api/session/lock')).statusCode).toBe(204);
+    expect(code((await pendingAdmin.get('/api/assessment')).body)).toBe('session_locked');
+    expect(code((await pendingAdmin.post('/api/session/mfa/verify', {})).body)).toBe(
+      'session_locked',
+    );
+
+    // Pending with a temporary password: MFA first, then the password change.
+    h.db.update(user).set({ mustChangePassword: true }).where(eq(user.email, dana.email)).run();
+    expect(code((await pendingDana.get('/api/assessment')).body)).toBe('mfa_required');
+    expect(code((await pendingDana.post('/api/session/password', {})).body)).toBe('mfa_required');
+    const started = await pendingDana.post('/api/session/mfa/enroll');
+    expect(started.statusCode, started.body).toBe(200);
+    const secret = mfaEnrollmentResponseSchema.parse(started.json()).secret;
+    const confirmed = await pendingDana.post('/api/session/mfa/enroll/confirm', {
+      code: totpAt(base32Decode(secret), h.clock.now()),
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const read = await pendingDana.get('/api/assessment');
+    expect(read.statusCode).toBe(403);
+    expect(code(read.body)).toBe('password_change_required');
+    const changed = await pendingDana.post('/api/session/password', {
+      currentPassword: NEW_USER.password,
+      newPassword: 'another long enough password',
+    });
+    expect(changed.statusCode, changed.body).toBe(200);
+    expect((await pendingDana.get('/api/assessment')).statusCode).toBe(200);
+
+    // Public routes are never gated; the full admin session is untouched.
+    expect((await pendingAdmin.get('/api/session')).statusCode).toBe(200);
+    expect((await admin.get('/api/users')).statusCode).toBe(200);
   });
 
   it('leaves health public and unknown routes 404', async () => {

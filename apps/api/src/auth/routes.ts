@@ -19,7 +19,13 @@ import { clearSessionCookie, readSessionToken, setSessionCookie } from './cookie
 import { assertAccountUnlocked, clearFailures, recordFailure } from './lockout';
 import { hashPassword, verifyPassword } from './password';
 import { checkNewPassword } from './password-policy';
-import { createSession, deleteSession, deleteSessionByToken, type SessionStore } from './sessions';
+import {
+  createSession,
+  deleteSession,
+  deleteSessionByToken,
+  mfaStateOf,
+  type SessionStore,
+} from './sessions';
 
 const INVALID_CREDENTIALS = 'Email or password is incorrect.';
 
@@ -93,7 +99,11 @@ async function signIn(
       after: null,
       requestId: request.id,
     });
-    return { session: createSession(tx, account.id, now), signInNotice: getSignInNotice(tx) };
+    // The password is only the first step: the session waits for the code, or for enrollment.
+    return {
+      session: createSession(tx, account.id, now, { mfaPending: true }),
+      signInNotice: getSignInNotice(tx),
+    };
   });
   setSessionCookie(reply, deps, created.session.token);
   return {
@@ -108,7 +118,7 @@ async function signIn(
     locked: false,
     mustChangePassword: account.mustChangePassword,
     signInNotice: created.signInNotice,
-    mfa: 'none',
+    mfa: mfaStateOf(account.mfaEnrolledAt, true),
   };
 }
 
@@ -180,7 +190,8 @@ async function setup(
         requestId: request.id,
       });
     }
-    return { userId, session: createSession(tx, userId, now) };
+    // The new admin enrolls before anything else.
+    return { userId, session: createSession(tx, userId, now, { mfaPending: true }) };
   });
 
   setSessionCookie(reply, deps, result.session.token);
@@ -192,7 +203,7 @@ async function setup(
     mustChangePassword: false,
     // No user existed before setup, so no notice can be set: the settings row needs an author.
     signInNotice: getSignInNotice(deps.db),
-    mfa: 'none',
+    mfa: 'enroll',
   };
 }
 
@@ -226,6 +237,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: ApiDeps): void {
       locked: request.auth?.locked ?? false,
       mustChangePassword: request.auth?.mustChangePassword ?? false,
       signInNotice: getSignInNotice(deps.db),
+      mfa: request.auth?.mfa ?? 'none',
     }),
   );
 

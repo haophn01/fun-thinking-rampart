@@ -10,6 +10,7 @@ An append-only record of every status and content change: who, what, before and 
 - Migration 0002 adds SQL triggers that abort any UPDATE or DELETE on `audit_event`. Migration 0006 narrows the UPDATE trigger to allow one fill of a row's `prev_hash` and `hash`, from null, with every other column unchanged.
 - **Hash columns:** `prev_hash` and `hash` stay empty (null) on every event until sec-integrity builds the hash chain and backfills them in code, once; nothing reads them yet.
 - **Auth and settings actions (sec-auth):** "Password changed" (`auth.password_changed`, the user, no before or after), "Session locked" and "Session unlocked" (`auth.session_locked` / `auth.session_unlocked`, the user; a repeat lock or an unlock of an unlocked session writes nothing), "Sign-in notice acknowledged" (`auth.notice_acknowledged`, the user, `after: { digest }`, written just before "Signed in"), and "Settings changed" (`settings.updated`, entity type "Settings", id `sign_in_notice`, before and after `{ signInNotice }`; saving the same text writes nothing).
+- **Two-step sign-in actions (sec-mfa):** "Two-step sign-in set up" (`auth.mfa_enrolled`, the user, no before or after, at enrollment's confirm), "Two-step sign-in verified" (`auth.mfa_verified`, the user, `after: { method: 'totp' }` or `{ method: 'recovery_code', remaining }`), and "Two-step sign-in reset" (`user.mfa_reset`, entity the reset user, actor the admin or null from the CLI, before `{ mfaEnrolled }` and after `{ mfaEnrolled: false }`; a reset with nothing stored writes nothing). "Signed in" is still written at the password step, before either of the first two. No secret, URI, code or recovery code is ever in a row.
 - Example: set an objective Met to Not Met, open the log: the newest entry shows the label, time, actor and before/after JSON.
 
 ## Why it's this way
@@ -24,3 +25,4 @@ An append-only record of every status and content change: who, what, before and 
 ## History
 - 2026-11-25 · plan cmmc-l2-grc · built (assessment sprint, PRs #4 and #6) · [report](../reports/cmmc-l2-grc.html)
 - 2026-11-26 · plan security-hardening · password, lock, unlock, notice and settings actions; `prev_hash`/`hash` columns and the narrowed update trigger (sec-auth sprint, PRs #33 to #35)
+- 2026-11-27 · plan security-hardening · two-step set up, verified and reset actions (sec-mfa sprint, PRs #38, #39 and wave 3)

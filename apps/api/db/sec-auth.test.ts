@@ -594,7 +594,8 @@ describe('sec-auth migration', () => {
     } finally {
       await app.close();
     }
-    // The account is not asked to change its password, and its new session is a plain one.
+    // The account is not asked to change its password, and its new session is unlocked and
+    // waits for its MFA step (the account isn't enrolled yet, so it enrolls next).
     expect(
       handle.sqlite
         .prepare("select must_change_password, password_changed_at from user where id = 'u1'")
@@ -604,7 +605,7 @@ describe('sec-auth migration', () => {
       handle.sqlite
         .prepare('select locked_at, mfa_pending from session where id <> ? order by rowid')
         .all(SHA),
-    ).toEqual([{ locked_at: null, mfa_pending: 0 }]);
+    ).toEqual([{ locked_at: null, mfa_pending: 1 }]);
   });
 
   it('audit trigger allows only a one-time hash fill', () => {

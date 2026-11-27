@@ -37,12 +37,12 @@ function userRow(h: Harness, email: string) {
   return row;
 }
 
-/** Signs in through the api as the user would, keeping any must-change flag. */
+/**
+ * Signs in through the api, keeping any must-change flag; the harness completes the MFA step,
+ * which comes before the password change (the guard order is pinned in `auth/csrf.test.ts`).
+ */
 async function signInAsUser(h: Harness, email: string, password: string): Promise<Client> {
-  const c = h.client();
-  const response = await c.post('/api/session', { email, password });
-  expect(response.statusCode, response.body).toBe(200);
-  return c;
+  return h.signIn(email, password, { temporary: true });
 }
 
 /** Everything a refused request must leave as it was. */
