@@ -80,6 +80,24 @@ describe('session reports the notice', () => {
     });
   });
 
+  it('sends it on the unlock and change-password answers too', async () => {
+    const { admin } = await world();
+    expect((await admin.post('/api/session/lock', {})).statusCode).toBe(204);
+    const unlocked = await admin.post('/api/session/unlock', { password: ADMIN.password });
+    expect(unlocked.statusCode).toBe(200);
+    expect(unlocked.json()).toMatchObject({
+      signInNotice: { text: NOTICE, digest: sha256(NOTICE) },
+    });
+    const changed = await admin.post('/api/session/password', {
+      currentPassword: ADMIN.password,
+      newPassword: 'Quiet harbour lantern ninety',
+    });
+    expect(changed.statusCode).toBe(200);
+    expect(changed.json()).toMatchObject({
+      signInNotice: { text: NOTICE, digest: sha256(NOTICE) },
+    });
+  });
+
   it('sends null when no notice is set', async () => {
     const { h, admin } = await world(null);
     expect((await h.client().get('/api/session')).json()).toMatchObject({ signInNotice: null });
