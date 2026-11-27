@@ -225,23 +225,19 @@ describe('server refuses an unsafe hosted config before opening the database', (
     return { result, dir, databasePath, output: `${result.stdout}${result.stderr}` };
   }
 
-  it(
-    'server refuses FIPS_MODE=required without FIPS crypto',
-    { timeout: 120_000 },
-    ({ skip }) => {
-      // Only meaningful on a Node without FIPS crypto, which is every standard build.
-      skip(getFips() === 1, 'this Node is in FIPS mode, so FIPS_MODE=required starts');
-      const { result, dir, databasePath, output } = runServer({
-        FIPS_MODE: 'required',
-        API_PORT: '3230',
-      });
-      expect(result.status, output).toBe(1);
-      expect(output).toContain('fips-required-not-enabled');
-      expect(output).toContain('"level":60');
-      expect(existsSync(databasePath)).toBe(false);
-      expect(readdirSync(dir)).toEqual([]);
-    },
-  );
+  it('server refuses FIPS_MODE=required without FIPS crypto', { timeout: 120_000 }, ({ skip }) => {
+    // Only meaningful on a Node without FIPS crypto, which is every standard build.
+    skip(getFips() === 1, 'this Node is in FIPS mode, so FIPS_MODE=required starts');
+    const { result, dir, databasePath, output } = runServer({
+      FIPS_MODE: 'required',
+      API_PORT: '3230',
+    });
+    expect(result.status, output).toBe(1);
+    expect(output).toContain('fips-required-not-enabled');
+    expect(output).toContain('"level":60');
+    expect(existsSync(databasePath)).toBe(false);
+    expect(readdirSync(dir)).toEqual([]);
+  });
 
   it('HOSTED=true without SERVE_WEB exits 1, names the rule and creates no database', () => {
     const { result, dir, databasePath, output } = runServer({ HOSTED: 'true' });
