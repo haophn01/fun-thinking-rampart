@@ -13,6 +13,7 @@
 
 .qr {
   width: 100%;
+  fill: var(--rp-ink);
   max-width: 232px;
   height: auto;
   border: var(--rp-rule) solid var(--rp-ink);
