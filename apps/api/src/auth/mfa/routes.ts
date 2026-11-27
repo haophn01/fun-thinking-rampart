@@ -99,14 +99,37 @@ function fullSession(
   };
 }
 
+/** A pending (unconfirmed) secret that still decrypts, or null. */
+function pendingSecretBytes(deps: ApiDeps, account: MfaAccount): Buffer | null {
+  if (account.secretEnc === null) return null;
+  try {
+    return base32Decode(
+      decryptSecret(deps.keys.mfaSecret, account.secretEnc, secretAad(account.id)),
+    );
+  } catch {
+    return null;
+  }
+}
+
 /**
- * `POST /api/session/mfa/enroll`: a new secret, stored sealed in place of any pending one, with
- * the last step cleared. Not audited: only finishing enrollment is. 409 once enrolled.
+ * `POST /api/session/mfa/enroll`: the pending secret if one is stored and still decrypts, so a
+ * reload of the enrollment page keeps a QR the user already scanned; otherwise a new secret,
+ * stored sealed with the last step cleared. Not audited: only finishing enrollment is. 409 once
+ * enrolled.
  */
 function enroll(deps: ApiDeps, request: FastifyRequest): MfaEnrollmentResponse {
   const auth = sessionOf(request);
   const account = accountOf(deps, auth.user.id);
   if (account.enrolledAt !== null) throw wrongStep();
+  const pending = pendingSecretBytes(deps, account);
+  if (pending !== null) {
+    const pendingUri = otpauthUri({
+      issuer: PRODUCT_NAME,
+      account: account.email,
+      secret: pending,
+    });
+    return { secret: base32Encode(pending), otpauthUri: pendingUri, qr: qrPath(pendingUri) };
+  }
   const secret = generateSecret();
   const encoded = base32Encode(secret);
   const sealed = encryptSecret(deps.keys.mfaSecret, encoded, secretAad(account.id));

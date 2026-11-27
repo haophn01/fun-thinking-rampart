@@ -103,15 +103,15 @@ describe('enroll stores an encrypted secret', () => {
     // Starting enrollment is not an event: only finishing it is.
     expect(mfaEvents(h)).toEqual([]);
 
+    // Showing enrollment again (a reload) keeps the pending secret, so a QR already scanned
+    // into an authenticator app keeps working.
     const second = await enroll(admin);
-    expect(second.secret).not.toBe(first.secret);
-    expect(userRow(h, ADMIN.email).mfaSecretEnc).not.toBe(enc);
+    expect(second.secret).toBe(first.secret);
+    expect(second.otpauthUri).toBe(first.otpauthUri);
+    expect(userRow(h, ADMIN.email).mfaSecretEnc).toBe(enc);
     const now = h.clock.now();
-    const stale = await admin.post(CONFIRM, { code: codeFor(first.secret, now) });
-    expect(stale.statusCode).toBe(401);
-    expect(codeOf(stale)).toBe('invalid_mfa_code');
-    const fresh = await admin.post(CONFIRM, { code: codeFor(second.secret, now) });
-    expect(fresh.statusCode, fresh.body).toBe(200);
+    const scanned = await admin.post(CONFIRM, { code: codeFor(first.secret, now) });
+    expect(scanned.statusCode, scanned.body).toBe(200);
   });
 });
 
