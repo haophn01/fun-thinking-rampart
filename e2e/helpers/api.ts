@@ -10,6 +10,7 @@ import {
   type DiagramKind,
   type DiagramLink,
   type EvidenceItem,
+  type SessionResponse,
 } from '../../apps/api/src/contract/index.ts';
 
 type Method = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -29,6 +30,25 @@ export interface Api {
   read<T>(path: string, schema: Schema<T>): Promise<T>;
   /** A write that must succeed, parsed with the contract's schema. */
   write<T>(method: Method, path: string, body: unknown, schema: Schema<T>): Promise<T>;
+}
+
+/**
+ * Signs `request` in as the given user, acknowledging the sign-in notice when one is set (its
+ * digest comes from `GET /api/session`, as the web app's does). The session it answers.
+ */
+export async function signIn(
+  request: APIRequestContext,
+  email: string,
+  password: string,
+): Promise<SessionResponse> {
+  const before = sessionResponseSchema.parse(
+    await (await ensureOk(await request.get('/api/session'), 'GET /api/session')).json(),
+  );
+  const noticeDigest = before.signInNotice?.digest;
+  const response = await request.post('/api/session', {
+    data: { email, password, ...(noticeDigest === undefined ? {} : { noticeDigest }) },
+  });
+  return sessionResponseSchema.parse(await (await ensureOk(response, `sign in ${email}`)).json());
 }
 
 /** Throws with the status and body when a response isn't 2xx, so a failure says why. */
