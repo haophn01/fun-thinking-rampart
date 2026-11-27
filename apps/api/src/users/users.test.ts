@@ -71,6 +71,7 @@ describe('admin-only user management', () => {
       role: 'contributor',
       active: true,
       createdAt: new Date(START.getTime() + 60_000).toISOString(),
+      mfaEnrolled: false,
     });
     await create(admin, { email: 'bob@example.com', displayName: 'Bob' });
     await create(admin, { email: 'abe2@example.com', displayName: 'Bob' });
@@ -118,7 +119,7 @@ describe('admin-only user management', () => {
     expect(list.body).not.toMatch(/password|hash|argon|failedSignIns|lockedUntil/i);
     for (const raw of list.json<{ users: Record<string, unknown>[] }>().users) {
       expect(Object.keys(raw).sort()).toEqual(
-        ['active', 'createdAt', 'displayName', 'email', 'id', 'role'].sort(),
+        ['active', 'createdAt', 'displayName', 'email', 'id', 'mfaEnrolled', 'role'].sort(),
       );
     }
   });

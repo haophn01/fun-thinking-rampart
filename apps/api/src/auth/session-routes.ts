@@ -126,6 +126,7 @@ async function changePassword(
     locked: false,
     mustChangePassword: false,
     signInNotice: getSignInNotice(deps.db),
+    mfa: 'none',
   };
 }
 
@@ -187,6 +188,7 @@ async function unlock(
     locked: false,
     mustChangePassword: account.mustChangePassword,
     signInNotice: getSignInNotice(deps.db),
+    mfa: 'none',
   };
 }
 

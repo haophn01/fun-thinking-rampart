@@ -31,14 +31,16 @@ describe('configureZodForBrowser', () => {
   it('still parses and refuses as before in jitless mode', () => {
     configureZodForBrowser();
     const session = { setupRequired: true, user: null, csrfToken: null };
-    // Defaults fill the sec-auth fields in jitless mode too.
+    // Defaults fill the sec-auth and sec-mfa fields in jitless mode too.
     expect(sessionResponseSchema.parse(session)).toEqual({
       ...session,
       locked: false,
       mustChangePassword: false,
       signInNotice: null,
+      mfa: 'none',
     });
     expect(sessionResponseSchema.safeParse({ setupRequired: 'yes' }).success).toBe(false);
     expect(sessionResponseSchema.safeParse({ ...session, locked: 'yes' }).success).toBe(false);
+    expect(sessionResponseSchema.safeParse({ ...session, mfa: 'pending' }).success).toBe(false);
   });
 });

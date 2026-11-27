@@ -29,6 +29,7 @@ describe('first run setup', () => {
       locked: false,
       mustChangePassword: false,
       signInNotice: null,
+      mfa: 'none',
     });
 
     const c = h.client();
@@ -94,6 +95,7 @@ describe('first run setup', () => {
       locked: false,
       mustChangePassword: false,
       signInNotice: null,
+      mfa: 'none',
     });
 
     // A second call is refused and changes nothing.
