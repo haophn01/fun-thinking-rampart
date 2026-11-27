@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
+import { ChangePasswordPage } from './auth/ChangePasswordPage';
 import { Gate } from './auth/Gate';
 import { SessionProvider } from './auth/session';
 import { AssessmentPage } from './pages/assessment/AssessmentPage';
@@ -40,6 +41,8 @@ export function AppRoutes() {
             />
           );
         })}
+        {/* The signed-in user's own page: inside the shell, but not a nav tab. */}
+        <Route path="/account/password" element={<ChangePasswordPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
