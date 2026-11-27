@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { displayNameSchema, emailSchema, passwordSchema, roleSchema } from './common';
+import { RECOVERY_CODE_COUNT, mfaStateSchema, recoveryCodeSchema } from './mfa';
 import { noticeDigestSchema, signInNoticeSchema } from './settings';
 
 /** A session ends this long after its last request (`last_seen_at`). */
@@ -33,8 +34,10 @@ export const sessionResponseSchema = z.object({
   mustChangePassword: z.boolean().default(false),
   /** The notice every sign-in acknowledges, or `null` when none is set. Sent signed out too. */
   signInNotice: signInNoticeSchema.nullable().default(null),
+  /** What two-step sign-in still needs: only the MFA, lock and sign-out routes answer until `none`. */
+  mfa: mfaStateSchema.default('none'),
 });
-/** As parsed: the three sec-auth fields are always present (their defaults fill old answers). */
+/** As parsed: the sec-auth and sec-mfa fields are always present (defaults fill old answers). */
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 
 /** `POST /api/setup`: the first admin. */
@@ -69,3 +72,12 @@ export const unlockRequestSchema = z.strictObject({
   password: z.string().min(1).max(128),
 });
 export type UnlockRequest = z.infer<typeof unlockRequestSchema>;
+
+/**
+ * `POST /api/session/mfa/enroll/confirm`: the rotated session, with the recovery codes. They are
+ * shown this once; the api keeps only their hashes.
+ */
+export const mfaEnrolledResponseSchema = sessionResponseSchema.extend({
+  recoveryCodes: z.array(recoveryCodeSchema).length(RECOVERY_CODE_COUNT),
+});
+export type MfaEnrolledResponse = z.infer<typeof mfaEnrolledResponseSchema>;

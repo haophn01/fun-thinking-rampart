@@ -8,6 +8,8 @@ export const userSchema = z.object({
   role: roleSchema,
   active: z.boolean(),
   createdAt: z.iso.datetime(),
+  /** Two-step sign-in is set up (`mfa_enrolled_at` is set). Old answers read as not set up. */
+  mfaEnrolled: z.boolean().default(false),
 });
 export type User = z.infer<typeof userSchema>;
 
