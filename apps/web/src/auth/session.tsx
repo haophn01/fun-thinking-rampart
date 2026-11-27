@@ -267,6 +267,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       csrfToken: () => current.current.csrfToken,
       onUnauthenticated: endSession,
       onLocked,
+      // The api says two-step sign-in is still needed: re-read the session to find which step.
+      onMfaRequired: () => void load(),
     });
     void load();
     return () => {

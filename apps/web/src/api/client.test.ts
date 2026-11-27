@@ -127,15 +127,21 @@ function envelope(code: string, message: string, details?: unknown) {
 
 function hooks(token: string | null = 'csrf-1') {
   const onUnauthenticated = vi.fn();
-  setApiSessionHooks({ csrfToken: () => token, onUnauthenticated, onLocked: vi.fn() });
+  setApiSessionHooks({
+    csrfToken: () => token,
+    onUnauthenticated,
+    onLocked: vi.fn(),
+    onMfaRequired: vi.fn(),
+  });
   return onUnauthenticated;
 }
 
 function bothHooks() {
   const onUnauthenticated = vi.fn();
   const onLocked = vi.fn();
-  setApiSessionHooks({ csrfToken: () => 'csrf-1', onUnauthenticated, onLocked });
-  return { onUnauthenticated, onLocked };
+  const onMfaRequired = vi.fn();
+  setApiSessionHooks({ csrfToken: () => 'csrf-1', onUnauthenticated, onLocked, onMfaRequired });
+  return { onUnauthenticated, onLocked, onMfaRequired };
 }
 
 describe('apiSend', () => {
@@ -481,5 +487,66 @@ describe('lock and 401 rules', () => {
     await failure(apiGet('/api/users', userResponseSchema));
     expect(onLocked).toHaveBeenCalledTimes(3);
     expect(onUnauthenticated).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('mfa rules', () => {
+  it('mfa rules', async () => {
+    const { onUnauthenticated, onLocked, onMfaRequired } = bothHooks();
+    const wrongCode = () =>
+      Promise.resolve(
+        respond(
+          envelope('invalid_mfa_code', "That code didn't work. Enter the newest code from your app."),
+          401,
+        ),
+      );
+
+    // A wrong code on confirm or verify is a refusal, not an ended session.
+    stubFetch(wrongCode);
+    const confirm = await failure(
+      apiSend('POST', '/api/session/mfa/enroll/confirm', { code: '123456' }),
+    );
+    expect(confirm.status).toBe(401);
+    expect(confirm.code).toBe('invalid_mfa_code');
+    await failure(apiSend('POST', '/api/session/mfa/verify', { code: '123456' }));
+    await failure(apiSend('POST', '/api/session/mfa/verify', { recoveryCode: 'abcdefghjk' }));
+    expect(onUnauthenticated).not.toHaveBeenCalled();
+    expect(onMfaRequired).not.toHaveBeenCalled();
+
+    // The 5th wrong code ends every session: verify answers 401 unauthenticated, and that does.
+    stubFetch(() => Promise.resolve(respond(envelope('unauthenticated', 'Sign in'), 401)));
+    await failure(apiSend('POST', '/api/session/mfa/verify', { code: '123456' }));
+    expect(onUnauthenticated).toHaveBeenCalledTimes(1);
+
+    // A 403 mfa_required from a read, a write and an upload runs onMfaRequired once each.
+    stubFetch(() =>
+      Promise.resolve(respond(envelope('mfa_required', 'Finish two-step sign-in to continue.'), 403)),
+    );
+    const read = await failure(apiGet('/api/users', userResponseSchema));
+    expect(read.status).toBe(403);
+    expect(read.code).toBe('mfa_required');
+    expect(onMfaRequired).toHaveBeenCalledTimes(1);
+    await failure(apiSend('PATCH', '/api/assessment', { assessmentType: 'self' }));
+    expect(onMfaRequired).toHaveBeenCalledTimes(2);
+    await failure(
+      apiUpload(
+        '/api/evidence/e-1/files',
+        new Blob(['x']),
+        'report.pdf',
+        evidenceItemResponseSchema,
+      ),
+    );
+    expect(onMfaRequired).toHaveBeenCalledTimes(3);
+
+    // Another 403, or mfa_required under another status, is not the MFA gate.
+    stubFetch(() => Promise.resolve(respond(envelope('forbidden', 'No'), 403)));
+    await failure(apiGet('/api/users', userResponseSchema));
+    stubFetch(() => Promise.resolve(respond(envelope('password_change_required', 'x'), 403)));
+    await failure(apiGet('/api/users', userResponseSchema));
+    stubFetch(() => Promise.resolve(respond(envelope('mfa_required', 'x'), 400)));
+    await failure(apiGet('/api/users', userResponseSchema));
+    expect(onMfaRequired).toHaveBeenCalledTimes(3);
+    expect(onUnauthenticated).toHaveBeenCalledTimes(1);
+    expect(onLocked).not.toHaveBeenCalled();
   });
 });
