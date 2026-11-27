@@ -2,8 +2,15 @@ import { and, desc, eq, lt, type SQL } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { AppDb } from '../../db/client';
 import { auditEvent, user } from '../../db/schema';
-import { auditPageSchema, auditQuerySchema, type AuditPage, type AuditQuery } from '../contract';
+import {
+  auditPageSchema,
+  auditQuerySchema,
+  auditVerifyResponseSchema,
+  type AuditPage,
+  type AuditQuery,
+} from '../contract';
 import { respond } from '../respond';
+import { verifyAuditChain } from './chain';
 import type { ApiDeps } from '../routes';
 
 function parseJson(text: string | null): unknown {
@@ -49,9 +56,15 @@ export function listAudit(db: Pick<AppDb, 'select'>, query: AuditQuery): AuditPa
   };
 }
 
-/** `GET /api/audit`: any signed-in user. */
+/**
+ * `GET /api/audit` and `GET /api/audit/verify`: any signed-in user. Verify reads the whole log
+ * and writes nothing, not even an event of its own.
+ */
 export function registerAuditRoutes(app: FastifyInstance, deps: ApiDeps): void {
   app.get('/api/audit', (request) =>
     respond(auditPageSchema, listAudit(deps.db, auditQuerySchema.parse(request.query))),
+  );
+  app.get('/api/audit/verify', () =>
+    respond(auditVerifyResponseSchema, verifyAuditChain(deps.db, deps.now())),
   );
 }

@@ -11,11 +11,13 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import Database from 'better-sqlite3';
+import { asc } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDb, runMigrations } from '../../../db/client';
 import { auditEvent, mfaRecoveryCode, session, user } from '../../../db/schema';
+import { verifyAuditChain } from '../../audit/chain';
 
 const apiRoot = resolve(import.meta.dirname, '..', '..', '..');
 const repoRoot = resolve(apiRoot, '..', '..');
@@ -265,6 +267,41 @@ describe('works while the app runs', () => {
     } finally {
       app.sqlite.close();
     }
+  });
+});
+
+describe('keeps the audit chain', () => {
+  // Each test spawns the CLI (tsx) one or more times; Windows CI needs more than vitest's 5 s.
+  it('chains a legacy log before it writes', { timeout: 120_000 }, () => {
+    const path = join(tempDir(), 'app.sqlite');
+    const ids = seededDb(path);
+    // Events the code before the chain wrote: no prev_hash, no hash.
+    const raw = new Database(path);
+    const insert = raw.prepare(
+      "insert into audit_event (at, actor_user_id, action, entity_type, entity_id, after) values (?, ?, 'user.created', 'user', ?, '{}')",
+    );
+    for (const id of [ids.ada, ids.bob, ids.cy]) insert.run(NOW, id, id);
+    raw.close();
+
+    const result = runCli(path, ['ada@example.com']);
+    expect(result.status, result.out).toBe(0);
+
+    const { events, check } = inspect(path, (db) => ({
+      events: db.select().from(auditEvent).orderBy(asc(auditEvent.id)).all(),
+      check: verifyAuditChain(db, new Date(NOW)),
+    }));
+    expect(events.map((event) => event.action)).toEqual([
+      'user.created',
+      'user.created',
+      'user.created',
+      'user.mfa_reset',
+    ]);
+    expect(events[0]?.prevHash).toBeNull();
+    for (const [index, event] of events.entries()) {
+      expect(event.hash, `event ${String(event.id)}`).not.toBeNull();
+      if (index > 0) expect(event.prevHash).toBe(events[index - 1]?.hash);
+    }
+    expect(check).toMatchObject({ ok: true, checked: 4, total: 4, headHash: events[3]?.hash });
   });
 });
 

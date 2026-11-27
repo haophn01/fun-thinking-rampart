@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { getFips } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -110,6 +111,88 @@ describe('unsafe hosted combinations are refused', () => {
   });
 });
 
+describe('fips-required-not-enabled', () => {
+  const fipsOff = { fipsEnabled: () => false };
+  const fipsOn = { fipsEnabled: () => true };
+  const RULE = 'fips-required-not-enabled';
+
+  function refusal(env: Record<string, string>, probe: { fipsEnabled: () => boolean }) {
+    try {
+      assertSafeStartup(loadConfig(env), probe);
+    } catch (error) {
+      if (error instanceof StartupCheckError) return error;
+      throw error;
+    }
+    throw new Error(`expected assertSafeStartup to refuse ${JSON.stringify(env)}`);
+  }
+
+  it('required with the probe off breaks only this rule, in local and hosted mode', () => {
+    const local = refusal({ FIPS_MODE: 'required' }, fipsOff);
+    expect(local.rules).toEqual([RULE]);
+    expect(local.message).toContain(RULE);
+    expect(local.message).toContain('crypto.getFips() is 0');
+    expect(local.message).toContain('--enable-fips');
+    expect(local.message).toContain('FIPS_MODE=off');
+
+    const safeHosted = { HOSTED: 'true', SERVE_WEB: 'true', RAMPART_SECRET_KEY: SECRET_KEY };
+    expect(refusal({ ...safeHosted, FIPS_MODE: 'required' }, fipsOff).rules).toEqual([RULE]);
+  });
+
+  it('is listed last, after every hosted rule', () => {
+    const error = refusal(
+      { HOSTED: 'true', RATE_LIMIT_MULTIPLIER: '5', LOG_LEVEL: 'trace', FIPS_MODE: 'required' },
+      fipsOff,
+    );
+    expect(error.rules).toEqual([
+      'hosted-needs-serve-web',
+      'hosted-real-rate-limits',
+      'hosted-log-level',
+      'hosted-needs-secret-key',
+      RULE,
+    ]);
+    const at = error.rules.map((rule) => error.message.indexOf(rule));
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+
+  it('the probe on, or FIPS_MODE off, passes', () => {
+    const safeHosted = { HOSTED: 'true', SERVE_WEB: 'true', RAMPART_SECRET_KEY: SECRET_KEY };
+    for (const env of [{}, safeHosted]) {
+      expect(() => {
+        assertSafeStartup(loadConfig({ ...env, FIPS_MODE: 'required' }), fipsOn);
+      }).not.toThrow();
+      for (const off of [{}, { FIPS_MODE: 'off' }, { FIPS_MODE: '' }]) {
+        expect(() => {
+          assertSafeStartup(loadConfig({ ...env, ...off }), fipsOff);
+        }).not.toThrow();
+      }
+    }
+  });
+
+  it('asks the probe only when FIPS is required, and by default asks crypto.getFips()', () => {
+    let asked = 0;
+    const counting = {
+      fipsEnabled: () => {
+        asked += 1;
+        return false;
+      },
+    };
+    assertSafeStartup(loadConfig({}), counting);
+    expect(asked).toBe(0);
+
+    // No probe passed: the real one. On a Node without FIPS it refuses; with FIPS it passes.
+    const required = loadConfig({ FIPS_MODE: 'required' });
+    if (getFips() === 1) {
+      expect(() => {
+        assertSafeStartup(required);
+      }).not.toThrow();
+    } else {
+      expect(() => {
+        assertSafeStartup(required);
+      }).toThrow(StartupCheckError);
+    }
+  });
+});
+
 describe('server refuses an unsafe hosted config before opening the database', () => {
   const dirs: string[] = [];
   afterEach(() => {
@@ -141,6 +224,20 @@ describe('server refuses an unsafe hosted config before opening the database', (
     });
     return { result, dir, databasePath, output: `${result.stdout}${result.stderr}` };
   }
+
+  it('server refuses FIPS_MODE=required without FIPS crypto', { timeout: 120_000 }, ({ skip }) => {
+    // Only meaningful on a Node without FIPS crypto, which is every standard build.
+    skip(getFips() === 1, 'this Node is in FIPS mode, so FIPS_MODE=required starts');
+    const { result, dir, databasePath, output } = runServer({
+      FIPS_MODE: 'required',
+      API_PORT: '3230',
+    });
+    expect(result.status, output).toBe(1);
+    expect(output).toContain('fips-required-not-enabled');
+    expect(output).toContain('"level":60');
+    expect(existsSync(databasePath)).toBe(false);
+    expect(readdirSync(dir)).toEqual([]);
+  });
 
   it('HOSTED=true without SERVE_WEB exits 1, names the rule and creates no database', () => {
     const { result, dir, databasePath, output } = runServer({ HOSTED: 'true' });

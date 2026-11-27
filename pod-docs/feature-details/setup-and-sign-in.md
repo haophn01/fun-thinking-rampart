@@ -21,7 +21,8 @@ sequenceDiagram
   G->>R: request.auth is set
 ```
 - Deny by default: a route is public only with `config: { public: true }`; setup and sign-in set `skipCsrf` because no session exists yet.
-- Passwords are Argon2id hashes (`auth/password.ts`). An unknown email is verified against a dummy hash so timing doesn't reveal accounts.
+- Passwords are Argon2id hashes (`auth/password.ts`) unless `FIPS_MODE=required`. An unknown email is verified against the mode's dummy hash (`DUMMY_HASH` or `DUMMY_PBKDF2_HASH`) so timing doesn't reveal accounts.
+- **FIPS_MODE (3.13.11):** `off` (default) or `required`, exact lowercase only (`on`, `REQUIRED`, `true` and padded values are refused by `ConfigError`). `required` adds the startup rule `fips-required-not-enabled`, last in `security/startup.ts`: `server.ts` exits 1 before the database opens unless Node's `crypto.getFips()` is 1 (Node run with `--enable-fips` and a FIPS-validated OpenSSL provider), local and hosted alike. With FIPS required, setup, a change, unlock's check, an admin's temporary password and a reset use PBKDF2-HMAC-SHA-256 (`passwordSchemeFor(config)`): `$pbkdf2-sha256$i=600000$<16-byte salt>$<32-byte key>`, standard base64 without padding, compared with `timingSafeEqual`. `verifyPassword` picks the scheme from the stored prefix, so Argon2id and PBKDF2 hashes both verify in either mode, and the reuse check spans both. A malformed hash (iterations outside 100,000 to 10,000,000, a wrong salt or key length, bad base64, an unknown prefix) verifies false, never a throw. Example: an admin set up before `FIPS_MODE=required` still signs in with the Argon2id hash; their next change stores PBKDF2.
 - Files: `apps/api/src/auth/{guard,sessions,password,routes}.ts`, `apps/api/src/auth/mfa/`, `apps/web/src/auth/`.
 - **MFA state:** `resolveSession` gives every `ActiveSession` an `mfa` (`enroll` while the user has no `mfa_enrolled_at`, `challenge` while an enrolled user's session has `mfa_pending`, else `none`), read per request from the user row and the session. Sign-in and setup create sessions with `mfa_pending` true (`createSession(…, { mfaPending: true })`); `rotateSession` never does, so confirm and verify end as a full session. `GET /api/session`, setup, sign-in, unlock and change password all report `mfa`, and a pending session still gets its `user` and `csrfToken`. "Signed in" is still written at the password step.
 - The cookie: only `auth/cookie.ts` names or sets it. Locally it is `rampart_session` (`HttpOnly; SameSite=Strict; Path=/`, no `Secure`, since the app is plain http on 127.0.0.1). With `HOSTED=true` it is `__Host-rampart_session` with `HttpOnly; Secure; SameSite=Strict; Path=/` and no `Domain`, so no other host can set or shadow it; each mode reads only its own name. Hosted responses also carry HSTS (`max-age=31536000; includeSubDomains`).
@@ -39,6 +40,8 @@ sequenceDiagram
 - A deactivated account's sign-in never counts a failure, so a 429 can't reveal that it exists. Human accepted this default.
 - An admin password reset also clears the lockout; resetting or deactivating yourself ends all your sessions. Both accepted by the human. No confirm dialog: [decisions.md](../decisions.md#2026-11-25--no-confirm-step-before-resetting-or-deactivating-yourself-agent-default--override-anytime).
 
+- FIPS: no rehash at sign-in. Argon2id hashes stored before `FIPS_MODE=required` keep verifying until each user next changes the password (or an admin resets it); SECURITY.md records the gap. PBKDF2 at 600,000 iterations is OWASP's figure for SHA-256 and the FIPS-approved option; Argon2id stays the default since it resists GPU guessing better.
+
 ## Watch out
 - Turning sign-in on was a one-way door (PR #5); revert its merge to undo.
 - The API logger redacts cookie, authorization and `x-csrf-token`.
@@ -50,6 +53,7 @@ sequenceDiagram
 - With a notice set, every scripted sign-in needs the digest: `e2e/helpers/api.ts`'s `signIn` reads it from `GET /api/session`.
 - A scripted sign-in isn't done at the password: see [mfa.md](mfa.md#watch-out) for the helpers that finish the code step.
 - Don't wait 15 minutes for the lock in a check: post `POST /api/session/lock`, or use Playwright's `page.clock` (as `e2e/auth.spec.ts` does).
+- Standard Node builds have no FIPS provider (`crypto.getFips()` is 0), so `FIPS_MODE=required` refuses to start there. Tests inject the probe (`assertSafeStartup(config, { fipsEnabled: () => true })`); `buildApp` never runs the check, so `createHarness({ env: { FIPS_MODE: 'required' } })` exercises PBKDF2 on any Node.
 - Pick test passwords off the blocklist: `PassWord1234` and one character repeated 12 times are on it.
 
 ## History
@@ -57,3 +61,4 @@ sequenceDiagram
 - 2026-11-26 · plan security-hardening · hosted `__Host-` Secure cookie, HSTS, rate limits on setup and sign-in (sec-baseline sprint, PRs #28 and #30); checked end to end on the production path by `e2e/security.spec.ts`
 - 2026-11-26 · plan security-hardening · 30 min / 8 h sessions, session lock, password blocklist and history, temporary passwords, sign-in notice (sec-auth sprint, PRs #33 to #35); driven end to end by `e2e/auth.spec.ts`, the screens measured by `e2e/look.spec.ts`, and the logs checked for secrets over the new flows
 - 2026-11-27 · plan security-hardening · two-step sign-in required for every account: pending sessions at sign-in and setup, the `mfa_required` gate (sec-mfa sprint, A2, wave 3)
+- 2026-11-27 · plan security-hardening · `FIPS_MODE` startup check and PBKDF2-SHA-256 passwords when FIPS is required, Argon2id hashes still verifying with no rehash (sec-integrity sprint, F1)

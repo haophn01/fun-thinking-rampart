@@ -7,7 +7,7 @@ import { recordAudit } from '../audit/record';
 import { clearSessionCookie } from '../auth/cookie';
 import { clearFailures } from '../auth/lockout';
 import { resetMfa } from '../auth/mfa/reset';
-import { hashPassword } from '../auth/password';
+import { hashPassword, passwordSchemeFor } from '../auth/password';
 import { checkNewPassword, pushPasswordHistory } from '../auth/password-policy';
 import { deleteUserSessions, type SessionStore } from '../auth/sessions';
 import {
@@ -84,7 +84,7 @@ async function createUser(deps: ApiDeps, request: FastifyRequest): Promise<UserR
   if (deps.db.select({ id: user.id }).from(user).where(eq(user.email, body.email)).get()) {
     throw taken();
   }
-  const passwordHash = await hashPassword(body.password);
+  const passwordHash = await hashPassword(body.password, passwordSchemeFor(deps.config));
   const now = deps.now();
   const at = now.toISOString();
   return deps.db.transaction((tx) => {
@@ -135,7 +135,10 @@ async function updateUser(
   const body = updateUserRequestSchema.parse(request.body);
   if (!findUser(deps.db, id)) throw notFound();
   if (body.password !== undefined) checkNewPassword(body.password);
-  const passwordHash = body.password === undefined ? null : await hashPassword(body.password);
+  const passwordHash =
+    body.password === undefined
+      ? null
+      : await hashPassword(body.password, passwordSchemeFor(deps.config));
   const now = deps.now();
   const actorUserId = request.auth?.user.id ?? null;
 
