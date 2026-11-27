@@ -46,7 +46,12 @@ const fileUrl = (id: string, version: number | string) =>
 describe('download', () => {
   it('returns the exact bytes with attachment headers', async () => {
     const { admin } = await world();
-    const bytes = new Uint8Array([0, 1, 2, 250, 255, 10, 13, 0]);
+    // A PDF whose header is followed by binary bytes (as real PDFs have), so every byte value
+    // that could be mangled on the way round is in it.
+    const bytes = new Uint8Array([
+      ...new TextEncoder().encode('%PDF-1.7\n%'),
+      ...[0, 1, 2, 250, 255, 10, 13, 0],
+    ]);
     const item = await uploaded(admin, bytes, 'Política 1.pdf');
     const response = await admin.get(fileUrl(item.id, 1));
     expect(response.statusCode).toBe(200);

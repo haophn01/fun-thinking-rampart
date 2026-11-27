@@ -10,6 +10,7 @@ import {
   documentControlSchema,
   errorEnvelopeSchema,
   evidenceItemResponseSchema,
+  evidenceListSchema,
   sspFileName,
   userResponseSchema,
   type DiagramLink,
@@ -115,6 +116,25 @@ async function fileItem(client: Client, title: string, bytes: Uint8Array, name: 
   const item = await evidenceItem(client, title, false);
   const response = ok(await client.upload(`/api/evidence/${item.id}/versions`, bytes, name), 201);
   return evidenceItemResponseSchema.parse(response.json()).item;
+}
+
+/**
+ * An evidence item holding a file stored before the upload guard (the guard refuses these bytes
+ * now): the version is seeded straight into the store and the DB.
+ */
+async function legacyFileItem(
+  h: Harness,
+  client: Client,
+  title: string,
+  bytes: Uint8Array,
+  name: string,
+) {
+  const item = await evidenceItem(client, title, false);
+  await h.seedFileVersion({ evidenceItemId: item.id, bytes, fileName: name });
+  const listed = evidenceListSchema.parse(ok(await client.get('/api/evidence')).json()).items;
+  const seeded = listed.find((row) => row.id === item.id);
+  if (seeded === undefined) throw new Error(`evidence item ${item.id} is not listed`);
+  return seeded;
 }
 
 async function link(
@@ -358,8 +378,8 @@ describe('GET /api/ssp/export', () => {
 
   it('a GIF named .png is referenced and takes no embed slot', async () => {
     const { store, reads } = spyStore();
-    const { admin } = await world(store);
-    const fake = await fileItem(admin, 'Old map', GIF_BYTES, 'fake.png');
+    const { h, admin } = await world(store);
+    const fake = await legacyFileItem(h, admin, 'Old map', GIF_BYTES, 'fake.png');
     const fakeLink = await link(admin, fake, 'network', 'Map 00 fake');
     expect(fakeLink.embeddable).toBe(false);
     for (let i = 0; i < SSP_MAX_EMBEDDED_IMAGES; i += 1) {

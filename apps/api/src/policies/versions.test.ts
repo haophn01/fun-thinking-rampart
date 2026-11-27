@@ -14,6 +14,7 @@ import {
   type Policy,
 } from '../contract';
 import { createHarness, type Client, type Harness } from '../testing/harness';
+import { sampleDocx, samplePdf } from '../uploads/testing/samples';
 
 const harnesses: Harness[] = [];
 afterEach(async () => {
@@ -47,8 +48,8 @@ describe('policy versions', () => {
   it('file versions', async () => {
     const { h, admin, item } = await world();
     const url = `/api/policies/${item.id}/versions`;
-    const v1 = bytesOf('policy v1');
-    const v2 = bytesOf('policy v2, revised');
+    const v1 = sampleDocx();
+    const v2 = samplePdf();
 
     const first = await admin.upload(url, v1, 'Access policy.docx');
     expect(first.statusCode, first.body).toBe(201);
@@ -123,7 +124,7 @@ describe('policy versions', () => {
     // A good file to an unknown policy: 404, and nothing reaches the store.
     const unknown = await admin.upload(
       `/api/policies/${UNKNOWN_ID}/versions`,
-      bytesOf('x'),
+      samplePdf(),
       'a.pdf',
     );
     expect(unknown.statusCode).toBe(404);
@@ -132,7 +133,10 @@ describe('policy versions', () => {
     expect(h.db.select().from(policyVersion).all()).toEqual([]);
 
     // Exactly the limit is accepted.
-    const max = await admin.upload(url, new Uint8Array(UPLOAD_MAX_BYTES), 'max.pdf');
+    // A PDF header padded to the limit, so the content check passes.
+    const maxBytes = new Uint8Array(UPLOAD_MAX_BYTES).fill(0x20);
+    maxBytes.set(bytesOf('%PDF-1.7\n'));
+    const max = await admin.upload(url, maxBytes, 'max.pdf');
     expect(max.statusCode, max.body).toBe(201);
     expect(policyResponseSchema.parse(max.json()).item.versions[0]?.size).toBe(UPLOAD_MAX_BYTES);
   });
@@ -188,7 +192,7 @@ describe('policy versions', () => {
     const created = await admin.post('/api/policies', { title: 'Access', description: null });
     const { id } = policyResponseSchema.parse(created.json()).item;
     expect(
-      (await admin.upload(`/api/policies/${id}/versions`, bytesOf('x'), 'a.pdf')).statusCode,
+      (await admin.upload(`/api/policies/${id}/versions`, samplePdf(), 'a.pdf')).statusCode,
     ).toBe(201);
     lose = true;
     const response = await admin.get(`/api/policies/${id}/versions/1/file`);

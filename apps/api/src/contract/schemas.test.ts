@@ -101,10 +101,11 @@ describe('contract schemas', () => {
       mfa_required: 403,
       invalid_mfa_code: 401,
       mfa_wrong_step: 409,
+      file_refused: 415,
     };
     expect(ERROR_CODES).toEqual(Object.keys(table));
     // sec-auth appends five codes, in this order, after the earlier ones.
-    expect(ERROR_CODES.slice(-9, -3)).toEqual([
+    expect(ERROR_CODES.slice(-10, -4)).toEqual([
       'provider_in_use',
       'password_too_common',
       'password_reused',
@@ -112,8 +113,14 @@ describe('contract schemas', () => {
       'session_locked',
       'notice_not_acknowledged',
     ]);
-    // sec-mfa appends three codes, in this order, at the end.
-    expect(ERROR_CODES.slice(-3)).toEqual(['mfa_required', 'invalid_mfa_code', 'mfa_wrong_step']);
+    // sec-mfa appends three codes, in this order, then sec-integrity appends file_refused last.
+    expect(ERROR_CODES.slice(-4, -1)).toEqual([
+      'mfa_required',
+      'invalid_mfa_code',
+      'mfa_wrong_step',
+    ]);
+    expect(ERROR_CODES.at(-1)).toBe('file_refused');
+    expect(ERROR_STATUS.file_refused).toBe(415);
     expect([ERROR_STATUS.mfa_required, ERROR_STATUS.invalid_mfa_code]).toEqual([403, 401]);
     expect(ERROR_STATUS.mfa_wrong_step).toBe(409);
     expect([...ERROR_CODES].sort()).toEqual(Object.keys(table).sort());
@@ -390,26 +397,6 @@ describe('contract schemas', () => {
   it('upload protocol constants', () => {
     expect(FILE_NAME_HEADER).toBe('x-file-name');
     expect(UPLOAD_MAX_BYTES).toBe(26_214_400);
-    expect(UPLOAD_EXTENSIONS).toEqual([
-      '.csv',
-      '.doc',
-      '.docx',
-      '.gif',
-      '.jpeg',
-      '.jpg',
-      '.json',
-      '.log',
-      '.md',
-      '.pdf',
-      '.png',
-      '.ppt',
-      '.pptx',
-      '.txt',
-      '.xls',
-      '.xlsx',
-      '.xml',
-      '.zip',
-    ]);
     expect(FILE_INTEGRITY_MESSAGE).toBe(
       "The stored file is missing or doesn't match its recorded SHA-256.",
     );
@@ -445,6 +432,26 @@ describe('contract schemas', () => {
     }
   });
 
+  it('UPLOAD_EXTENSIONS is the strict list', () => {
+    expect(UPLOAD_EXTENSIONS).toEqual([
+      '.csv',
+      '.docx',
+      '.jpeg',
+      '.jpg',
+      '.pdf',
+      '.png',
+      '.txt',
+      '.xlsx',
+    ]);
+    for (const name of ['notes.md', 'bundle.zip', 'map.svg', 'page.html', 'setup.exe']) {
+      expect(uploadProblem(name, 10), name).toBe('unsupported_file_type');
+    }
+    // The types the old list allowed are refused now too.
+    for (const extension of ['.doc', '.gif', '.json', '.log', '.ppt', '.pptx', '.xls', '.xml']) {
+      expect(uploadProblem(`old${extension}`, 10), extension).toBe('unsupported_file_type');
+    }
+  });
+
   it('uploadProblem edges', () => {
     const max = 26_214_400;
     const cases: [string, number, ReturnType<typeof uploadProblem>][] = [
@@ -460,7 +467,8 @@ describe('contract schemas', () => {
       ['a.pdf.exe', 10, 'unsupported_file_type'],
       ['a.exe.pdf', 10, null],
       ['REPORT.PDF', 10, null],
-      ['Notes.Md', 10, null],
+      ['Notes.Txt', 10, null],
+      ['Notes.Md', 10, 'unsupported_file_type'],
       ['README', 10, 'unsupported_file_type'],
       ['.pdf', 10, 'unsupported_file_type'],
       ['a.pdf.', 10, 'unsupported_file_type'],

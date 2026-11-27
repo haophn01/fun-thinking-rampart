@@ -85,7 +85,7 @@ const EVIDENCE_FILE = {
   bytes: Buffer.from('permit tcp 10.0.0.0/24 any eq 443\ndeny ip any any\n'),
 };
 const POLICY_FILE = {
-  name: 'access-policy.md',
+  name: 'access-policy.txt',
   bytes: Buffer.from('# Access policy\n\nLeast privilege.\n'),
 };
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -519,7 +519,7 @@ test.describe('verification path', () => {
     const uploaded = answer(page, 'POST', /^\/api\/policies\/[^/]+\/versions$/);
     await item.getByLabel('Upload a new version').setInputFiles({
       name: POLICY_FILE.name,
-      mimeType: 'text/markdown',
+      mimeType: 'text/plain',
       buffer: POLICY_FILE.bytes,
     });
     expect((await uploaded).status()).toBe(201);

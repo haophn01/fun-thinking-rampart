@@ -33,6 +33,7 @@ export const ERROR_CODES = [
   'mfa_required',
   'invalid_mfa_code',
   'mfa_wrong_step',
+  'file_refused',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -98,6 +99,11 @@ export const ERROR_STATUS = {
   invalid_mfa_code: 401,
   /** The MFA route doesn't fit the user's or session's state (already enrolled, not pending). */
   mfa_wrong_step: 409,
+  /**
+   * The upload's bytes aren't what its extension says, or it is an unsafe office file. The message
+   * is `fileRefusedMessage(...)`; `details` follows `fileRefusedDetailsSchema`.
+   */
+  file_refused: 415,
 } as const satisfies Record<ErrorCode, number>;
 
 /** The fixed message the api sends, and the web may show as is, for these codes. */
