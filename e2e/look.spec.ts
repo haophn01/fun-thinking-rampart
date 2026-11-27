@@ -5,6 +5,9 @@
 // horizontal scroll at 375 px.
 //
 // Every page also loads under the production CSP with zero `securitypolicyviolation` events.
+// The auth screens get the same checks: the sign-in notice and the form after it, the forced
+// password change (and its refusal), the lock screen (and a wrong password), Change password,
+// Settings with a notice on, and the app shell's 429.
 //
 // Playwright runs spec files in name order against one api and database, so this file runs before
 // shell.spec.ts and smoke.spec.ts, which both need a fresh install. It therefore starts an api of
@@ -45,7 +48,7 @@ import {
 import { BODY_TEXT_MIN, LARGE_TEXT_MIN, contrastRatio } from '../apps/web/src/look/contrast.ts';
 import { COLORS, TEXT_SIZES_PX } from '../apps/web/src/look/tokens.ts';
 import { SSP_TABS } from '../apps/web/src/pages/ssp/tabs.ts';
-import { api, ensureOk, type Api } from './helpers/api';
+import { api, ensureOk, signIn, type Api } from './helpers/api';
 import {
   firstObjectiveId,
   planHold,
@@ -142,6 +145,19 @@ const NA_RATIONALE = 'No objective of this requirement is N/A.';
 const FUTURE_REQUIREMENT_ID = catalog.requirements[5]?.id ?? '';
 const FUTURE_STATEMENT = `${FUTURE_REQUIREMENT_ID} will be enforced by the MDM policy; the date is TBD.`;
 
+/** The sign-in notice the auth screens show: several sentences and a line break, as a real one. */
+const NOTICE =
+  'You are accessing an information system that processes Controlled Unclassified Information.\n' +
+  'Use of this system is monitored, recorded and subject to audit. Unauthorised use is ' +
+  'prohibited and may result in criminal and civil penalties. By continuing you consent to ' +
+  'these terms.';
+/** The seeded admin, and the seeded contributor, whose admin-set password is temporary. */
+const LENA = { email: 'lena@example.test', password: 'look-check-pass-1' };
+const COLE = { email: 'cole@example.test', password: 'contributor-pass-1' };
+/** On the bundled blocklist, so the forced change refuses it. */
+const TOO_COMMON = 'QwertyUiop12';
+const SIGNED_OUT: StorageState = { cookies: [], origins: [] };
+
 /** A value for every SSP profile field, so every group's form is filled. */
 const SSP_PROFILE = {
   categorization: 'Moderate impact for confidentiality, low for integrity',
@@ -167,7 +183,7 @@ const SSP_PROFILE = {
 async function seed(request: APIRequestContext): Promise<Seeded> {
   await ensureOk(
     await request.post('/api/setup', {
-      data: { email: 'lena@example.test', displayName: 'Lena Look', password: 'look-check-pass-1' },
+      data: { ...LENA, displayName: 'Lena Look' },
     }),
     'POST /api/setup',
   );
@@ -289,10 +305,9 @@ async function seed(request: APIRequestContext): Promise<Seeded> {
     'POST',
     '/api/users',
     {
-      email: 'cole@example.test',
+      ...COLE,
       displayName: 'Cole Contributor',
       role: 'contributor',
-      password: 'contributor-pass-1',
     },
     userResponseSchema,
   );
@@ -599,6 +614,15 @@ async function open(page: Page, path: string) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
+/** Every Look rule and CSP violation the current page shows, each line named by width and view. */
+async function measure(page: Page, width: number, name: string): Promise<string[]> {
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const facts = await page.evaluate(collectFacts);
+  const lines = [...violations(facts, width), ...(await cspViolations(page))];
+  return lines.map((line) => `${String(width)}px ${name} ${line}`);
+}
+
 // ---------- the test ----------
 
 /** A browser context signed in as the seeded admin, its `/api` calls routed to the look api. */
@@ -798,5 +822,180 @@ test.describe('look', () => {
     await expect(page.getByLabel('Planned implementation')).toHaveValue(PLANNED);
     await expect(page.getByLabel('N/A rationale')).toHaveValue(NA_RATIONALE);
     await context.close();
+  });
+
+  test('auth screens hold the look', async ({ browser, playwright }, testInfo) => {
+    test.setTimeout(180_000);
+    const baseURL = testInfo.project.use.baseURL;
+    const requests: APIRequestContext[] = [];
+    const lookApi = async (state?: StorageState) => {
+      const request = await playwright.request.newContext({
+        baseURL: API_ORIGIN,
+        ...(state === undefined ? {} : { storageState: state }),
+      });
+      requests.push(request);
+      return request;
+    };
+
+    // The admin turns the notice on, through the look api.
+    const admin = await api(await lookApi(storageState));
+    await ensureOk(
+      await admin.send('PUT', '/api/settings/sign-in-notice', { text: NOTICE }),
+      'PUT notice',
+    );
+    // Cole's password is temporary, so his session lands on the forced change.
+    const cole = await lookApi();
+    expect((await signIn(cole, COLE.email, COLE.password)).mustChangePassword).toBe(true);
+    // A second session for Lena, locked, so the seeded one stays open.
+    const locked = await lookApi();
+    await signIn(locked, LENA.email, LENA.password);
+    expect((await (await api(locked)).send('POST', '/api/session/lock')).status()).toBe(204);
+
+    const contexts = {
+      signedOut: await lookContext(browser, baseURL, SIGNED_OUT),
+      cole: await lookContext(browser, baseURL, await cole.storageState()),
+      locked: await lookContext(browser, baseURL, await locked.storageState()),
+      admin: await lookContext(browser, baseURL, storageState),
+      tooMany: await lookContext(browser, baseURL, SIGNED_OUT),
+    };
+    // The shell's 429: the session read is refused with a wait. A later route wins.
+    await contexts.tooMany.route(
+      (url) => url.pathname === '/api/session',
+      (route) =>
+        route.fulfill({
+          status: 429,
+          json: {
+            error: {
+              code: 'too_many_attempts',
+              message: 'Too many requests. Try again later.',
+              requestId: 'look-check',
+              details: { retryAfterSeconds: 42 },
+            },
+          },
+        }),
+    );
+
+    const lockHeading = (page: Page) =>
+      page.getByRole('heading', { level: 1, name: 'Session locked' });
+    const screens: {
+      name: string;
+      context: BrowserContext;
+      path: string;
+      ready: (page: Page) => Promise<void>;
+    }[] = [
+      {
+        name: 'sign-in notice',
+        context: contexts.signedOut,
+        path: '/',
+        ready: async (page) => {
+          await expect(page.getByRole('region', { name: 'System use notice' })).toBeVisible();
+        },
+      },
+      {
+        name: 'sign-in form after the notice',
+        context: contexts.signedOut,
+        path: '/',
+        ready: async (page) => {
+          await page.getByRole('button', { name: 'Acknowledge and continue' }).click();
+          await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+        },
+      },
+      {
+        name: 'forced change password',
+        context: contexts.cole,
+        path: '/',
+        ready: async (page) => {
+          await expect(page.getByTestId('change-password-forced')).toBeVisible();
+        },
+      },
+      {
+        name: 'forced change password (refused)',
+        context: contexts.cole,
+        path: '/',
+        ready: async (page) => {
+          await page.getByLabel('Current password').fill(COLE.password);
+          await page.getByLabel('New password', { exact: true }).fill(TOO_COMMON);
+          await page.getByLabel('Confirm new password').fill(TOO_COMMON);
+          await page.getByRole('button', { name: 'Change password' }).click();
+          await expect(
+            page.getByText('This password is too common. Choose another.', { exact: true }),
+          ).toBeVisible();
+        },
+      },
+      {
+        name: 'lock screen',
+        context: contexts.locked,
+        path: '/',
+        ready: async (page) => {
+          await expect(lockHeading(page)).toBeVisible();
+        },
+      },
+      {
+        name: 'lock screen (wrong password)',
+        context: contexts.locked,
+        path: '/',
+        ready: async (page) => {
+          await expect(lockHeading(page)).toBeVisible();
+          await page.getByLabel('Password', { exact: true }).fill('not-the-password-at-all');
+          await page.getByRole('button', { name: 'Unlock' }).click();
+          await expect(page.getByText('Password is incorrect.', { exact: true })).toBeVisible();
+        },
+      },
+      {
+        name: '/account/password',
+        context: contexts.admin,
+        path: '/account/password',
+        ready: async (page) => {
+          await expect(
+            page.getByRole('heading', { level: 1, name: 'Change password' }),
+          ).toBeVisible();
+        },
+      },
+      {
+        name: '/settings (notice on)',
+        context: contexts.admin,
+        path: '/settings',
+        ready: async (page) => {
+          await expect(page.getByLabel('Notice text')).toHaveValue(NOTICE);
+          await expect(page.getByText(/^Loading/)).toHaveCount(0);
+        },
+      },
+      {
+        name: 'too many requests',
+        context: contexts.tooMany,
+        path: '/',
+        ready: async (page) => {
+          await expect(
+            page.getByText('Too many requests. Try again in 42 seconds.', { exact: true }),
+          ).toBeVisible();
+          await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+        },
+      },
+    ];
+
+    const found: string[] = [];
+    let cspChecked = 0;
+    for (const width of WIDTHS) {
+      for (const screen of screens) {
+        const page = await screen.context.newPage();
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(screen.path);
+        await screen.ready(page);
+        found.push(...(await measure(page, width, screen.name)));
+        cspChecked += 1;
+        await page.close();
+      }
+    }
+    for (const context of Object.values(contexts)) await context.close();
+
+    // Turn the notice off again.
+    await ensureOk(
+      await admin.send('PUT', '/api/settings/sign-in-notice', { text: null }),
+      'clear notice',
+    );
+    for (const request of requests) await request.dispose();
+
+    expect(cspChecked, 'screens checked for CSP violations').toBe(screens.length * WIDTHS.length);
+    expect([...new Set(found)], [...new Set(found)].join('\n')).toEqual([]);
   });
 });

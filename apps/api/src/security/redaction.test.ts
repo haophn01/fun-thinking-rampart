@@ -26,6 +26,18 @@ const WRONG_PASSWORD = 'not the right password';
 const USER_EMAIL = 'casey@example.com';
 const USER_PASSWORD = 'contributor first password';
 const RESET_PASSWORD = 'contributor reset password';
+/** On the bundled blocklist, so the change refuses it. */
+const TOO_COMMON_PASSWORD = 'QwertyUiop12';
+const CHANGED_PASSWORD = 'contributor chosen password';
+const NOTICE = 'Authorised use only. Use of this system is monitored and recorded.';
+
+/** The routes of sec-auth's flows, each of which must show in the logs it scans. */
+const NEW_FLOW_ROUTES = [
+  'POST /api/session/password',
+  'POST /api/session/lock',
+  'POST /api/session/unlock',
+  'PUT /api/settings/sign-in-notice',
+];
 
 /** Every value a log line must never hold, gathered as the flows run. */
 class Secrets {
@@ -34,6 +46,8 @@ class Secrets {
     WRONG_PASSWORD,
     USER_PASSWORD,
     RESET_PASSWORD,
+    TOO_COMMON_PASSWORD,
+    CHANGED_PASSWORD,
   ]);
 
   /** Keeps the client's session token and CSRF token as they are now. */
@@ -56,8 +70,11 @@ class Secrets {
 }
 
 /**
- * This sprint's flows: setup, sign-in right and wrong, creating a user, resetting their password,
- * a CSRF-checked write, sign-out, and a 500. Returns every secret they used or were handed.
+ * The auth flows: setup, sign-in right and wrong, creating a user with a temporary password,
+ * their forced change (refused as too common, refused as reused, then done), resetting their
+ * password, lock and unlock (wrong, then right), setting the sign-in notice and an acknowledged
+ * sign-in, a CSRF-checked write, sign-out, and a 500. Returns every secret they used or were
+ * handed.
  */
 async function runFlows(h: Harness): Promise<string[]> {
   const secrets = new Secrets();
@@ -96,15 +113,77 @@ async function runFlows(h: Harness): Promise<string[]> {
   expect(created.statusCode).toBe(201);
   const userId = created.json<{ user: { id: string } }>().user.id;
 
-  const user = await h.signIn(USER_EMAIL, USER_PASSWORD);
+  // The admin-set password is temporary: the user must change it before anything else.
+  const user = await h.signIn(USER_EMAIL, USER_PASSWORD, { temporary: true });
+  secrets.client(user);
+  expect(user.user).not.toBeNull();
+  const gated = secrets.response(await user.get('/api/assessment'));
+  expect(gated.statusCode).toBe(403);
+  expect(gated.json<{ error: { code: string } }>().error.code).toBe('password_change_required');
+  const common = secrets.response(
+    await user.post('/api/session/password', {
+      currentPassword: USER_PASSWORD,
+      newPassword: TOO_COMMON_PASSWORD,
+    }),
+  );
+  expect(common.statusCode).toBe(400);
+  expect(common.json<{ error: { code: string } }>().error.code).toBe('password_too_common');
+  const reused = secrets.response(
+    await user.post('/api/session/password', {
+      currentPassword: USER_PASSWORD,
+      newPassword: USER_PASSWORD,
+    }),
+  );
+  expect(reused.statusCode).toBe(400);
+  expect(reused.json<{ error: { code: string } }>().error.code).toBe('password_reused');
+  const changed = secrets.response(
+    await user.post('/api/session/password', {
+      currentPassword: USER_PASSWORD,
+      newPassword: CHANGED_PASSWORD,
+    }),
+  );
+  expect(changed.statusCode).toBe(200);
+  expect(changed.json<{ mustChangePassword: boolean }>().mustChangePassword).toBe(false);
+  // The change rotates the session: keep the new token and CSRF token too.
   secrets.client(user);
 
+  // A reset sets a new temporary password and ends the user's sessions.
   const reset = secrets.response(
     await admin.patch(`/api/users/${userId}`, { password: RESET_PASSWORD }),
   );
   expect(reset.statusCode).toBe(200);
   const again = await h.signIn(USER_EMAIL, RESET_PASSWORD);
   secrets.client(again);
+
+  // Lock, a wrong unlock, then the right one.
+  const locked = secrets.response(await again.post('/api/session/lock'));
+  expect(locked.statusCode).toBe(204);
+  const wrongUnlock = secrets.response(
+    await again.post('/api/session/unlock', { password: WRONG_PASSWORD }),
+  );
+  expect(wrongUnlock.statusCode).toBe(401);
+  const unlocked = secrets.response(
+    await again.post('/api/session/unlock', { password: RESET_PASSWORD }),
+  );
+  expect(unlocked.statusCode).toBe(200);
+  expect(unlocked.json<{ locked: boolean }>().locked).toBe(false);
+
+  // The admin sets a sign-in notice; the next sign-in acknowledges it by its digest.
+  const notice = secrets.response(
+    await admin.put('/api/settings/sign-in-notice', { text: NOTICE }),
+  );
+  expect(notice.statusCode).toBe(200);
+  const digest = notice.json<{ signInNotice: { digest: string } }>().signInNotice.digest;
+  const acknowledging = h.client();
+  const acknowledged = secrets.response(
+    await acknowledging.post('/api/session', {
+      email: USER_EMAIL,
+      password: RESET_PASSWORD,
+      noticeDigest: digest,
+    }),
+  );
+  expect(acknowledged.statusCode).toBe(200);
+  secrets.client(acknowledging);
 
   // A write that passes the CSRF check, and one sent with no token, which it refuses.
   const write = secrets.response(await admin.patch('/api/assessment', { type: 'c3pao' }));
@@ -128,7 +207,7 @@ async function runFlows(h: Harness): Promise<string[]> {
 interface Line {
   msg?: string;
   level?: number;
-  req?: { headers?: Record<string, unknown> };
+  req?: { method?: string; url?: string; headers?: Record<string, unknown> };
   res?: { headers?: Record<string, unknown> };
 }
 
@@ -137,6 +216,11 @@ function expectRedactedTraffic(h: Harness): void {
   const lines = h.logs as Line[];
   const incoming = lines.filter((line) => line.msg === 'incoming request');
   expect(incoming.length).toBeGreaterThanOrEqual(10);
+  // This sprint's routes were all logged: change password, lock, unlock and the notice.
+  const routes = new Set(
+    incoming.map((line) => `${line.req?.method ?? ''} ${line.req?.url ?? ''}`),
+  );
+  for (const route of NEW_FLOW_ROUTES) expect(routes, route).toContain(route);
   const withCookie = incoming.filter((line) => line.req?.headers?.cookie !== undefined);
   expect(withCookie.length).toBeGreaterThan(0);
   for (const line of withCookie) expect(line.req?.headers?.cookie).toBe('[Redacted]');
