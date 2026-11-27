@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { assessment, user } from '../../db/schema';
 import { recordAudit } from '../audit/record';
 import {
+  ERROR_MESSAGES,
   sessionResponseSchema,
   setupRequestSchema,
   signInRequestSchema,
@@ -13,6 +14,7 @@ import {
 import { AppError } from '../errors';
 import { respond } from '../respond';
 import type { ApiDeps } from '../routes';
+import { getSignInNotice, getSignInNoticeText, noticeDigest } from '../settings/repository';
 import { clearSessionCookie, readSessionToken, setSessionCookie } from './cookie';
 import { assertAccountUnlocked, clearFailures, recordFailure } from './lockout';
 import { hashPassword, verifyPassword } from './password';
@@ -29,12 +31,27 @@ function setupRequired(db: SessionStore): boolean {
   return (row?.n ?? 0) === 0;
 }
 
+/**
+ * The digest the sign-in must carry while a notice is set, or null when there is none. A missing
+ * or stale digest is refused before anything else is looked at, so it counts no failure.
+ */
+function acknowledgedDigest(db: SessionStore, sent: string | undefined): string | null {
+  const text = getSignInNoticeText(db);
+  if (text === null) return null;
+  const digest = noticeDigest(text);
+  if (sent !== digest) {
+    throw new AppError('notice_not_acknowledged', ERROR_MESSAGES.notice_not_acknowledged);
+  }
+  return digest;
+}
+
 async function signIn(
   deps: ApiDeps,
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<SessionResponse> {
   const body = signInRequestSchema.parse(request.body);
+  acknowledgedDigest(deps.db, body.noticeDigest);
   const now = deps.now();
   const found = deps.db.select().from(user).where(eq(user.email, body.email)).get();
   const account = found?.active === true ? found : undefined;
@@ -49,9 +66,23 @@ async function signIn(
   }
 
   const created = deps.db.transaction((tx) => {
+    // Checked again: the notice may have changed while the password was being verified.
+    const digest = acknowledgedDigest(tx, body.noticeDigest);
     clearFailures(tx, account.id);
     // No fixation: the cookie's old session, whoever it belonged to, is gone.
     deleteSessionByToken(tx, readSessionToken(request, deps));
+    if (digest !== null) {
+      recordAudit(tx, {
+        at: now,
+        actorUserId: account.id,
+        action: 'auth.notice_acknowledged',
+        entityType: 'user',
+        entityId: account.id,
+        before: null,
+        after: { digest },
+        requestId: request.id,
+      });
+    }
     recordAudit(tx, {
       at: now,
       actorUserId: account.id,
@@ -62,9 +93,9 @@ async function signIn(
       after: null,
       requestId: request.id,
     });
-    return createSession(tx, account.id, now);
+    return { session: createSession(tx, account.id, now), signInNotice: getSignInNotice(tx) };
   });
-  setSessionCookie(reply, deps, created.token);
+  setSessionCookie(reply, deps, created.session.token);
   return {
     setupRequired: false,
     user: {
@@ -73,10 +104,10 @@ async function signIn(
       displayName: account.displayName,
       role: account.role,
     },
-    csrfToken: created.csrfToken,
+    csrfToken: created.session.csrfToken,
     locked: false,
     mustChangePassword: account.mustChangePassword,
-    signInNotice: null,
+    signInNotice: created.signInNotice,
   };
 }
 
@@ -158,7 +189,8 @@ async function setup(
     csrfToken: result.session.csrfToken,
     locked: false,
     mustChangePassword: false,
-    signInNotice: null,
+    // No user existed before setup, so no notice can be set: the settings row needs an author.
+    signInNotice: getSignInNotice(deps.db),
   };
 }
 
@@ -191,6 +223,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: ApiDeps): void {
       csrfToken: request.auth?.csrfToken ?? null,
       locked: request.auth?.locked ?? false,
       mustChangePassword: request.auth?.mustChangePassword ?? false,
+      signInNotice: getSignInNotice(deps.db),
     }),
   );
 

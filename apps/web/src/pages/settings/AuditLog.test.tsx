@@ -298,14 +298,16 @@ describe('AuditLog', () => {
     await renderSettings();
     await screen.findByText('No audit events yet.');
     const headings = screen.getAllByRole('heading', { level: 2 });
-    expect(headings).toHaveLength(3);
+    expect(headings).toHaveLength(4);
     expect(headings[0]).toHaveTextContent(/Assessment/);
     expect(headings[1]).toHaveTextContent(/Users/);
-    expect(headings[2]).toHaveTextContent(/Audit log/);
+    expect(headings[2]).toHaveTextContent(/Sign-in notice/);
+    expect(headings[3]).toHaveTextContent(/Audit log/);
     expect(headings.map((h) => h.querySelector('[data-balloon]')?.textContent)).toEqual([
       '1',
       '2',
       '3',
+      '4',
     ]);
   });
 

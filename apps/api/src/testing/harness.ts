@@ -1,5 +1,7 @@
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { openDb, runMigrations, type AppDb, type DbHandle } from '../../db/client';
+import { user } from '../../db/schema';
 import { createMemoryStore, type MemoryFileStore } from '../../storage';
 import { buildApp } from '../app';
 import { sessionCookieName } from '../auth/cookie';
@@ -80,9 +82,18 @@ export interface Harness {
   client(): Client;
   /** Runs first-run setup and returns the signed-in admin's client. */
   setupAdmin(admin?: { email?: string; displayName?: string; password?: string }): Promise<Client>;
-  /** Signs in and returns the client; throws unless the api answers 200. */
-  signIn(email: string, password: string): Promise<Client>;
+  /**
+   * Signs in and returns the client; throws unless the api answers 200. It first clears the
+   * user's `must_change_password` in the DB, so suites get a working session from an
+   * admin-set (temporary) password; `{ temporary: true }` keeps the flag.
+   */
+  signIn(email: string, password: string, options?: SignInOptions): Promise<Client>;
   close(): Promise<void>;
+}
+
+export interface SignInOptions {
+  /** Keep `must_change_password` as the DB has it, so the session is gated. */
+  temporary?: boolean;
 }
 
 export interface HarnessOptions {
@@ -220,7 +231,12 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     return c;
   }
 
-  async function signIn(email: string, password: string) {
+  async function signIn(email: string, password: string, options: SignInOptions = {}) {
+    if (options.temporary !== true) {
+      // Emails are stored trimmed and lowercased.
+      const stored = email.trim().toLowerCase();
+      handle.db.update(user).set({ mustChangePassword: false }).where(eq(user.email, stored)).run();
+    }
     const c = client();
     const response = await c.post('/api/session', { email, password });
     if (response.statusCode !== 200) {

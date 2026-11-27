@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMemoryStore } from '../../storage';
-import { CSRF_HEADER, SESSION_COOKIE } from '../contract';
-import { createHarness, type Harness, type HarnessOptions } from './harness';
+import { user } from '../../db/schema';
+import { CSRF_HEADER, SESSION_COOKIE, sessionResponseSchema } from '../contract';
+import { ADMIN, createHarness, type Harness, type HarnessOptions } from './harness';
 
 const harnesses: Harness[] = [];
 
@@ -218,6 +220,44 @@ describe('harness', () => {
       await h.setupAdmin();
       const again = await h.signIn('admin@example.com', 'correct horse battery');
       expect((await again.get('/api/users')).statusCode).toBe(200);
+    });
+  });
+
+  describe('signIn and temporary passwords', () => {
+    function flag(h: Harness, email: string): boolean | undefined {
+      return h.db.select().from(user).where(eq(user.email, email)).get()?.mustChangePassword;
+    }
+    function setFlag(h: Harness, email: string): void {
+      h.db.update(user).set({ mustChangePassword: true }).where(eq(user.email, email)).run();
+    }
+
+    it('clears must_change_password by default, so suites sign in to a working session', async () => {
+      const h = harness();
+      await h.setupAdmin();
+      setFlag(h, ADMIN.email);
+      const signedIn = await h.signIn(ADMIN.email, ADMIN.password);
+      expect(flag(h, ADMIN.email)).toBe(false);
+      const me = sessionResponseSchema.parse((await signedIn.get('/api/session')).json());
+      expect(me.mustChangePassword).toBe(false);
+      expect((await signedIn.get('/api/users')).statusCode).toBe(200);
+    });
+
+    it('keeps the flag with { temporary: true }', async () => {
+      const h = harness();
+      await h.setupAdmin();
+      setFlag(h, ADMIN.email);
+      const signedIn = await h.signIn(ADMIN.email, ADMIN.password, { temporary: true });
+      expect(flag(h, ADMIN.email)).toBe(true);
+      const me = sessionResponseSchema.parse((await signedIn.get('/api/session')).json());
+      expect(me.mustChangePassword).toBe(true);
+      expect((await signedIn.get('/api/users')).statusCode).toBe(403);
+    });
+
+    it('still throws on a wrong password or an unknown email', async () => {
+      const h = harness();
+      await h.setupAdmin();
+      await expect(h.signIn(ADMIN.email, 'not the password!')).rejects.toThrow(/401/);
+      await expect(h.signIn('nobody@example.com', ADMIN.password)).rejects.toThrow(/401/);
     });
   });
 });
