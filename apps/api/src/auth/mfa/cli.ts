@@ -1,5 +1,6 @@
 // `pnpm admin:reset-mfa <email>`: local recovery for a user who lost their authenticator and
-// recovery codes. It opens the existing database (never creating or migrating one), runs the same
+// recovery codes. It opens the existing database (never creating or migrating one), chains any
+// audit events written before the hash chain (once, as the server's start would), runs the same
 // `resetMfa` as the admin route inside one transaction, and prints plain text. It never prints a
 // secret, a code or a hash.
 import { existsSync } from 'node:fs';
@@ -7,6 +8,7 @@ import Database from 'better-sqlite3';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../../../db/schema';
+import { chainAuditLog } from '../../audit/chain';
 import { loadConfig } from '../../config';
 import { resetMfa } from './reset';
 
@@ -45,17 +47,23 @@ export function runResetMfa(
       };
     }
     const db = drizzle(sqlite, { schema });
-    const outcome = db.transaction((tx) => {
-      const row = tx
-        .select({ id: schema.user.id })
-        .from(schema.user)
-        .where(eq(schema.user.email, email))
-        .get();
-      if (!row) return 'unknown' as const;
-      return resetMfa(tx, row.id, { actorUserId: null, requestId: null, now })
-        ? ('reset' as const)
-        : ('nothing' as const);
-    });
+    // Before the reset's event, so it links into a chain that covers every earlier event.
+    chainAuditLog(db);
+    const outcome = db.transaction(
+      (tx) => {
+        const row = tx
+          .select({ id: schema.user.id })
+          .from(schema.user)
+          .where(eq(schema.user.email, email))
+          .get();
+        if (!row) return 'unknown' as const;
+        return resetMfa(tx, row.id, { actorUserId: null, requestId: null, now })
+          ? ('reset' as const)
+          : ('nothing' as const);
+      },
+      // The write lock up front: the running app may append events on its own connection.
+      { behavior: 'immediate' },
+    );
     if (outcome === 'unknown') return { code: 1, message: `No user with the email ${email}.` };
     if (outcome === 'nothing') {
       return { code: 0, message: `${email} has no two-step sign-in set up. Nothing changed.` };
