@@ -105,11 +105,12 @@ describe('the matrix covers every api route', () => {
   it('every api route has exactly one matrix entry', async () => {
     const routes = await apiRoutes(harness());
     expect(Object.keys(ROUTE_MATRIX).sort()).toEqual(routes.map(routeKey).sort());
-    // sec-mfa: the session MFA routes.
+    // sec-mfa: the three session MFA routes and the admin reset.
     expect(ROUTE_MATRIX).toMatchObject({
       'POST /api/session/mfa/enroll': { access: 'session' },
       'POST /api/session/mfa/enroll/confirm': { access: 'session' },
       'POST /api/session/mfa/verify': { access: 'session' },
+      'POST /api/users/:id/mfa/reset': { access: 'admin' },
     });
     expect(matrixMismatches(routes, ROUTE_MATRIX)).toEqual({ missing: [], extra: [] });
   });

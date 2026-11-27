@@ -282,6 +282,11 @@ export const ROUTE_MATRIX: Readonly<Record<string, MatrixEntry>> = {
     sample: { url: `/api/users/${NO_ROW}`, body: { displayName: 'Matrix Renamed' } },
     idor: USERS_GLOBAL,
   },
+  'POST /api/users/:id/mfa/reset': {
+    access: 'admin',
+    sample: { url: `/api/users/${NO_ROW}/mfa/reset` },
+    idor: USERS_GLOBAL,
+  },
   'GET /api/audit': { access: 'session', sample: { url: '/api/audit' }, idor: NO_URL_ID },
 
   // App-wide settings.
