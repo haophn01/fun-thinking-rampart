@@ -13,7 +13,7 @@ _From plan: pod-docs/plans/security-hardening.md · Slug: sec-baseline · Status
 | 2 | T1 | Rate limiting on every request, tight limits on setup and sign-in | sec-baseline-t1 | #30 | done | efa0a59 | S1, C1 |
 | 2 | M1 | Access-control regression matrix over every api route | sec-baseline-m1 | #30 | done | efa0a59 | C1 |
 | 2 | R1 | Log redaction review and tests | sec-baseline-r1 | #30 | done | efa0a59 | C1 |
-| 3 | E1 | e2e on the production path, header spec, CSP violation check; docs | sec-baseline-e1 | — | pending | — | H1, P1, T1 |
+| 3 | E1 | e2e on the production path, header spec, CSP violation check; docs | sec-baseline-e1 | #32 | done | 669868c | H1, P1, T1 |
 
 Plan branch `security-hardening`; wave heads `sec-baseline-w1`, `sec-baseline-w2`, `sec-baseline-w3`. Merge target `main`. No migration and no one-way door in this sprint.
 
@@ -390,3 +390,35 @@ Edges: `TRUE`, `1`, `yes`, ` true` are refused for the booleans. `0`, `1001`, `1
 - **Depends on:** H1, P1, T1
 - **One-way door:** none
 - **Model:** opus
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date (`main` has no new commits since 91161a6).
+- **Slices shipped:** S1 and C1 (PR #28, 78d507f); H1, P1, T1, M1 and R1 (PR #30, efa0a59); E1 (PR #32). All went into `security-hardening`. There were no one-way doors.
+- **Queue:**
+  - resolved S1's spawn-shell Semgrep exclusion (P1, #30)
+  - added T1's rate-limit UX for the next sprint, sec-auth (the app shell has to handle 429)
+  - the "before hosting: web CSP" item from plan cmmc-l2-grc is now covered by H1, P1 and E1, ready to be marked resolved at plan end
+- **Decisions:**
+  - zod runs jitless in the browser only, applied when the contract loads (2026-11-26)
+  - error codes are logged as `errorCode`, because R1 redacts `code`
+  - P1's defaults: `API_PORT` comes from `WEB_PORT` under `start`, and a dot in the last path segment means a file
+- **Slice log:**
+  - S1: opus · medium · test-first yes · CI all green, audit fixture proven · Semgrep rule excluded, then re-enabled by P1 · left a ~252 KB worktree folder
+  - C1: opus · medium · test-first yes (2 characterization tests proven by mutation) · runtime local and hosted · I gave it the wrong dev ports (no clash)
+  - H1: opus · medium · test-first yes · BLOCKED on 2 pinned CSP tests; gate 1 exception granted · runtime by curl, local and hosted
+  - P1: opus · high · test-first yes · BLOCKED on harness.test; gate 1 exception granted · rendered with H1 in a throwaway merge, 0 violations · CI green with Semgrep rule on
+  - T1: opus · medium · test-first yes (the lockout test is a guard) · e2e red with 429 without the multiplier, then green · one Windows crash retried
+  - M1: opus · high · test-first yes · mutation proved IDOR test bites · no access gap found in 59 routes
+  - R1: opus · medium · test-first by mutation · raised the `code` redaction issue (fixed by the wave fix)
+  - E1: opus · medium · test-first yes · BLOCKED on the zod eval probe; gate 1 exception granted (contract/browser.ts and main.tsx) · e2e 20 passed, 0 CSP violations · one usage-limit stop, resumed
+  - Stalls: none. Usage-limit stops: 1 (E1).
+- **Wave fixes:** wave 2: `errorCode` in two log calls (red, then green). Waves 1 and 3: none.
+- **Wave checks:** each wave passed verify (976, then 1,019, then 1,024), e2e (15, then 15, then 20), root tsc and the audit gate, with CI green on all 7 jobs for #28, #30 and #32. New known issue: an intermittent vitest worker crash on Windows.
+- **Human's app:** still running the old two-port way (I wasn't allowed to stop its processes). The human was told how to restart it with `corepack pnpm start` (single port 3000).
+- **Agent context at hand-back:** about 1,300,000 tokens (sum of `subagent_tokens`, final context sizes, not billed).
+- **For the next sprint (sec-auth):**
+  - auth-screen UX for 429
+  - `expectNoSecrets` and the redaction keys are ready for TOTP and recovery codes
+  - the route matrix needs entries for every new route
+  - the security spec and CSP collector cover any new screens

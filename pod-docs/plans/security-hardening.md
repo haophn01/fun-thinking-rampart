@@ -174,7 +174,7 @@ erDiagram
 
 | Sprint | Goal | Status | Depends on |
 |--------|------|--------|------------|
-| sec-baseline | Route authz/CSRF/IDOR matrix; supply-chain CI (pinned actions, OSV/audit, Semgrep, pnpm settings); production web serving with CSP and headers; `HOSTED` mode; rate limiting; log redaction tests | active | — |
+| sec-baseline | Route authz/CSRF/IDOR matrix; supply-chain CI (pinned actions, OSV/audit, Semgrep, pnpm settings); production web serving with CSP and headers; `HOSTED` mode; rate limiting; log redaction tests | done | — |
 | sec-auth | Migration 0006; sessions (30 min / 8 h, rotation, sign out everywhere); password blocklist, history, change page, temporary password; sign-in notice; session lock screen | planned | sec-baseline |
 | sec-mfa | TOTP enrollment and challenge for every user, recovery codes, replay guard, encrypted secrets, admin reset; e2e sign-in path | planned | sec-auth |
 | sec-integrity | Upload hardening; hash-chained audit log with Verify; FIPS_MODE check and PBKDF2 option; SECURITY.md (disclosure, STRIDE, 800-171 self-mapping); docs and e2e | planned | sec-mfa |
