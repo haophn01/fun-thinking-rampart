@@ -6,9 +6,9 @@ _From plan: pod-docs/plans/security-hardening.md · Slug: sec-integrity · Statu
 
 | Wave | Slice | Title | Branch | PR | Status | Confidence | Depends on |
 |------|-------|-------|--------|----|--------|------------|------------|
-| 1 | A1 | Audit hash chain: hash on write, legacy backfill, verify api | sec-integrity-A1 | — | pending | — | — |
-| 1 | U1 | Upload content checker, zip guard, name sanitizer, sample files | sec-integrity-U1 | — | pending | — | — |
-| 1 | F1 | FIPS_MODE startup check and PBKDF2-SHA-256 passwords | sec-integrity-F1 | — | pending | — | — |
+| 1 | A1 | Audit hash chain: hash on write, legacy backfill, verify api | sec-integrity-A1 | #42 | done | deb2cc3 | — |
+| 1 | U1 | Upload content checker, zip guard, name sanitizer, sample files | sec-integrity-U1 | #42 | done | deb2cc3 | — |
+| 1 | F1 | FIPS_MODE startup check and PBKDF2-SHA-256 passwords | sec-integrity-F1 | #42 | done | deb2cc3 | — |
 | 2 | U2 | Upload hardening wired into evidence and policies | sec-integrity-U2 | — | pending | — | U1 |
 | 2 | V1 | Settings › Audit log: Verify audit log | sec-integrity-V1 | — | pending | — | A1 |
 | 3 | E1 | e2e: upload refusals, Verify, look of the Verify result | sec-integrity-E1 | — | pending | — | A1, U1, U2, V1 |
