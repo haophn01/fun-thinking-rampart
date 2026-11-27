@@ -288,6 +288,11 @@ export const ROUTE_MATRIX: Readonly<Record<string, MatrixEntry>> = {
     idor: USERS_GLOBAL,
   },
   'GET /api/audit': { access: 'session', sample: { url: '/api/audit' }, idor: NO_URL_ID },
+  'GET /api/audit/verify': {
+    access: 'session',
+    sample: { url: '/api/audit/verify' },
+    idor: { notApplicable: 'the whole audit log, not an assessment row' },
+  },
 
   // App-wide settings.
   'PUT /api/settings/sign-in-notice': {

@@ -111,6 +111,12 @@ describe('the matrix covers every api route', () => {
       'POST /api/session/mfa/enroll/confirm': { access: 'session' },
       'POST /api/session/mfa/verify': { access: 'session' },
       'POST /api/users/:id/mfa/reset': { access: 'admin' },
+      // sec-integrity: Verify reads the whole audit log, so no row id names an assessment.
+      'GET /api/audit/verify': {
+        access: 'session',
+        sample: { url: '/api/audit/verify' },
+        idor: { notApplicable: 'the whole audit log, not an assessment row' },
+      },
     });
     expect(matrixMismatches(routes, ROUTE_MATRIX)).toEqual({ missing: [], extra: [] });
   });
