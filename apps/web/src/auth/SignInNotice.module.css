@@ -1,0 +1,24 @@
+/* The system use notice step on Sign in: plain text with its line breaks kept. */
+.notice {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.heading {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.text {
+  margin: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 16px;
+  border: var(--rp-rule) solid var(--rp-ink);
+  background: var(--rp-vellum);
+  font-size: var(--rp-text-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

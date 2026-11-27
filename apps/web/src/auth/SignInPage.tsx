@@ -3,9 +3,11 @@ import { ApiError } from '../api/client';
 import { Alert, Button, TextField } from '../look';
 import { usePageTitle } from '../pages/usePageTitle';
 import styles from './auth.module.css';
+import notice from './SignInNotice.module.css';
 import { useSession } from './session';
 
 const INVALID_CREDENTIALS = 'Email or password is incorrect.';
+const NOTICE_CHANGED = 'The notice has changed. Read it again.';
 const UNREACHABLE = "Can't reach the API. Check that it is running, then try again.";
 
 /** "Too many attempts. Try again in N minutes.", N being `retryAfterSeconds` rounded up. */
@@ -40,6 +42,9 @@ export function SignInPage() {
   const [failure, setFailure] = useState<string | null>(null);
   const [showNotice, setShowNotice] = useState(true);
   const [pending, setPending] = useState(false);
+  // The digest of the notice read on this visit; a new visit starts unacknowledged.
+  const [acknowledged, setAcknowledged] = useState<string | null>(null);
+  const [changed, setChanged] = useState(false);
   // Guards a second submit that lands before React re-renders the disabled button.
   const inFlight = useRef(false);
 
@@ -58,12 +63,56 @@ export function SignInPage() {
     setPending(true);
     setFailure(null);
     try {
-      await session.signIn(email.trim().toLowerCase(), password);
+      await session.signIn(
+        email.trim().toLowerCase(),
+        password,
+        ...(acknowledged !== null && session.signInNotice !== null ? [acknowledged] : []),
+      );
     } catch (error) {
+      if (error instanceof ApiError && error.code === 'notice_not_acknowledged') {
+        setAcknowledged(null);
+        setChanged(true);
+        inFlight.current = false;
+        setPending(false);
+        await session.refresh();
+        return;
+      }
       setFailure(signInFailure(error));
       inFlight.current = false;
       setPending(false);
     }
+  }
+
+  const noticeStep = session.signInNotice !== null && acknowledged !== session.signInNotice.digest;
+  if (session.signInNotice !== null && noticeStep) {
+    const { text, digest } = session.signInNotice;
+    return (
+      <>
+        <div className={styles.intro}>
+          <p className={styles.kicker}>Inspection access</p>
+          <h1>Sign in</h1>
+        </div>
+        {showNotice && session.notice !== null && <Alert tone="info">{session.notice}</Alert>}
+        {changed && <Alert tone="info">{NOTICE_CHANGED}</Alert>}
+        <section className={notice.notice} aria-labelledby="sign-in-notice-heading">
+          <h2 id="sign-in-notice-heading" className={notice.heading}>
+            System use notice
+          </h2>
+          <p className={notice.text}>{text}</p>
+          <div className={styles.actions}>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setAcknowledged(digest);
+                setChanged(false);
+              }}
+            >
+              Acknowledge and continue
+            </Button>
+          </div>
+        </section>
+      </>
+    );
   }
 
   return (

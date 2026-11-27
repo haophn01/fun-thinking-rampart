@@ -1,0 +1,11 @@
+.form {
+  display: grid;
+  gap: 20px;
+  max-width: 720px;
+  min-width: 0;
+}
+
+.hint {
+  color: var(--rp-graphite);
+  font-size: var(--rp-text-body);
+}
