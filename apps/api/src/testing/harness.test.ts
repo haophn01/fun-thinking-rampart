@@ -358,7 +358,12 @@ describe('harness', () => {
         mfaLastStep: null,
         mfaEnrolledAt: null,
       });
-      expect((await admin.post('/api/users', CONTRIBUTOR)).statusCode).toBe(201);
+      // The session stays as setup left it: waiting for enrollment, so the gate holds.
+      expect(pending(h, admin)).toBe(true);
+      expect((await admin.get('/api/users')).statusCode).toBe(403);
+      // A default sign-in completes MFA, so the admin can add a user.
+      const full = await h.signIn(ADMIN.email, ADMIN.password);
+      expect((await full.post('/api/users', CONTRIBUTOR)).statusCode).toBe(201);
       const carl = await h.signIn(CONTRIBUTOR.email, CONTRIBUTOR.password, { mfa: 'as_stored' });
       expect(stored(h, CONTRIBUTOR.email).mfaEnrolledAt).toBeNull();
       // A pending session stays pending: as_stored never touches the session either.
@@ -367,7 +372,8 @@ describe('harness', () => {
       const second = await h.signIn(CONTRIBUTOR.email, CONTRIBUTOR.password, { mfa: 'as_stored' });
       expect(stored(h, CONTRIBUTOR.email).mfaEnrolledAt).toBeNull();
       expect(pending(h, carl)).toBe(true);
-      expect(pending(h, second)).toBe(false);
+      // Sign-in leaves every session pending, and as_stored keeps it so.
+      expect(pending(h, second)).toBe(true);
     });
 
     it('h.totp equals totpAt for the stored secret, at the clock or a given time', async () => {

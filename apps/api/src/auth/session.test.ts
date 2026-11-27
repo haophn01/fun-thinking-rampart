@@ -131,7 +131,44 @@ describe('rotation at sign-in', () => {
     const stale = h.client();
     stale.cookie = oldToken;
     expect((await stale.get('/api/users')).statusCode).toBe(401);
+    // The new session waits for the code, then works.
+    expect((await c.get('/api/users')).statusCode).toBe(403);
+    const verified = await c.post('/api/session/mfa/verify', { code: h.totp(ADMIN.email) });
+    expect(verified.statusCode, verified.body).toBe(200);
     expect((await c.get('/api/users')).statusCode).toBe(200);
+  });
+});
+
+describe('session status', () => {
+  const SIGNED_OUT = {
+    user: null,
+    csrfToken: null,
+    locked: false,
+    mustChangePassword: false,
+    signInNotice: null,
+  };
+
+  it('setup-required and signed-out answers are the old pins plus mfa none', async () => {
+    const h = harness();
+    const fresh = await h.client().get('/api/session');
+    expect(fresh.statusCode).toBe(200);
+    expect(fresh.json()).toEqual({ setupRequired: true, ...SIGNED_OUT, mfa: 'none' });
+
+    await h.setupAdmin();
+    const out = await h.client().get('/api/session');
+    expect(out.json()).toEqual({ setupRequired: false, ...SIGNED_OUT, mfa: 'none' });
+  });
+
+  it('a full session reports none, a pending one challenge, with its user and token', async () => {
+    const h = harness();
+    const admin = await h.setupAdmin();
+    const full = (await admin.get('/api/session')).json<Record<string, unknown>>();
+    expect(full.mfa).toBe('none');
+    const pending = h.client();
+    await pending.post('/api/session', { email: ADMIN.email, password: ADMIN.password });
+    const answer = (await pending.get('/api/session')).json<Record<string, unknown>>();
+    expect(answer).toMatchObject({ mfa: 'challenge', csrfToken: pending.csrfToken });
+    expect(answer.user).toMatchObject({ email: ADMIN.email });
   });
 });
 
