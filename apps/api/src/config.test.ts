@@ -27,6 +27,8 @@ describe('config', () => {
       serveWeb: false,
       webDistPath: resolve(apiRoot, '..', 'web', 'dist'),
       rateLimitMultiplier: 1,
+      secretKeyHex: null,
+      secretKeyPath: join(apiRoot, 'data', 'rampart-secret.key'),
     });
 
     // Port boundaries.
@@ -176,6 +178,58 @@ describe('config', () => {
         'WEB_DIST_PATH',
       ]);
       for (const key of error.keys) expect(error.message).toContain(key);
+    });
+  });
+
+  describe('secret key settings', () => {
+    const KEY = '0123456789abcdef'.repeat(4);
+
+    it('a 64-hex key in either case parses to lowercase', () => {
+      expect(loadConfig({ RAMPART_SECRET_KEY: KEY }).secretKeyHex).toBe(KEY);
+      expect(loadConfig({ RAMPART_SECRET_KEY: KEY.toUpperCase() }).secretKeyHex).toBe(KEY);
+      const mixed = 'AbCdEf0123456789'.repeat(4);
+      expect(loadConfig({ RAMPART_SECRET_KEY: mixed }).secretKeyHex).toBe(mixed.toLowerCase());
+    });
+
+    it('unset or empty is null', () => {
+      expect(loadConfig({}).secretKeyHex).toBeNull();
+      expect(loadConfig({ RAMPART_SECRET_KEY: '' }).secretKeyHex).toBeNull();
+    });
+
+    it('refuses a wrong length, a non-hex character or one byte repeated, naming the key only', () => {
+      const bad = [
+        KEY.slice(0, 63),
+        `${KEY}0`,
+        `${KEY.slice(0, 63)}g`,
+        '0'.repeat(64),
+        'ab'.repeat(32),
+        'FF'.repeat(32),
+        ` ${KEY}`,
+        `${KEY}
+`,
+      ];
+      for (const value of bad) {
+        const error = configError({ RAMPART_SECRET_KEY: value });
+        expect(error.keys, JSON.stringify(value)).toEqual(['RAMPART_SECRET_KEY']);
+        expect(error.message).toContain('RAMPART_SECRET_KEY');
+        // The value itself never reaches the message, even a near-miss key.
+        expect(error.message).not.toContain(value.trim().slice(0, 32));
+      }
+    });
+
+    it('SECRET_KEY_PATH resolves against apps/api; absolute is kept; blank is refused', () => {
+      expect(loadConfig({}).secretKeyPath).toBe(join(apiRoot, 'data', 'rampart-secret.key'));
+      expect(loadConfig({ SECRET_KEY_PATH: '' }).secretKeyPath).toBe(
+        join(apiRoot, 'data', 'rampart-secret.key'),
+      );
+      expect(loadConfig({ SECRET_KEY_PATH: 'scratch/k.key' }).secretKeyPath).toBe(
+        join(apiRoot, 'scratch', 'k.key'),
+      );
+      const absolute = resolve(apiRoot, '..', 'keys', 'r.key');
+      expect(loadConfig({ SECRET_KEY_PATH: absolute }).secretKeyPath).toBe(absolute);
+      for (const blank of [' ', '	']) {
+        expect(configError({ SECRET_KEY_PATH: blank }).keys).toEqual(['SECRET_KEY_PATH']);
+      }
     });
   });
 });

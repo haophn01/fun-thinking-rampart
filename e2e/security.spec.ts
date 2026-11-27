@@ -30,6 +30,8 @@ const API_CSP = "default-src 'none';base-uri 'none';form-action 'none';frame-anc
 const PERMISSIONS_POLICY = 'camera=(), geolocation=(), microphone=(), payment=(), usb=()';
 const HSTS = 'max-age=31536000; includeSubDomains';
 const IMMUTABLE = 'public, max-age=31536000, immutable';
+// Hosted mode needs RAMPART_SECRET_KEY and never uses a key file. A fixed test key only.
+const HOSTED_SECRET_KEY = '0f1e2d3c4b5a69788796a5b4c3d2e1f0'.repeat(2);
 
 // ---------- the CSP violation collector ----------
 
@@ -165,11 +167,15 @@ test.describe('production serving on the config server', () => {
 let hosted: ChildProcess | null = null;
 const hostedOutput: string[] = [];
 
+function hostedRunDir() {
+  return join(process.env.E2E_RUN_DIR ?? '', 'hosted');
+}
+
 /** The built api (`node dist/server.js`) in hosted mode, on a database in the run folder. */
 async function startHosted() {
   const entry = join(API_DIR, 'dist', 'server.js');
   if (!existsSync(entry)) throw new Error(`${entry} is missing: the config server builds it.`);
-  const runDir = join(process.env.E2E_RUN_DIR ?? '', 'hosted');
+  const runDir = hostedRunDir();
   mkdirSync(runDir, { recursive: true });
   const child = spawn(process.execPath, [entry], {
     cwd: API_DIR,
@@ -183,6 +189,9 @@ async function startHosted() {
       LOG_LEVEL: 'warn',
       // Hosted mode refuses any other multiplier: the real limits, so few requests.
       RATE_LIMIT_MULTIPLIER: '1',
+      RAMPART_SECRET_KEY: HOSTED_SECRET_KEY,
+      // Never written: the env key wins. The check below proves it.
+      SECRET_KEY_PATH: join(runDir, 'never.key'),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -260,6 +269,8 @@ test.describe('hosted mode', () => {
       expect(rest).toContain('Path=/');
       expect(rest).toContain('SameSite=Strict');
       expect(attributes).not.toContain('domain');
+      // The env key was used: hosted mode wrote no key file.
+      expect(existsSync(join(hostedRunDir(), 'never.key'))).toBe(false);
     } finally {
       await request.dispose();
     }

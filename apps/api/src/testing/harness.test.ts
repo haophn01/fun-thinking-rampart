@@ -8,7 +8,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createMemoryStore } from '../../storage';
 import { user } from '../../db/schema';
 import { CSRF_HEADER, SESSION_COOKIE, sessionResponseSchema } from '../contract';
-import { ADMIN, createHarness, type Harness, type HarnessOptions } from './harness';
+import {
+  ADMIN,
+  createHarness,
+  HARNESS_SECRET_KEY,
+  type Harness,
+  type HarnessOptions,
+} from './harness';
 
 const harnesses: Harness[] = [];
 
@@ -193,6 +199,20 @@ describe('harness', () => {
         logLevel: 'error',
       });
       expect(harness({ logLevel: 'warn' }).config).toMatchObject({ logLevel: 'warn' });
+    });
+
+    it('defaults the secret key to HARNESS_SECRET_KEY and takes an env override', () => {
+      expect(HARNESS_SECRET_KEY).toBe('0123456789abcdef'.repeat(4));
+      expect(harness().config.secretKeyHex).toBe(HARNESS_SECRET_KEY);
+      // Hosted harnesses get it too, so they pass the startup rule like a real hosted server.
+      expect(harness({ env: { HOSTED: 'true' } }).config.secretKeyHex).toBe(HARNESS_SECRET_KEY);
+      const other = 'fedcba9876543210'.repeat(4);
+      expect(harness({ env: { RAMPART_SECRET_KEY: other } }).config.secretKeyHex).toBe(other);
+      // An empty value unsets it: the app then runs on a random in-memory key.
+      expect(harness({ env: { RAMPART_SECRET_KEY: '' } }).config.secretKeyHex).toBeNull();
+      expect(() => harness({ env: { RAMPART_SECRET_KEY: '0'.repeat(64) } })).toThrow(
+        /RAMPART_SECRET_KEY/,
+      );
     });
 
     it('a bad env value fails like the server would', () => {

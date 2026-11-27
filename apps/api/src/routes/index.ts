@@ -12,6 +12,7 @@ import { registerEvidenceRoutes } from '../evidence/routes';
 import { registerPoamRoutes } from '../poam/routes';
 import { registerPolicyRoutes } from '../policies/routes';
 import { markGuardedScope } from '../security/route-table';
+import type { DerivedKeys } from '../security/secrets';
 import { registerSettingsRoutes } from '../settings/routes';
 import { registerSspDataRoutes } from '../ssp-data/routes';
 import { registerSspRoutes } from '../ssp/routes';
@@ -23,6 +24,8 @@ export interface ApiDeps {
   /** The loaded settings: hosted mode picks the session cookie, for one. */
   config: Config;
   db: AppDb;
+  /** Derived from the master key: never log them. */
+  keys: DerivedKeys;
   /** The app clock: every expiry, lockout, audit `at` and "today" comes from it. */
   now: () => Date;
   /** Evidence and policy files, content-addressed by SHA-256. */
