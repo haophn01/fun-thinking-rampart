@@ -14,7 +14,7 @@ import type { ApiDeps } from '../routes';
 import { getSignInNotice } from '../settings/repository';
 import { clearSessionCookie, setSessionCookie } from './cookie';
 import { assertAccountUnlocked, clearFailures, recordFailure } from './lockout';
-import { hashPassword, verifyPassword } from './password';
+import { hashPassword, passwordSchemeFor, verifyPassword } from './password';
 import { assertNotReused, checkNewPassword, pushPasswordHistory } from './password-policy';
 import {
   deleteOtherSessions,
@@ -73,12 +73,13 @@ async function changePassword(
   const now = deps.now();
   const account = accountOf(deps, auth.user.id);
   assertAccountUnlocked(reply, account.lockedUntil, now);
-  if (!(await verifyPassword(account.passwordHash, body.currentPassword))) {
+  const scheme = passwordSchemeFor(deps.config);
+  if (!(await verifyPassword(account.passwordHash, body.currentPassword, scheme))) {
     throw wrongPassword(deps, request, reply, account.id, now);
   }
   checkNewPassword(body.newPassword);
   await assertNotReused(deps.db, account.id, account.passwordHash, body.newPassword);
-  const passwordHash = await hashPassword(body.newPassword);
+  const passwordHash = await hashPassword(body.newPassword, scheme);
 
   const rotated = deps.db.transaction((tx) => {
     // Another change may have finished while this one was hashing: its password is the current one.
@@ -165,7 +166,8 @@ async function unlock(
   const now = deps.now();
   const account = accountOf(deps, auth.user.id);
   assertAccountUnlocked(reply, account.lockedUntil, now);
-  if (!(await verifyPassword(account.passwordHash, body.password))) {
+  const scheme = passwordSchemeFor(deps.config);
+  if (!(await verifyPassword(account.passwordHash, body.password, scheme))) {
     throw wrongPassword(deps, request, reply, account.id, now);
   }
   deps.db.transaction((tx) => {
