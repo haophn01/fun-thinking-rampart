@@ -6,12 +6,18 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMemoryStore } from '../../storage';
-import { user } from '../../db/schema';
+import { session, user } from '../../db/schema';
+import { base32Decode } from '../auth/mfa/base32';
+import { totpAt } from '../auth/mfa/totp';
+import { tokenDigest } from '../auth/sessions';
 import { CSRF_HEADER, SESSION_COOKIE, sessionResponseSchema } from '../contract';
+import { decryptSecret, deriveKeys } from '../security/secrets';
 import {
   ADMIN,
   createHarness,
+  HARNESS_MFA_SECRET,
   HARNESS_SECRET_KEY,
+  type Client,
   type Harness,
   type HarnessOptions,
 } from './harness';
@@ -278,6 +284,109 @@ describe('harness', () => {
       await h.setupAdmin();
       await expect(h.signIn(ADMIN.email, 'not the password!')).rejects.toThrow(/401/);
       await expect(h.signIn('nobody@example.com', ADMIN.password)).rejects.toThrow(/401/);
+    });
+  });
+
+  describe('signIn completes MFA by default', () => {
+    const CONTRIBUTOR = {
+      email: 'carl@example.com',
+      displayName: 'Carl Contributor',
+      role: 'contributor',
+      password: 'contributor password',
+    } as const;
+
+    function stored(h: Harness, email: string) {
+      const row = h.db.select().from(user).where(eq(user.email, email)).get();
+      if (!row) throw new Error(`no user ${email}`);
+      return row;
+    }
+    function sessionId(c: Client): string {
+      if (c.cookie === null) throw new Error('the client has no session');
+      return tokenDigest(c.cookie);
+    }
+    function pending(h: Harness, c: Client): boolean | undefined {
+      return h.db
+        .select({ mfaPending: session.mfaPending })
+        .from(session)
+        .where(eq(session.id, sessionId(c)))
+        .get()?.mfaPending;
+    }
+    function pend(h: Harness, c: Client): void {
+      h.db
+        .update(session)
+        .set({ mfaPending: true })
+        .where(eq(session.id, sessionId(c)))
+        .run();
+    }
+
+    it('setupAdmin and signIn enroll with HARNESS_MFA_SECRET, the session not pending', async () => {
+      const h = harness();
+      const keys = deriveKeys(Buffer.from(h.config.secretKeyHex ?? '', 'hex'));
+      const admin = await h.setupAdmin();
+      const row = stored(h, ADMIN.email);
+      expect(row.mfaEnrolledAt).toBe(h.clock.now().toISOString());
+      expect(row.mfaLastStep).toBeNull();
+      expect(row.mfaSecretEnc).toMatch(/^v1\./);
+      expect(decryptSecret(keys.mfaSecret, row.mfaSecretEnc ?? '', `user:${row.id}`)).toBe(
+        HARNESS_MFA_SECRET,
+      );
+      expect(pending(h, admin)).toBe(false);
+
+      expect((await admin.post('/api/users', CONTRIBUTOR)).statusCode).toBe(201);
+      expect(stored(h, CONTRIBUTOR.email).mfaEnrolledAt).toBeNull();
+      const carl = await h.signIn(CONTRIBUTOR.email, CONTRIBUTOR.password);
+      const carlRow = stored(h, CONTRIBUTOR.email);
+      expect(carlRow.mfaEnrolledAt).not.toBeNull();
+      expect(decryptSecret(keys.mfaSecret, carlRow.mfaSecretEnc ?? '', `user:${carlRow.id}`)).toBe(
+        HARNESS_MFA_SECRET,
+      );
+      expect(pending(h, carl)).toBe(false);
+
+      // Only the new sign-in's own session is made full; an enrolled user keeps their secret.
+      pend(h, carl);
+      const again = await h.signIn(CONTRIBUTOR.email, CONTRIBUTOR.password);
+      expect(pending(h, again)).toBe(false);
+      expect(pending(h, carl)).toBe(true);
+      expect(stored(h, CONTRIBUTOR.email).mfaSecretEnc).toBe(carlRow.mfaSecretEnc);
+    });
+
+    it("{ mfa: 'as_stored' } changes nothing", async () => {
+      const h = harness();
+      const admin = await h.setupAdmin({}, { mfa: 'as_stored' });
+      expect(stored(h, ADMIN.email)).toMatchObject({
+        mfaSecretEnc: null,
+        mfaLastStep: null,
+        mfaEnrolledAt: null,
+      });
+      expect((await admin.post('/api/users', CONTRIBUTOR)).statusCode).toBe(201);
+      const carl = await h.signIn(CONTRIBUTOR.email, CONTRIBUTOR.password, { mfa: 'as_stored' });
+      expect(stored(h, CONTRIBUTOR.email).mfaEnrolledAt).toBeNull();
+      // A pending session stays pending: as_stored never touches the session either.
+      pend(h, carl);
+      expect(pending(h, carl)).toBe(true);
+      const second = await h.signIn(CONTRIBUTOR.email, CONTRIBUTOR.password, { mfa: 'as_stored' });
+      expect(stored(h, CONTRIBUTOR.email).mfaEnrolledAt).toBeNull();
+      expect(pending(h, carl)).toBe(true);
+      expect(pending(h, second)).toBe(false);
+    });
+
+    it('h.totp equals totpAt for the stored secret, at the clock or a given time', async () => {
+      const h = harness();
+      await h.setupAdmin();
+      const secret = base32Decode(HARNESS_MFA_SECRET);
+      expect(h.totp(ADMIN.email)).toBe(totpAt(secret, h.clock.now()));
+      const later = new Date(h.clock.now().getTime() + 90_000);
+      expect(h.totp(ADMIN.email, later)).toBe(totpAt(secret, later));
+      h.clock.set(later);
+      expect(h.totp(ADMIN.email)).toBe(totpAt(secret, later));
+      expect(() => h.totp('nobody@example.com')).toThrow(/nobody@example.com/);
+    });
+
+    it('works on a random in-memory key too', async () => {
+      const h = harness({ env: { RAMPART_SECRET_KEY: '' } });
+      expect(h.config.secretKeyHex).toBeNull();
+      await h.setupAdmin();
+      expect(h.totp(ADMIN.email)).toBe(totpAt(base32Decode(HARNESS_MFA_SECRET), h.clock.now()));
     });
   });
 });

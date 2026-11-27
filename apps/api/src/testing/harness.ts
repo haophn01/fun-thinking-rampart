@@ -1,12 +1,17 @@
-import { eq } from 'drizzle-orm';
+import { randomBytes } from 'node:crypto';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { openDb, runMigrations, type AppDb, type DbHandle } from '../../db/client';
-import { user } from '../../db/schema';
+import { session, user } from '../../db/schema';
 import { createMemoryStore, type MemoryFileStore } from '../../storage';
 import { buildApp } from '../app';
 import { sessionCookieName } from '../auth/cookie';
+import { base32Decode } from '../auth/mfa/base32';
+import { totpAt } from '../auth/mfa/totp';
+import { tokenDigest } from '../auth/sessions';
 import { loadConfig, type Config, type LogLevel } from '../config';
 import { CSRF_HEADER, sessionResponseSchema, type SessionUser } from '../contract';
+import { decryptSecret, deriveKeys, encryptSecret, type DerivedKeys } from '../security/secrets';
 
 /** The admin `setupAdmin()` creates unless told otherwise. */
 export const ADMIN = {
@@ -17,6 +22,13 @@ export const ADMIN = {
 
 /** `RAMPART_SECRET_KEY` for every harness app unless `env` overrides it: a test key only. */
 export const HARNESS_SECRET_KEY = '0123456789abcdef'.repeat(4);
+
+/**
+ * The TOTP secret (base32) `setupAdmin()` and `signIn()` enroll an unenrolled user with, so
+ * suites get a full session. Test fixture: RFC 6238's published secret ("12345678901234567890").
+ */
+// nosemgrep: generic.secrets.security.detected-generic-secret.detected-generic-secret
+export const HARNESS_MFA_SECRET = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
 
 /** Where every harness clock starts. */
 export const START = new Date('2026-11-23T09:00:00.000Z');
@@ -81,22 +93,36 @@ export interface Harness {
   clock: Clock;
   /** Every log line the app wrote, parsed. */
   logs: Record<string, unknown>[];
+  /** The keys the app seals MFA secrets and recovery codes with. */
+  keys: DerivedKeys;
   /** A client with no session. */
   client(): Client;
-  /** Runs first-run setup and returns the signed-in admin's client. */
-  setupAdmin(admin?: { email?: string; displayName?: string; password?: string }): Promise<Client>;
+  /**
+   * Runs first-run setup and returns the signed-in admin's client, enrolled in MFA as `signIn`
+   * describes unless `{ mfa: 'as_stored' }`.
+   */
+  setupAdmin(
+    admin?: { email?: string; displayName?: string; password?: string },
+    options?: Pick<SignInOptions, 'mfa'>,
+  ): Promise<Client>;
   /**
    * Signs in and returns the client; throws unless the api answers 200. It first clears the
    * user's `must_change_password` in the DB, so suites get a working session from an
-   * admin-set (temporary) password; `{ temporary: true }` keeps the flag.
+   * admin-set (temporary) password; `{ temporary: true }` keeps the flag. After the api answers,
+   * an unenrolled user is enrolled in the DB with `HARNESS_MFA_SECRET` and the new session is
+   * made not MFA-pending, so it is a full one; `{ mfa: 'as_stored' }` skips both.
    */
   signIn(email: string, password: string, options?: SignInOptions): Promise<Client>;
+  /** The TOTP code for the user's stored secret at `at` (the harness clock by default). */
+  totp(email: string, at?: Date): string;
   close(): Promise<void>;
 }
 
 export interface SignInOptions {
   /** Keep `must_change_password` as the DB has it, so the session is gated. */
   temporary?: boolean;
+  /** `as_stored`: leave the user's MFA and the session's `mfa_pending` as the api left them. */
+  mfa?: 'as_stored';
 }
 
 export interface HarnessOptions {
@@ -161,10 +187,15 @@ export function createHarness(options: HarnessOptions = {}): Harness {
   });
   // The client keeps whichever session cookie the app's mode uses.
   const cookieName = sessionCookieName(config);
+  // The harness holds the master key, so it can seal the secrets it enrolls under the app's keys.
+  const masterKey =
+    config.secretKeyHex === null ? randomBytes(32) : Buffer.from(config.secretKeyHex, 'hex');
+  const keys = deriveKeys(masterKey);
   const app = buildApp({
     config,
     db: handle.db,
     now: () => clock.now(),
+    secretKey: masterKey,
     store,
     logStream: {
       write(line: string) {
@@ -225,15 +256,48 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     return self;
   }
 
+  /** Enrolls the client's user with `HARNESS_MFA_SECRET` if unenrolled; its session is made full. */
+  function completeMfa(c: Client): void {
+    if (c.user === null || c.cookie === null) throw new Error('the api left no session');
+    const userId = c.user.id;
+    handle.db
+      .update(user)
+      .set({
+        mfaSecretEnc: encryptSecret(keys.mfaSecret, HARNESS_MFA_SECRET, `user:${userId}`),
+        mfaLastStep: null,
+        mfaEnrolledAt: clock.now().toISOString(),
+      })
+      .where(and(eq(user.id, userId), isNull(user.mfaEnrolledAt)))
+      .run();
+    handle.db
+      .update(session)
+      .set({ mfaPending: false })
+      .where(eq(session.id, tokenDigest(c.cookie)))
+      .run();
+  }
+
   async function setupAdmin(
     admin: { email?: string; displayName?: string; password?: string } = {},
+    options: Pick<SignInOptions, 'mfa'> = {},
   ) {
     const c = client();
     const response = await c.post('/api/setup', { ...ADMIN, ...admin });
     if (response.statusCode !== 201) {
       throw new Error(`setup answered ${String(response.statusCode)}: ${response.body}`);
     }
+    if (options.mfa !== 'as_stored') completeMfa(c);
     return c;
+  }
+
+  function totp(email: string, at: Date = clock.now()): string {
+    const row = handle.db
+      .select({ id: user.id, enc: user.mfaSecretEnc })
+      .from(user)
+      .where(eq(user.email, email.trim().toLowerCase()))
+      .get();
+    if (row === undefined || row.enc === null) throw new Error(`no stored MFA secret for ${email}`);
+    const secret = decryptSecret(keys.mfaSecret, row.enc, `user:${row.id}`);
+    return totpAt(base32Decode(secret), at);
   }
 
   async function signIn(email: string, password: string, options: SignInOptions = {}) {
@@ -247,6 +311,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     if (response.statusCode !== 200) {
       throw new Error(`sign-in answered ${String(response.statusCode)}: ${response.body}`);
     }
+    if (options.mfa !== 'as_stored') completeMfa(c);
     return c;
   }
 
@@ -258,9 +323,11 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     handle,
     clock,
     logs,
+    keys,
     client,
     setupAdmin,
     signIn,
+    totp,
     async close() {
       await app.close();
       if (handle.sqlite.open) handle.sqlite.close();

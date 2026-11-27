@@ -8,6 +8,9 @@ import styles from './auth.module.css';
 import { ChangePasswordPage } from './ChangePasswordPage';
 import { IdleLock } from './IdleLock';
 import { LockScreen } from './LockScreen';
+import { MfaChallengePage } from './MfaChallengePage';
+import { MfaEnrollPage } from './MfaEnrollPage';
+import { RecoveryCodesPage } from './RecoveryCodesPage';
 import { useSession } from './session';
 import { SetupPage } from './SetupPage';
 import { SignInPage } from './SignInPage';
@@ -83,7 +86,7 @@ function HeldApp({ locked, children }: { locked: boolean; children: ReactNode })
 
 /**
  * Shows what the session allows: Loading, Setup, Sign in, an error with Retry, the lock screen,
- * the forced password change, or the app.
+ * two-step setup, its recovery codes or its challenge, the forced password change, or the app.
  */
 export function Gate({ children }: { children: ReactNode }) {
   const session = useSession();
@@ -100,6 +103,24 @@ export function Gate({ children }: { children: ReactNode }) {
       return (
         <AuthFrame>
           <LockScreen />
+        </AuthFrame>
+      );
+    case 'mfa_enroll':
+      return (
+        <AuthFrame>
+          <MfaEnrollPage />
+        </AuthFrame>
+      );
+    case 'mfa_recovery_codes':
+      return (
+        <AuthFrame>
+          <RecoveryCodesPage />
+        </AuthFrame>
+      );
+    case 'mfa_challenge':
+      return (
+        <AuthFrame>
+          <MfaChallengePage />
         </AuthFrame>
       );
     case 'password_change':

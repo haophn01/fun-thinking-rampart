@@ -154,9 +154,11 @@ interface UserRowProps {
   busy: boolean;
   /** Resolves true when saved, 'too_common' when the new password was refused, else false. */
   onChange: (user: User, change: UpdateUserRequest) => Promise<boolean | 'too_common'>;
+  /** Clears the user's two-step sign-in; admins only, no confirm step. */
+  onResetMfa: (user: User) => Promise<void>;
 }
 
-function UserRow({ user, isMe, busy, onChange }: UserRowProps) {
+function UserRow({ user, isMe, busy, onChange, onResetMfa }: UserRowProps) {
   const nameId = useId();
   const [resetting, setResetting] = useState(false);
   const [password, setPassword] = useState('');
@@ -187,6 +189,9 @@ function UserRow({ user, isMe, busy, onChange }: UserRowProps) {
           {isMe && <span className={styles.tag}>You</span>}
         </span>
         <span className={styles.email}>{user.email}</span>
+        <span className={styles.email}>
+          Two-step sign-in: {user.mfaEnrolled ? 'Set up' : 'Not set up'}
+        </span>
       </div>
       <span className={styles.state}>{user.active ? 'Active' : 'Inactive'}</span>
       <Select
@@ -214,6 +219,11 @@ function UserRow({ user, isMe, busy, onChange }: UserRowProps) {
         >
           Reset password
         </Button>
+        {user.mfaEnrolled && (
+          <Button disabled={busy} onClick={() => void onResetMfa(user)}>
+            Reset two-step sign-in
+          </Button>
+        )}
       </div>
       {resetting && (
         <form className={styles.reset} noValidate onSubmit={(event) => void savePassword(event)}>
@@ -322,6 +332,33 @@ export function UsersPanel() {
     [meId, session],
   );
 
+  const resetMfa = useCallback(
+    async (target: User) => {
+      setBusyId(target.id);
+      setFailure(null);
+      setNotice(null);
+      try {
+        const { user } = await apiSend(
+          'POST',
+          `/api/users/${encodeURIComponent(target.id)}/mfa/reset`,
+          undefined,
+          userResponseSchema,
+        );
+        setUsers((list) => list?.map((u) => (u.id === user.id ? user : u)) ?? null);
+        setNotice(
+          `Two-step sign-in reset for ${user.displayName}. They set it up again at their next sign-in.`,
+        );
+        // The reset ends all of the user's sessions, yours included.
+        if (target.id === meId) session.endSession();
+      } catch (error) {
+        setFailure(changeFailure(error));
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [meId, session],
+  );
+
   const clearMessages = useCallback(() => {
     setFailure(null);
     setNotice(null);
@@ -365,6 +402,7 @@ export function UsersPanel() {
             isMe={user.id === meId}
             busy={busyId === user.id}
             onChange={change}
+            onResetMfa={resetMfa}
           />
         ))}
       </ul>

@@ -591,3 +591,267 @@ describe('a lock the api has not confirmed', () => {
     expect(api.sent('POST /api/session/lock')).toHaveLength(2);
   });
 });
+
+/** One held answer: the test waits for the request, then answers it. */
+function held() {
+  let arrived: (call: Call) => void = () => undefined;
+  let answer: (response: Response) => void = () => undefined;
+  const requested = new Promise<Call>((resolve) => (arrived = resolve));
+  const response = new Promise<Response>((resolve) => (answer = resolve));
+  const handler: Handler = (call) => {
+    arrived(call);
+    return response;
+  };
+  return { handler, requested, answer };
+}
+type Held = ReturnType<typeof held>;
+
+// Test fixture: the public RFC/Google Authenticator base32 example ("Hello!"), not a real secret.
+// nosemgrep: generic.secrets.security.detected-generic-secret.detected-generic-secret
+const SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+const ENROLLMENT = {
+  secret: SECRET,
+  otpauthUri: `otpauth://totp/Rampart:ada%40example.com?secret=${SECRET}`,
+  qr: { size: 21, path: 'M0 0h7v1h-7zM14 0h7v1h-7z' },
+};
+const CODES = Array.from({ length: 10 }, (_, index) => `abcde-fghj${String(index)}`);
+
+describe('gate states for MFA', () => {
+  it('gate states for MFA', async () => {
+    // Enrollment shows in the auth frame, with nothing of the app behind it.
+    const enroll = held();
+    fakeApi({
+      'GET /api/session': () => json(200, session({ mfa: 'enroll' })),
+      'POST /api/session/mfa/enroll': enroll.handler,
+    });
+    const enrolling = renderApp('/poam');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Set up two-step sign-in' }),
+    ).toBeVisible();
+    await enroll.requested;
+    enroll.answer(json(200, ENROLLMENT));
+    expect(await screen.findByTestId('mfa-manual-key')).toBeVisible();
+    expect(screen.queryByRole('navigation', { hidden: true })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('gate-app')).not.toBeInTheDocument();
+    enrolling.unmount();
+
+    // The challenge for an enrolled user whose session waits for the code.
+    fakeApi({ 'GET /api/session': () => json(200, session({ mfa: 'challenge' })) });
+    const challenge = renderApp('/poam');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Enter your code' })).toBeVisible();
+    expect(screen.queryByRole('navigation', { hidden: true })).not.toBeInTheDocument();
+    challenge.unmount();
+
+    // Locked wins over both.
+    for (const mfa of ['enroll', 'challenge']) {
+      fakeApi({ 'GET /api/session': () => json(200, session({ mfa, locked: true })) });
+      const locked = renderApp();
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Session locked' }),
+      ).toBeVisible();
+      expect(screen.queryByRole('heading', { name: /two-step|Enter your code/ })).toBeNull();
+      locked.unmount();
+    }
+
+    // Both win over a required password change.
+    const pendingEnroll = held();
+    fakeApi({
+      'GET /api/session': () => json(200, session({ mfa: 'enroll', mustChangePassword: true })),
+      'POST /api/session/mfa/enroll': pendingEnroll.handler,
+    });
+    const enrollFirst = renderApp();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Set up two-step sign-in' }),
+    ).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Change password' })).not.toBeInTheDocument();
+    await pendingEnroll.requested;
+    pendingEnroll.answer(json(200, ENROLLMENT));
+    await screen.findByTestId('mfa-manual-key');
+    enrollFirst.unmount();
+    fakeApi({
+      'GET /api/session': () => json(200, session({ mfa: 'challenge', mustChangePassword: true })),
+    });
+    const challengeFirst = renderApp();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Enter your code' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Change password' })).not.toBeInTheDocument();
+    challengeFirst.unmount();
+
+    // A 403 mfa_required mid-session re-reads the session and shows enrollment.
+    let mfa = 'none';
+    const users = held();
+    const reEnroll = held();
+    const api = fakeApi({
+      'GET /api/session': () => json(200, session({ mfa })),
+      'GET /api/users': users.handler,
+      'POST /api/session/mfa/enroll': reEnroll.handler,
+    });
+    renderApp('/settings');
+    await users.requested;
+    mfa = 'enroll';
+    users.answer(apiError(403, 'mfa_required'));
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Set up two-step sign-in' }),
+    ).toBeVisible();
+    expect(api.sent('GET /api/session')).toHaveLength(2);
+    expect(screen.queryByRole('navigation', { hidden: true })).not.toBeInTheDocument();
+    await reEnroll.requested;
+    reEnroll.answer(json(200, ENROLLMENT));
+    await screen.findByTestId('mfa-manual-key');
+  });
+
+  it('a failed re-read, lock() and endSession from the MFA states', async () => {
+    const user = userEvent.setup();
+    let fail = false;
+    const api = fakeApi({
+      'GET /api/session': () =>
+        fail ? apiError(503, 'db_unavailable') : json(200, session({ mfa: 'challenge' })),
+    });
+    renderProbe();
+    await waitFor(() => {
+      expect(status()).toHaveTextContent('mfa_challenge');
+    });
+    // A failed re-read keeps the challenge rather than showing the session error.
+    fail = true;
+    await user.click(screen.getByRole('button', { name: 'Probe refresh' }));
+    await waitFor(() => {
+      expect(api.sent('GET /api/session')).toHaveLength(2);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(status()).toHaveTextContent('mfa_challenge');
+    // lock() applies only to a full session.
+    await user.click(screen.getByRole('button', { name: 'Probe lock' }));
+    expect(status()).toHaveTextContent('mfa_challenge');
+    expect(api.sent('POST /api/session/lock')).toHaveLength(0);
+    // endSession ends it, like any held session.
+    await user.click(screen.getByRole('button', { name: 'Probe end' }));
+    expect(status()).toHaveTextContent('signed_out');
+    expect(screen.getByTestId('notice')).toHaveTextContent(SESSION_ENDED);
+  });
+});
+
+/** Enrolls through the page: answers the enroll POST, types the code, and confirms. */
+async function enrollThrough(
+  user: ReturnType<typeof userEvent.setup>,
+  enroll: Held,
+  confirm: Held,
+  confirmed: Record<string, unknown>,
+) {
+  expect(
+    await screen.findByRole('heading', { level: 1, name: 'Set up two-step sign-in' }),
+  ).toBeVisible();
+  await enroll.requested;
+  enroll.answer(json(200, ENROLLMENT));
+  await user.type(await screen.findByLabelText('6-digit code'), '123456');
+  await user.click(screen.getByRole('button', { name: 'Confirm' }));
+  const call = await confirm.requested;
+  expect(call.body).toEqual({ code: '123456' });
+  confirm.answer(json(200, { ...session(confirmed), recoveryCodes: CODES }));
+  expect(
+    await screen.findByRole('heading', { level: 1, name: 'Save your recovery codes' }),
+  ).toBeVisible();
+  expect(within(screen.getByTestId('recovery-codes')).getAllByRole('listitem')).toHaveLength(10);
+}
+
+describe('recovery codes survive a re-read', () => {
+  it('recovery codes survive a re-read', async () => {
+    const user = userEvent.setup();
+    let answer: Record<string, unknown> = session({ mfa: 'enroll' });
+    const enroll = held();
+    const confirm = held();
+    const api = fakeApi({
+      'GET /api/session': () => json(200, answer),
+      'POST /api/session/mfa/enroll': enroll.handler,
+      'POST /api/session/mfa/enroll/confirm': confirm.handler,
+      'POST /api/poam': () => json(201, {}),
+    });
+    renderProbe();
+    await enrollThrough(user, enroll, confirm, { csrfToken: 'csrf-2' });
+    expect(status()).toHaveTextContent('mfa_recovery_codes');
+
+    // A re-read for the same user, now with mfa none, keeps the codes on screen.
+    answer = session({ csrfToken: 'csrf-3' });
+    await user.click(screen.getByRole('button', { name: 'Probe refresh' }));
+    await waitFor(() => {
+      expect(api.sent('GET /api/session')).toHaveLength(2);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(status()).toHaveTextContent('mfa_recovery_codes');
+    expect(screen.getByText(CODES[0] ?? '')).toBeVisible();
+
+    // Continue opens the app, with the newest session's token.
+    await user.click(screen.getByRole('checkbox', { name: 'I saved my recovery codes' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByLabelText('Draft')).toBeVisible();
+    expect(status()).toHaveTextContent('signed_in');
+    expect(screen.queryByTestId('recovery-codes')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Probe write' }));
+    await waitFor(() => {
+      expect(api.sent('POST /api/poam')).toHaveLength(1);
+    });
+    expect(api.sent('POST /api/poam')[0]?.headers.get('x-csrf-token')).toBe('csrf-3');
+  });
+
+  it('Continue opens the forced change when the password is temporary', async () => {
+    const user = userEvent.setup();
+    const enroll = held();
+    const confirm = held();
+    fakeApi({
+      'GET /api/session': () => json(200, session({ mfa: 'enroll', mustChangePassword: true })),
+      'POST /api/session/mfa/enroll': enroll.handler,
+      'POST /api/session/mfa/enroll/confirm': confirm.handler,
+    });
+    renderProbe();
+    await enrollThrough(user, enroll, confirm, { mustChangePassword: true });
+    await user.click(screen.getByRole('checkbox', { name: 'I saved my recovery codes' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Change password' })).toBeVisible();
+    expect(screen.getByTestId('change-password-forced')).toBeInTheDocument();
+    expect(status()).toHaveTextContent('password_change');
+  });
+
+  it('a signed-out re-read, or a reset, drops the codes', async () => {
+    const user = userEvent.setup();
+    let answer: Record<string, unknown> = session({ mfa: 'enroll' });
+    const enroll = held();
+    const confirm = held();
+    fakeApi({
+      'GET /api/session': () => json(200, answer),
+      'POST /api/session/mfa/enroll': enroll.handler,
+      'POST /api/session/mfa/enroll/confirm': confirm.handler,
+    });
+    const first = renderProbe();
+    await enrollThrough(user, enroll, confirm, {});
+    answer = SIGNED_OUT;
+    await user.click(screen.getByRole('button', { name: 'Probe refresh' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
+    expect(status()).toHaveTextContent('signed_out');
+    expect(screen.queryByTestId('recovery-codes')).not.toBeInTheDocument();
+    first.unmount();
+
+    // An admin reset in between: the same user must enroll again, so the old codes go.
+    answer = session({ mfa: 'enroll' });
+    const enrollAgain = held();
+    const confirmAgain = held();
+    const reEnroll = held();
+    let enrolls = 0;
+    fakeApi({
+      'GET /api/session': () => json(200, answer),
+      'POST /api/session/mfa/enroll': (call) => {
+        enrolls += 1;
+        return (enrolls === 1 ? enrollAgain : reEnroll).handler(call);
+      },
+      'POST /api/session/mfa/enroll/confirm': confirmAgain.handler,
+    });
+    renderProbe();
+    await enrollThrough(user, enrollAgain, confirmAgain, {});
+    await user.click(screen.getByRole('button', { name: 'Probe refresh' }));
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Set up two-step sign-in' }),
+    ).toBeVisible();
+    expect(status()).toHaveTextContent('mfa_enroll');
+    expect(screen.queryByTestId('recovery-codes')).not.toBeInTheDocument();
+    await reEnroll.requested;
+    reEnroll.answer(json(200, ENROLLMENT));
+    await screen.findByTestId('mfa-manual-key');
+  });
+});

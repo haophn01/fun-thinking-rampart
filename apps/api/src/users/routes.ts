@@ -6,6 +6,7 @@ import { user } from '../../db/schema';
 import { recordAudit } from '../audit/record';
 import { clearSessionCookie } from '../auth/cookie';
 import { clearFailures } from '../auth/lockout';
+import { resetMfa } from '../auth/mfa/reset';
 import { hashPassword } from '../auth/password';
 import { checkNewPassword, pushPasswordHistory } from '../auth/password-policy';
 import { deleteUserSessions, type SessionStore } from '../auth/sessions';
@@ -28,7 +29,7 @@ type Profile = Pick<UserRow, (typeof PROFILE_KEYS)[number]>;
 
 const paramsSchema = z.object({ id: z.string() });
 
-/** The public shape: no hash, no lockout state. */
+/** The public shape: no hash, no lockout state, no MFA secret (only whether it is set up). */
 function toUser(row: UserRow): User {
   return {
     id: row.id,
@@ -37,7 +38,7 @@ function toUser(row: UserRow): User {
     role: row.role,
     active: row.active,
     createdAt: row.createdAt,
-    mfaEnrolled: false,
+    mfaEnrolled: row.mfaEnrolledAt !== null,
   };
 }
 
@@ -206,6 +207,25 @@ async function updateUser(
   return row;
 }
 
+/**
+ * `POST /api/users/:id/mfa/reset`: clears the user's two-step sign-in and ends all their sessions
+ * (clearing the cookie when they are the caller). Nothing stored: 200 with nothing changed.
+ */
+function resetUserMfa(deps: ApiDeps, request: FastifyRequest, reply: FastifyReply): UserRow {
+  const { id } = paramsSchema.parse(request.params);
+  const actorUserId = request.auth?.user.id ?? null;
+  const now = deps.now();
+  const { row, changed } = deps.db.transaction((tx) => {
+    if (!findUser(tx, id)) throw notFound();
+    const changed = resetMfa(tx, id, { actorUserId, requestId: request.id, now });
+    const updated = findUser(tx, id);
+    if (!updated) throw notFound();
+    return { row: updated, changed };
+  });
+  if (changed && id === actorUserId) clearSessionCookie(reply, deps);
+  return row;
+}
+
 /** Users: any signed-in user lists them; only admins create or change them. Never deleted. */
 export function registerUserRoutes(app: FastifyInstance, deps: ApiDeps): void {
   app.get('/api/users', () => {
@@ -224,6 +244,11 @@ export function registerUserRoutes(app: FastifyInstance, deps: ApiDeps): void {
 
   app.patch('/api/users/:id', { config: { role: 'admin' } }, async (request, reply) => {
     const row = await updateUser(deps, request, reply);
+    return respond(userResponseSchema, { user: toUser(row) });
+  });
+
+  app.post('/api/users/:id/mfa/reset', { config: { role: 'admin' } }, (request, reply) => {
+    const row = resetUserMfa(deps, request, reply);
     return respond(userResponseSchema, { user: toUser(row) });
   });
 }
