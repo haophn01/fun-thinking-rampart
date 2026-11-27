@@ -98,10 +98,13 @@ describe('contract schemas', () => {
       password_change_required: 403,
       session_locked: 423,
       notice_not_acknowledged: 400,
+      mfa_required: 403,
+      invalid_mfa_code: 401,
+      mfa_wrong_step: 409,
     };
     expect(ERROR_CODES).toEqual(Object.keys(table));
     // sec-auth appends five codes, in this order, after the earlier ones.
-    expect(ERROR_CODES.slice(-6)).toEqual([
+    expect(ERROR_CODES.slice(-9, -3)).toEqual([
       'provider_in_use',
       'password_too_common',
       'password_reused',
@@ -109,16 +112,23 @@ describe('contract schemas', () => {
       'session_locked',
       'notice_not_acknowledged',
     ]);
+    // sec-mfa appends three codes, in this order, at the end.
+    expect(ERROR_CODES.slice(-3)).toEqual(['mfa_required', 'invalid_mfa_code', 'mfa_wrong_step']);
+    expect([ERROR_STATUS.mfa_required, ERROR_STATUS.invalid_mfa_code]).toEqual([403, 401]);
+    expect(ERROR_STATUS.mfa_wrong_step).toBe(409);
     expect([...ERROR_CODES].sort()).toEqual(Object.keys(table).sort());
     expect(ERROR_STATUS).toEqual(table);
     for (const code of ERROR_CODES) expect(ERROR_STATUS[code], code).toBe(table[code]);
-    // The fixed texts the api sends and the web shows for the sec-auth codes.
+    // The fixed texts the api sends and the web shows for the sec-auth and sec-mfa codes.
     expect(ERROR_MESSAGES).toEqual({
       password_too_common: 'This password is too common. Choose another.',
       password_reused: 'You used this password recently. Choose another.',
       password_change_required: 'Change your password to continue.',
       session_locked: 'Your session is locked. Enter your password to unlock it.',
       notice_not_acknowledged: 'Acknowledge the sign-in notice to continue.',
+      mfa_required: 'Finish two-step sign-in to continue.',
+      invalid_mfa_code: "That code didn't work. Enter the newest code from your app.",
+      mfa_wrong_step: "This two-step sign-in step doesn't apply now. Reload the page.",
     });
   });
 
