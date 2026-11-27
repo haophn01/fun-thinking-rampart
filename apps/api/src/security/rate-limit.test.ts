@@ -263,12 +263,15 @@ describe('multiplier scales the limits', () => {
 });
 
 describe('tight routes are pinned', () => {
-  it('is the old list plus change password and unlock, and each is a real route', async () => {
+  it('is the old list plus the three MFA routes, and each is a real route', async () => {
     expect(AUTH_LIMITED_ROUTES).toEqual([
       'POST /api/setup',
       'POST /api/session',
       'POST /api/session/password',
       'POST /api/session/unlock',
+      'POST /api/session/mfa/enroll',
+      'POST /api/session/mfa/enroll/confirm',
+      'POST /api/session/mfa/verify',
     ]);
     const h = harness();
     await h.app.ready();
@@ -286,6 +289,22 @@ describe('tight routes are pinned', () => {
     expectLimited(await password());
     const lock = () => send(h, { method: 'POST', url: '/api/session/lock' });
     expect(await statuses(11, lock)).toEqual(Array<number>(11).fill(401));
+  });
+
+  it('the 11th verify in a minute gives 429, each MFA route in its own bucket; reset is general', async () => {
+    const h = harness();
+    for (const url of [
+      '/api/session/mfa/verify',
+      '/api/session/mfa/enroll/confirm',
+      '/api/session/mfa/enroll',
+    ]) {
+      const post = () => send(h, { method: 'POST', url, body: {} });
+      expect(await statuses(10, post), url).toEqual(Array<number>(10).fill(401));
+      expectLimited(await post());
+    }
+    const reset = () =>
+      send(h, { method: 'POST', url: '/api/users/00000000-0000-4000-8000-000000000000/mfa/reset' });
+    expect(await statuses(11, reset)).toEqual(Array<number>(11).fill(401));
   });
 });
 

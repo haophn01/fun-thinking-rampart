@@ -6,6 +6,7 @@ import type { Config } from '../config';
 import { registerAssessmentRoutes } from '../assessment/routes';
 import { registerAuditRoutes } from '../audit/list';
 import { registerGuard } from '../auth/guard';
+import { registerMfaRoutes } from '../auth/mfa/routes';
 import { registerAuthRoutes } from '../auth/routes';
 import { registerSessionRoutes } from '../auth/session-routes';
 import { registerEvidenceRoutes } from '../evidence/routes';
@@ -46,6 +47,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiDeps): void {
     registerGuard(api, deps);
     registerAuthRoutes(api, deps);
     registerSessionRoutes(api, deps);
+    registerMfaRoutes(api, deps);
     registerUserRoutes(api, deps);
     registerSettingsRoutes(api, deps);
     registerAuditRoutes(api, deps);

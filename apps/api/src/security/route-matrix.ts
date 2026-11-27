@@ -245,6 +245,22 @@ export const ROUTE_MATRIX: Readonly<Record<string, MatrixEntry>> = {
     },
     idor: SESSION_ROUTE,
   },
+  // Two-step sign-in (sec-mfa): the caller's own enrollment and challenge.
+  'POST /api/session/mfa/enroll': {
+    access: 'session',
+    sample: { url: '/api/session/mfa/enroll' },
+    idor: SESSION_ROUTE,
+  },
+  'POST /api/session/mfa/enroll/confirm': {
+    access: 'session',
+    sample: { url: '/api/session/mfa/enroll/confirm', body: { code: '123456' } },
+    idor: SESSION_ROUTE,
+  },
+  'POST /api/session/mfa/verify': {
+    access: 'session',
+    sample: { url: '/api/session/mfa/verify', body: { code: '123456' } },
+    idor: SESSION_ROUTE,
+  },
 
   // Users and the audit log.
   'GET /api/users': { access: 'session', sample: { url: '/api/users' }, idor: USERS_GLOBAL },
@@ -264,6 +280,11 @@ export const ROUTE_MATRIX: Readonly<Record<string, MatrixEntry>> = {
   'PATCH /api/users/:id': {
     access: 'admin',
     sample: { url: `/api/users/${NO_ROW}`, body: { displayName: 'Matrix Renamed' } },
+    idor: USERS_GLOBAL,
+  },
+  'POST /api/users/:id/mfa/reset': {
+    access: 'admin',
+    sample: { url: `/api/users/${NO_ROW}/mfa/reset` },
     idor: USERS_GLOBAL,
   },
   'GET /api/audit': { access: 'session', sample: { url: '/api/audit' }, idor: NO_URL_ID },

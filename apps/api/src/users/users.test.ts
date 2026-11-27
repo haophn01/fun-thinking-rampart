@@ -402,3 +402,39 @@ describe('audit of user changes', () => {
     expect(sessionsOf(h, carl.id)).toHaveLength(1);
   });
 });
+
+describe('users report two-step status', () => {
+  it('the user list and a user answer report mfaEnrolled per user', async () => {
+    const h = harness();
+    // The harness enrolls the admin it sets up, and anyone it signs in by default.
+    const admin = await h.setupAdmin();
+    const carl = await create(admin, { email: 'carl@example.com', displayName: 'Carl' });
+    const dana = await create(admin, { email: 'dana@example.com', displayName: 'Dana' });
+    expect(carl.mfaEnrolled).toBe(false);
+    await h.signIn('dana@example.com', PASSWORD, { mfa: 'as_stored' });
+
+    const enrolled = async () => {
+      const list = usersResponseSchema.parse((await admin.get('/api/users')).json()).users;
+      return Object.fromEntries(list.map((u) => [u.email, u.mfaEnrolled]));
+    };
+    expect(await enrolled()).toEqual({
+      [ADMIN.email]: true,
+      'carl@example.com': false,
+      'dana@example.com': false,
+    });
+
+    await h.signIn('carl@example.com', PASSWORD);
+    expect(await enrolled()).toEqual({
+      [ADMIN.email]: true,
+      'carl@example.com': true,
+      'dana@example.com': false,
+    });
+
+    // A pending secret alone is not enrolled: only mfa_enrolled_at counts.
+    h.db.update(user).set({ mfaSecretEnc: 'v1.a.b.c' }).where(eq(user.id, dana.id)).run();
+    const patched = await admin.patch(`/api/users/${dana.id}`, { displayName: 'Dana D' });
+    expect(userResponseSchema.parse(patched.json()).user.mfaEnrolled).toBe(false);
+    const renamed = await admin.patch(`/api/users/${carl.id}`, { displayName: 'Carl C' });
+    expect(userResponseSchema.parse(renamed.json()).user.mfaEnrolled).toBe(true);
+  });
+});
