@@ -69,16 +69,27 @@ never collects `e2e/`, so `pnpm verify` needs no browser.
 
 The specs, in the order Playwright runs them (file name order):
 
+- `auth.spec.ts` drives this sprint's sign-in rules in the browser, on a server of its own: the
+  built api with `SERVE_WEB=true` on 3295 (`E2E_AUTH_PORT` overrides it), a fresh database in the
+  run folder, `LOG_LEVEL=warn` and `RATE_LIMIT_MULTIPLIER=100`. An admin sets a sign-in notice
+  in Settings, and sign-in shows it with no form until **Acknowledge and continue** (the api
+  refuses a sign-in without its digest); the audit log then shows "Sign-in notice acknowledged".
+  An admin-created user must change the temporary password at first sign-in, where a too-common
+  and a reused password are refused, then the app opens. With `page.clock`, 15 minutes without
+  input lock the app behind the lock screen (the api answers 423), a wrong password is refused,
+  and the right one unlocks with a draft intact.
 - `look.spec.ts` checks the Look, signed in, on every route in the nav (plus a requirement's
   detail and the phone menu) at 1280 and 375 px: no visible text under 16 px, only the six palette
   colours (or transparent) for text, backgrounds and borders, every text pair at 4.5:1 (3:1 for
-  large text), and no horizontal scroll at 375 px. Because it runs first and the other specs need a
-  fresh install, it starts a second api of its own on 3293 (`E2E_LOOK_API_PORT` overrides it)
+  large text), and no horizontal scroll at 375 px. Because the specs after it need a fresh
+  install, it starts a second api of its own on 3293 (`E2E_LOOK_API_PORT` overrides it)
   with its own database in the run folder, fills every page through that api, and routes the
   browser's `/api` calls to it. The pages still come from the run's server, under its CSP, and
   every page records zero CSP violations (a `securitypolicyviolation` listener). Every SSP tab is
   measured with its data, Lint & export with its findings on screen, and a seeded future-tense
-  statement shows its finding there.
+  statement shows its finding there. The auth screens get the same checks at both widths: the
+  sign-in notice and the form after it, the forced password change and its refusal, the lock
+  screen and a wrong password, Change password, Settings with a notice on, and the shell's 429.
 - `security.spec.ts` checks the security headers on the production path. On the run's server it
   only reads, signed out: `/` and `/assessment` carry the exact web CSP, `nosniff`,
   `no-referrer`, the Permissions-Policy and `X-Frame-Options: DENY` and no HSTS; `/api/health`
@@ -141,7 +152,7 @@ naming every bad one:
 | `HOSTED`                | `false`               | Exactly `true` or `false`. `true` means the api sits behind one local reverse proxy on 127.0.0.1 that terminates HTTPS: HSTS, the `__Host-rampart_session` Secure cookie, `upgrade-insecure-requests` in the page CSP, and `X-Forwarded-For` honoured only from 127.0.0.1 |
 | `SERVE_WEB`             | `false`               | Exactly `true` or `false`. `true` serves the built web app (`WEB_DIST_PATH`) from the api; a missing `index.html` stops the start (run `pnpm build` first). `pnpm start` sets it                                                                                          |
 | `WEB_DIST_PATH`         | `../web/dist`         | The built web app's folder. Relative paths are resolved from `apps/api`. Read once at start: files added later aren't served                                                                                                                                              |
-| `RATE_LIMIT_MULTIPLIER` | `1`                   | Digits only, 1 to 1000. Multiplies every rate limit's maximum (600 requests a minute per IP, and 10 a minute per IP each for setup and sign-in). Tests and e2e raise it; hosted mode needs 1                                                                              |
+| `RATE_LIMIT_MULTIPLIER` | `1`                   | Digits only, 1 to 1000. Multiplies every rate limit's maximum (600 requests a minute per IP, and 10 a minute per IP each for setup, sign-in, change password and unlock). Tests and e2e raise it; hosted mode needs 1                                                     |
 
 An empty value counts as unset. The host is always `127.0.0.1`. With `HOSTED=true` the api also
 refuses to start (exit code 1, before it opens the database) unless `SERVE_WEB=true`,
@@ -164,27 +175,57 @@ carries the same id.
 ## Sign-in and security defaults
 
 The first run has no users: open the web app and **Setup** creates the first admin (any email, a
-password of 12 to 128 characters) and the self-assessment. After that, setup answers 409 and
-admins add people under Settings.
+password of 12 to 128 characters that isn't on the common-password list) and the
+self-assessment. After that, setup answers 409 and admins add people under Settings.
 
 - **Every api route needs a signed-in user** except `GET /api/health`, `GET /api/session`,
   `POST /api/setup`, `POST /api/session` (sign in) and `DELETE /api/session` (sign out).
 - **Passwords** are hashed with Argon2id (`@node-rs/argon2` defaults). Passwords, hashes and
   session tokens never appear in a response, a log line or the audit log.
 - **Sessions** live in the database; the browser holds a random token in the `rampart_session`
-  cookie (`HttpOnly; SameSite=Strict; Path=/; Max-Age=43200`), and the database stores only its
-  SHA-256. A session ends after 2 hours idle or 12 hours in all. Sign-in always starts a new
-  session. Deactivating a user or resetting their password ends all their sessions. There is no
-  `Secure` flag yet because V1 serves plain http on `127.0.0.1`.
+  cookie (`HttpOnly; SameSite=Strict; Path=/; Max-Age=28800`), and the database stores only its
+  SHA-256. Locally there is no `Secure` flag, because the app serves plain http on `127.0.0.1`;
+  with `HOSTED=true` the cookie is `__Host-rampart_session` with `Secure`. A session ends 30
+  minutes after its last request or 8 hours after sign-in, whichever comes first. Sign-in always
+  starts a new session. Changing your password rotates your session (same 8-hour start) and ends
+  your others. Deactivating a user, resetting their password or changing their role ends all
+  their sessions.
+- **Session lock (3.1.10):** after 15 minutes with no keyboard, pointer, wheel or touch input in
+  any tab (shared through `localStorage['rampart.lastInputAt']`), the web app shows the lock
+  screen, keeps the page and its drafts hidden behind it, and posts `POST /api/session/lock`
+  (204). A locked session answers 423 `session_locked` to every route but lock, unlock and the
+  public ones (sign-out included), and its idle clock stops, so it still ends 30 minutes after its
+  last unlocked request. `POST /api/session/unlock` `{ password }` unlocks it (200, or 401
+  `invalid_credentials`, shown as "Password is incorrect."). Input sends a keep-alive at most
+  every 5 minutes; there is none without input.
+- **Passwords:** 12 to 128 characters. Whenever a password is set (setup, a change, an admin's
+  temporary password) it is checked against a bundled offline list of about 46,000 common
+  passwords, ignoring case (400 `password_too_common`), and a change also refuses your current
+  password and your last four (400 `password_reused`). Sign-in never applies these rules, so
+  existing passwords keep working. Change yours with **Change password** in the masthead
+  (`/account/password`; `POST /api/session/password` `{ currentPassword, newPassword }`).
+- **Temporary passwords:** a password an admin sets, adding a user or resetting one, is
+  temporary. That user's next sign-in shows only **Change password** (with Sign out) until they
+  choose their own; until then every other route answers 403 `password_change_required`.
+- **Sign-in notice (3.1.9):** an admin sets it under Settings › Sign-in notice
+  (`PUT /api/settings/sign-in-notice` `{ text }`, at most 4000 characters; blank or `null` turns
+  it off). While it is on, sign-in shows it first and the form only after **Acknowledge and
+  continue**. `GET /api/session` sends it with its `digest` (the SHA-256 hex of the text), and a
+  sign-in without that `noticeDigest` gets 400 `notice_not_acknowledged`, counting no failure.
+  Each acknowledged sign-in is audited.
 - **CSRF:** every `POST`, `PUT`, `PATCH` and `DELETE` made with a session must send the
   session's token (from `GET /api/session`) in the `x-csrf-token` header. Bodies must be
   `application/json`, so a cross-site form can't post.
-- **Lockout:** the 5th wrong password in a row locks the account for 15 minutes (429 with
-  `Retry-After`). Unknown emails, wrong passwords and inactive users all get the same 401.
+- **Lockout:** the 5th wrong password in a row, counted across sign-in, unlock and change
+  password, locks the account for 15 minutes (429 with `Retry-After`). When the 5th comes from a
+  signed-in session (unlock or change), all that user's sessions end too. Unknown emails, wrong
+  passwords and inactive users all get the same 401.
 - **Roles:** `admin` manages users and assessment settings; `contributor` records results. The
   last active admin can't be demoted or deactivated. Users are never deleted.
 - **Audit log:** every change is written to an append-only `audit_event` table in the same
-  transaction; `GET /api/audit` pages through it newest first.
+  transaction; `GET /api/audit` pages through it newest first. Password changes, session lock and
+  unlock, notice acknowledgements and settings changes are audited too. The `prev_hash` and `hash`
+  columns stay empty until the hash chain arrives.
 
 ## API endpoints
 
