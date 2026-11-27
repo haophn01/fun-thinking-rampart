@@ -284,7 +284,7 @@ async function seed(request: APIRequestContext): Promise<Seeded> {
   await ensureOk(
     await client.upload(
       `/api/policies/${policy.item.id}/versions`,
-      'access-control-policy.md',
+      'access-control-policy.txt',
       Buffer.from('# Access\n'),
     ),
     'upload policy',

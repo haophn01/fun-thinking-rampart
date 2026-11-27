@@ -20,8 +20,10 @@ export function failureText(error: unknown): string {
       case 'validation_failed':
         // A file refused before sending (status 0) carries a message ready to show.
         return error.status === 0 ? error.message : 'The change was not accepted.';
+      // For file_refused, the api's message says why the bytes were refused.
       case 'payload_too_large':
       case 'unsupported_file_type':
+      case 'file_refused':
         return error.message;
     }
   }

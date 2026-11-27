@@ -286,4 +286,38 @@ describe('Policies page', () => {
       'That policy no longer exists. Reload the page.',
     );
   });
+
+  it("shows a refused file's reason", async () => {
+    const user = userEvent.setup();
+    let answer: (response: Response) => void = () => undefined;
+    const api = policiesApi([ACCESS], {
+      'POST /api/policies/p-1/versions': () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    await renderPolicies();
+    const row = await screen.findByRole('listitem', { name: 'Access control policy' });
+    await user.upload(
+      within(row).getByLabelText('Upload a new version'),
+      new File(['MZ'], 'report.pdf'),
+    );
+    await vi.waitFor(() => {
+      expect(api.sent('POST /api/policies/p-1/versions')).toHaveLength(1);
+    });
+    const message = "This file's contents aren't a real PDF file. It looks like a program.";
+    answer(
+      json(415, {
+        error: {
+          code: 'file_refused',
+          message,
+          requestId: 'r',
+          details: { reason: 'content_mismatch', extension: '.pdf', detected: 'executable' },
+        },
+      }),
+    );
+    expect(await within(row).findByRole('alert')).toHaveTextContent(message);
+    // The listed versions are unchanged.
+    expect(within(row).getByText('access-control-v2.docx')).toBeInTheDocument();
+  });
 });

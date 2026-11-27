@@ -356,6 +356,28 @@ describe('apiUpload pre-checks', () => {
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('a .md or .zip file is refused before sending', async () => {
+    hooks();
+    const fetchMock = stubFetch(() =>
+      Promise.resolve(respond(JSON.stringify({ item: EVIDENCE }), 201)),
+    );
+    for (const name of ['notes.md', 'bundle.zip', 'NOTES.MD', 'map.svg', 'old.doc']) {
+      const error = await failure(
+        apiUpload(UPLOAD_PATH, new Blob(['abc']), name, evidenceItemResponseSchema),
+      );
+      expect(error.code, name).toBe('unsupported_file_type');
+      expect(error.status, name).toBe(0);
+      expect(error.message, name).toBe(
+        "This file type can't be uploaded. Allowed: .csv .docx .jpeg .jpg .pdf .png .txt .xlsx",
+      );
+      expect(error.details, name).toEqual({
+        problem: 'unsupported_file_type',
+        allowed: ['.csv', '.docx', '.jpeg', '.jpg', '.pdf', '.png', '.txt', '.xlsx'],
+      });
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('unauthenticated hook', () => {
