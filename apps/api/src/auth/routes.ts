@@ -14,12 +14,10 @@ import { AppError } from '../errors';
 import { respond } from '../respond';
 import type { ApiDeps } from '../routes';
 import { clearSessionCookie, readSessionToken, setSessionCookie } from './cookie';
+import { assertAccountUnlocked, clearFailures, recordFailure } from './lockout';
 import { hashPassword, verifyPassword } from './password';
+import { checkNewPassword } from './password-policy';
 import { createSession, deleteSession, deleteSessionByToken, type SessionStore } from './sessions';
-
-/** The 5th consecutive failure locks the account. */
-export const MAX_FAILED_SIGN_INS = 5;
-export const LOCK_MS = 15 * 60 * 1000;
 
 const INVALID_CREDENTIALS = 'Email or password is incorrect.';
 
@@ -29,57 +27,6 @@ function setupRequired(db: SessionStore): boolean {
     .from(user)
     .get();
   return (row?.n ?? 0) === 0;
-}
-
-/** The 429 for a locked account; whole seconds, rounded up, and never 0. */
-function tooManyAttempts(reply: FastifyReply, lockedUntil: string, now: Date): AppError {
-  const retryAfterSeconds = Math.max(
-    1,
-    Math.ceil((Date.parse(lockedUntil) - now.getTime()) / 1000),
-  );
-  void reply.header('retry-after', String(retryAfterSeconds));
-  return new AppError('too_many_attempts', 'Too many failed sign-ins. Try again later.', {
-    details: { retryAfterSeconds },
-  });
-}
-
-function isLocked(lockedUntil: string | null, now: Date): boolean {
-  return lockedUntil !== null && now.getTime() < Date.parse(lockedUntil);
-}
-
-/** Records one failed sign-in on an existing, active account; the 5th in a row locks it. */
-function recordFailure(deps: ApiDeps, userId: string, now: Date, requestId: string): void {
-  deps.db.transaction((tx) => {
-    const current = tx
-      .select({ failed: user.failedSignIns, lockedUntil: user.lockedUntil })
-      .from(user)
-      .where(eq(user.id, userId))
-      .get();
-    // Locked by a request that finished while this one was hashing: not counted.
-    if (!current || isLocked(current.lockedUntil, now)) return;
-    // A lock that has ended restarts the count.
-    const failed = (current.lockedUntil === null ? current.failed : 0) + 1;
-    const locks = failed >= MAX_FAILED_SIGN_INS;
-    tx.update(user)
-      .set({
-        failedSignIns: failed,
-        lockedUntil: locks ? new Date(now.getTime() + LOCK_MS).toISOString() : null,
-      })
-      .where(eq(user.id, userId))
-      .run();
-    if (locks) {
-      recordAudit(tx, {
-        at: now,
-        actorUserId: null,
-        action: 'auth.locked_out',
-        entityType: 'user',
-        entityId: userId,
-        before: null,
-        after: null,
-        requestId,
-      });
-    }
-  });
 }
 
 async function signIn(
@@ -92,10 +39,7 @@ async function signIn(
   const found = deps.db.select().from(user).where(eq(user.email, body.email)).get();
   const account = found?.active === true ? found : undefined;
 
-  const lockedUntil = account?.lockedUntil ?? null;
-  if (lockedUntil !== null && isLocked(lockedUntil, now)) {
-    throw tooManyAttempts(reply, lockedUntil, now);
-  }
+  assertAccountUnlocked(reply, account?.lockedUntil ?? null, now);
   // Unknown emails and inactive users still pay for a verify, so timing says nothing.
   const matched = await verifyPassword(account?.passwordHash ?? null, body.password);
   if (!account) throw new AppError('invalid_credentials', INVALID_CREDENTIALS);
@@ -105,10 +49,7 @@ async function signIn(
   }
 
   const created = deps.db.transaction((tx) => {
-    tx.update(user)
-      .set({ failedSignIns: 0, lockedUntil: null })
-      .where(eq(user.id, account.id))
-      .run();
+    clearFailures(tx, account.id);
     // No fixation: the cookie's old session, whoever it belonged to, is gone.
     deleteSessionByToken(tx, readSessionToken(request, deps));
     recordAudit(tx, {
@@ -134,7 +75,7 @@ async function signIn(
     },
     csrfToken: created.csrfToken,
     locked: false,
-    mustChangePassword: false,
+    mustChangePassword: account.mustChangePassword,
     signInNotice: null,
   };
 }
@@ -147,6 +88,7 @@ async function setup(
   const body = setupRequestSchema.parse(request.body);
   const complete = () => new AppError('setup_complete', 'Setup is already complete.');
   if (!setupRequired(deps.db)) throw complete();
+  checkNewPassword(body.password);
   const passwordHash = await hashPassword(body.password);
   const now = deps.now();
   const at = now.toISOString();
@@ -163,7 +105,14 @@ async function setup(
       active: true,
     };
     tx.insert(user)
-      .values({ id: userId, ...admin, passwordHash, createdAt: at, updatedAt: at })
+      .values({
+        id: userId,
+        ...admin,
+        passwordHash,
+        passwordChangedAt: at,
+        createdAt: at,
+        updatedAt: at,
+      })
       .run();
     recordAudit(tx, {
       at: now,
@@ -240,6 +189,8 @@ export function registerAuthRoutes(app: FastifyInstance, deps: ApiDeps): void {
       setupRequired: setupRequired(deps.db),
       user: request.auth?.user ?? null,
       csrfToken: request.auth?.csrfToken ?? null,
+      locked: request.auth?.locked ?? false,
+      mustChangePassword: request.auth?.mustChangePassword ?? false,
     }),
   );
 

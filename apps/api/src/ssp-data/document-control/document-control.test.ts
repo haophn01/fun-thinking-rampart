@@ -30,7 +30,8 @@ import { appendExportRevision } from './repository';
 const DC = '/api/ssp/document-control';
 const REVISIONS = '/api/ssp/revisions';
 const APPROVALS = '/api/ssp/approvals';
-const HOUR = 60 * 60 * 1000;
+/** Time between two edits: under the 30 min idle limit, so the session stays alive. */
+const STEP = 20 * 60 * 1000;
 /** START's UTC date. */
 const TODAY = '2026-11-23';
 const TOMORROW = '2026-11-24';
@@ -309,17 +310,17 @@ describe('approvals', () => {
       updatedAt: START.toISOString(),
     });
 
-    h.clock.advance(HOUR);
+    h.clock.advance(STEP);
     const patched = await admin.patch(`${APPROVALS}/${approval.id}`, { approvedOn: APPROVED });
     expect(patched.statusCode, patched.body).toBe(200);
-    const changedAt = new Date(START.getTime() + HOUR).toISOString();
+    const changedAt = new Date(START.getTime() + STEP).toISOString();
     expect(approvalResponseSchema.parse(patched.json()).approval).toMatchObject({
       approvedOn: APPROVED,
       updatedAt: changedAt,
     });
 
     // Sending what is stored changes nothing: no event, updatedAt kept.
-    h.clock.advance(HOUR);
+    h.clock.advance(STEP);
     const before = eventCount(h);
     const same = await admin.patch(`${APPROVALS}/${approval.id}`, {
       name: 'Ada',
