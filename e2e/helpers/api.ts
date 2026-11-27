@@ -73,11 +73,13 @@ export async function api(target: Page | APIRequestContext): Promise<Api> {
   }
   const csrf = { [CSRF_HEADER]: session.csrfToken };
 
+  // No body, no JSON content type: the api refuses an empty JSON body.
   const send = (method: Method, path: string, body?: unknown) =>
     request.fetch(path, {
       method,
-      headers: { ...csrf, 'content-type': 'application/json' },
-      ...(body === undefined ? {} : { data: JSON.stringify(body) }),
+      ...(body === undefined
+        ? { headers: csrf }
+        : { headers: { ...csrf, 'content-type': 'application/json' }, data: JSON.stringify(body) }),
     });
 
   return {
