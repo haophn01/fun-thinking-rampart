@@ -11,11 +11,11 @@ _From plan: pod-docs/plans/security-hardening.md · Slug: sec-auth · Status: ac
 | 1 | P1 | Password blocklist: bundled offline list, generator, licence record | sec-auth-p1 | #33 | done | 4db63e8 | — |
 | 2 | A1 | Auth api: 30 min / 8 h sessions, rotation, lock and unlock, change password, history, gates | sec-auth-a1 | #34 | done | f361fac | D1, K1, P1 |
 | 2 | G1 | Web session seams: lock and password states, 423 and 401 rules, 429 in the app shell | sec-auth-g1 | #34 | done | f361fac | K1 |
-| 3 | N1 | Sign-in notice api: settings route, session field, acknowledgement on sign-in | sec-auth-n1 | — | pending | — | A1 |
-| 3 | U1 | Temporary passwords and sign out everywhere for admin user changes | sec-auth-u1 | — | pending | — | A1 |
-| 3 | W1 | Web: change-password page, forced change, temporary-password UI | sec-auth-w1 | — | pending | — | G1 |
-| 3 | W2 | Web: idle lock, lock screen, keep-alive | sec-auth-w2 | — | pending | — | G1 |
-| 3 | W3 | Web: sign-in notice step and Settings › Sign-in notice | sec-auth-w3 | — | pending | — | G1 |
+| 3 | N1 | Sign-in notice api: settings route, session field, acknowledgement on sign-in | sec-auth-n1 | #35 | done | 3c4cda8 | A1 |
+| 3 | U1 | Temporary passwords and sign out everywhere for admin user changes | sec-auth-u1 | #35 | done | 3c4cda8 | A1 |
+| 3 | W1 | Web: change-password page, forced change, temporary-password UI | sec-auth-w1 | #35 | done | 3c4cda8 | G1 |
+| 3 | W2 | Web: idle lock, lock screen, keep-alive | sec-auth-w2 | #35 | done | 3c4cda8 | G1 |
+| 3 | W3 | Web: sign-in notice step and Settings › Sign-in notice | sec-auth-w3 | #35 | done | 3c4cda8 | G1 |
 | 4 | E1 | e2e for notice, forced change and lock; redaction over the new flows; docs | sec-auth-e1 | — | pending | — | N1, U1, W1, W2, W3 |
 
 Plan branch `security-hardening`; wave heads `sec-auth-w1` … `sec-auth-w4`. Merge target `main`. Wave 1 holds the plan's one migration (D1, a one-way door): it stops for the human unless they pre-approve it.
