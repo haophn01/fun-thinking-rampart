@@ -10,18 +10,24 @@ import { createMemoryStore } from '../../storage';
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import {
-  CSRF_HEADER,
-  SESSION_COOKIE,
   assessmentViewSchema,
   auditPageSchema,
   errorEnvelopeSchema,
   requirementWriteResponseSchema,
-  sessionResponseSchema,
   userResponseSchema,
   type AuditPage,
   type RequirementWriteResponse,
 } from '../contract';
-import { ADMIN, START, createHarness, type Client, type Harness } from '../testing/harness';
+import {
+  ADMIN,
+  HARNESS_SECRET_KEY,
+  START,
+  createHarness,
+  signInThroughApi,
+  type Client,
+  type Harness,
+  type MfaSecrets,
+} from '../testing/harness';
 
 const harnesses: Harness[] = [];
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -352,7 +358,11 @@ describe('planned and N/A fields', () => {
     function start(): { app: FastifyInstance; close: () => Promise<void> } {
       const handle = openDb(path);
       runMigrations(handle.db);
-      const config = loadConfig({ DATABASE_PATH: path, LOG_LEVEL: 'silent' });
+      const config = loadConfig({
+        DATABASE_PATH: path,
+        LOG_LEVEL: 'silent',
+        RAMPART_SECRET_KEY: HARNESS_SECRET_KEY,
+      });
       const app = buildApp({ config, db: handle.db, now, store: createMemoryStore() });
       let closed = false;
       const close = async () => {
@@ -365,16 +375,10 @@ describe('planned and N/A fields', () => {
       return { app, close };
     }
 
+    // Setup or sign-in, then the MFA step as a user would, the secret kept across the restart.
+    const secrets: MfaSecrets = new Map();
     async function session(app: FastifyInstance, target: string, payload: unknown) {
-      const response = await app.inject({
-        method: 'POST',
-        url: target,
-        payload: payload as object,
-      });
-      expect(response.statusCode, response.body).toBeLessThan(300);
-      const cookie = response.cookies.find((c) => c.name === SESSION_COOKIE)?.value ?? '';
-      const { csrfToken } = sessionResponseSchema.parse(response.json());
-      return { cookie: `${SESSION_COOKIE}=${cookie}`, [CSRF_HEADER]: csrfToken ?? '' };
+      return signInThroughApi(app, target, payload, { at: now(), secrets });
     }
 
     const first = start();

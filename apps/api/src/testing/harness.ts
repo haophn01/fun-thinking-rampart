@@ -376,7 +376,7 @@ const TOTP_STEP_MS = 30_000;
  */
 export async function signInThroughApi(
   app: FastifyInstance,
-  url: '/api/setup' | '/api/session',
+  url: string,
   payload: unknown,
   options: { at: Date; secrets: MfaSecrets; cookieName?: string },
 ): Promise<SessionHeaders> {
