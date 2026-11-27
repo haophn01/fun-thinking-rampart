@@ -209,6 +209,9 @@ describe('contract schemas', () => {
       'auth.session_unlocked',
       'auth.notice_acknowledged',
       'settings.updated',
+      'auth.mfa_enrolled',
+      'auth.mfa_verified',
+      'user.mfa_reset',
     ]);
     expect(AUDIT_ENTITY_TYPES).toEqual([
       'user',

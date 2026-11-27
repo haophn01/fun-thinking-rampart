@@ -47,6 +47,9 @@ export const AUDIT_ACTIONS = [
   'auth.session_unlocked',
   'auth.notice_acknowledged',
   'settings.updated',
+  'auth.mfa_enrolled',
+  'auth.mfa_verified',
+  'user.mfa_reset',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

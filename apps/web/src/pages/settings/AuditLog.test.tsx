@@ -247,6 +247,10 @@ describe('AuditLog', () => {
       ssp_revision: 'SSP revision',
       ssp_approval: 'SSP approval',
     };
+    const ordered = (list: readonly string[], keys: string[]) => {
+      const start = list.indexOf(keys[0] ?? '');
+      return list.slice(start, start + keys.length);
+    };
     // sec-auth appends its actions and entity after them, each with its own label.
     const secAuth = {
       'auth.password_changed': 'Password changed',
@@ -256,19 +260,25 @@ describe('AuditLog', () => {
       'settings.updated': 'Settings changed',
     };
     const secAuthEntities = { settings: 'Settings' };
-    expect(AUDIT_ACTIONS.slice(-Object.keys(secAuth).length)).toEqual(Object.keys(secAuth));
+    // sec-mfa appends three actions after those, each with its own label, and no entity.
+    const secMfa = {
+      'auth.mfa_enrolled': 'Two-step sign-in set up',
+      'auth.mfa_verified': 'Two-step sign-in verified',
+      'user.mfa_reset': 'Two-step sign-in reset',
+    };
+    expect(AUDIT_ACTIONS.slice(-Object.keys(secMfa).length)).toEqual(Object.keys(secMfa));
+    expect(ordered(AUDIT_ACTIONS, Object.keys(secAuth))).toEqual(Object.keys(secAuth));
+    expect(AUDIT_ACTIONS.indexOf('settings.updated') + 1).toBe(
+      AUDIT_ACTIONS.indexOf('auth.mfa_enrolled'),
+    );
     expect(AUDIT_ENTITY_TYPES.slice(-Object.keys(secAuthEntities).length)).toEqual(
       Object.keys(secAuthEntities),
     );
-    const ordered = (list: readonly string[], keys: string[]) => {
-      const start = list.indexOf(keys[0] ?? '');
-      return list.slice(start, start + keys.length);
-    };
     expect(ordered(AUDIT_ACTIONS, Object.keys(added))).toEqual(Object.keys(added));
     expect(ordered(AUDIT_ENTITY_TYPES, Object.keys(addedEntities))).toEqual(
       Object.keys(addedEntities),
     );
-    for (const [action, label] of Object.entries({ ...added, ...secAuth }))
+    for (const [action, label] of Object.entries({ ...added, ...secAuth, ...secMfa }))
       expect(actions[action], action).toBe(label);
     for (const [type, label] of Object.entries({ ...addedEntities, ...secAuthEntities })) {
       expect(entities[type], type).toBe(label);
