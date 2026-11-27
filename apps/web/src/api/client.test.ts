@@ -496,7 +496,10 @@ describe('mfa rules', () => {
     const wrongCode = () =>
       Promise.resolve(
         respond(
-          envelope('invalid_mfa_code', "That code didn't work. Enter the newest code from your app."),
+          envelope(
+            'invalid_mfa_code',
+            "That code didn't work. Enter the newest code from your app.",
+          ),
           401,
         ),
       );
@@ -520,7 +523,9 @@ describe('mfa rules', () => {
 
     // A 403 mfa_required from a read, a write and an upload runs onMfaRequired once each.
     stubFetch(() =>
-      Promise.resolve(respond(envelope('mfa_required', 'Finish two-step sign-in to continue.'), 403)),
+      Promise.resolve(
+        respond(envelope('mfa_required', 'Finish two-step sign-in to continue.'), 403),
+      ),
     );
     const read = await failure(apiGet('/api/users', userResponseSchema));
     expect(read.status).toBe(403);
