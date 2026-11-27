@@ -11,13 +11,16 @@ export const RATE_LIMITS = {
 
 /**
  * The routes with the tight `auth` limit, each in a bucket of its own per client. Their requests
- * don't count in the general bucket. Later sprints append their password and MFA routes.
+ * don't count in the general bucket. The admin MFA reset stays in the general bucket.
  */
 export const AUTH_LIMITED_ROUTES: readonly string[] = [
   'POST /api/setup',
   'POST /api/session',
   'POST /api/session/password',
   'POST /api/session/unlock',
+  'POST /api/session/mfa/enroll',
+  'POST /api/session/mfa/enroll/confirm',
+  'POST /api/session/mfa/verify',
 ];
 
 export const RATE_LIMITED_MESSAGE = 'Too many requests. Try again later.';
