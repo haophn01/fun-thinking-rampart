@@ -7,6 +7,7 @@ import {
   CLOSEOUT_CONFIRMER_LABELS,
   CSRF_HEADER,
   ERROR_CODES,
+  ERROR_MESSAGES,
   ERROR_STATUS,
   FILE_INTEGRITY_MESSAGE,
   FILE_NAME_HEADER,
@@ -92,12 +93,33 @@ describe('contract schemas', () => {
       unsupported_file_type: 415,
       file_integrity_failed: 500,
       provider_in_use: 409,
+      password_too_common: 400,
+      password_reused: 400,
+      password_change_required: 403,
+      session_locked: 423,
+      notice_not_acknowledged: 400,
     };
     expect(ERROR_CODES).toEqual(Object.keys(table));
-    expect(ERROR_CODES.at(-1)).toBe('provider_in_use');
+    // sec-auth appends five codes, in this order, after the earlier ones.
+    expect(ERROR_CODES.slice(-6)).toEqual([
+      'provider_in_use',
+      'password_too_common',
+      'password_reused',
+      'password_change_required',
+      'session_locked',
+      'notice_not_acknowledged',
+    ]);
     expect([...ERROR_CODES].sort()).toEqual(Object.keys(table).sort());
     expect(ERROR_STATUS).toEqual(table);
     for (const code of ERROR_CODES) expect(ERROR_STATUS[code], code).toBe(table[code]);
+    // The fixed texts the api sends and the web shows for the sec-auth codes.
+    expect(ERROR_MESSAGES).toEqual({
+      password_too_common: 'This password is too common. Choose another.',
+      password_reused: 'You used this password recently. Choose another.',
+      password_change_required: 'Change your password to continue.',
+      session_locked: 'Your session is locked. Enter your password to unlock it.',
+      notice_not_acknowledged: 'Acknowledge the sign-in notice to continue.',
+    });
   });
 
   it('objective status is exact', () => {
@@ -172,6 +194,11 @@ describe('contract schemas', () => {
       'ssp_approval.created',
       'ssp_approval.updated',
       'ssp_approval.removed',
+      'auth.password_changed',
+      'auth.session_locked',
+      'auth.session_unlocked',
+      'auth.notice_acknowledged',
+      'settings.updated',
     ]);
     expect(AUDIT_ENTITY_TYPES).toEqual([
       'user',
@@ -190,6 +217,7 @@ describe('contract schemas', () => {
       'diagram_link',
       'ssp_revision',
       'ssp_approval',
+      'settings',
     ]);
   });
 

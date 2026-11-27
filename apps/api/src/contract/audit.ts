@@ -42,6 +42,11 @@ export const AUDIT_ACTIONS = [
   'ssp_approval.created',
   'ssp_approval.updated',
   'ssp_approval.removed',
+  'auth.password_changed',
+  'auth.session_locked',
+  'auth.session_unlocked',
+  'auth.notice_acknowledged',
+  'settings.updated',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -67,6 +72,8 @@ export const AUDIT_ENTITY_TYPES = [
   'diagram_link',
   'ssp_revision',
   'ssp_approval',
+  /** The entity ID names the setting: `sign_in_notice`. */
+  'settings',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
