@@ -75,7 +75,7 @@ async function signIn(
     },
     csrfToken: created.csrfToken,
     locked: false,
-    mustChangePassword: false,
+    mustChangePassword: account.mustChangePassword,
     signInNotice: null,
   };
 }
@@ -189,6 +189,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: ApiDeps): void {
       setupRequired: setupRequired(deps.db),
       user: request.auth?.user ?? null,
       csrfToken: request.auth?.csrfToken ?? null,
+      mustChangePassword: request.auth?.mustChangePassword ?? false,
     }),
   );
 

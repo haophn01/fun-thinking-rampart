@@ -263,8 +263,12 @@ describe('multiplier scales the limits', () => {
 });
 
 describe('tight routes are pinned', () => {
-  it('is exactly setup and sign-in, and each is a real route', async () => {
-    expect(AUTH_LIMITED_ROUTES).toEqual(['POST /api/setup', 'POST /api/session']);
+  it('is setup, sign-in and change password, and each is a real route', async () => {
+    expect(AUTH_LIMITED_ROUTES).toEqual([
+      'POST /api/setup',
+      'POST /api/session',
+      'POST /api/session/password',
+    ]);
     const h = harness();
     await h.app.ready();
     const routes = new Set(listRoutes(h.app).map((entry) => `${entry.method} ${entry.url}`));

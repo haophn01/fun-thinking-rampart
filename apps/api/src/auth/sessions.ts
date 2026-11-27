@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import type { AppDb } from '../../db/client';
 import { session, user } from '../../db/schema';
 import { SESSION_ABSOLUTE_LIMIT_MS, SESSION_IDLE_LIMIT_MS, type SessionUser } from '../contract';
@@ -20,6 +20,8 @@ export interface ActiveSession {
   id: string;
   csrfToken: string;
   user: SessionUser;
+  /** The password is temporary: only the session routes answer until it is changed. */
+  mustChangePassword: boolean;
 }
 
 /** 32 random bytes as base64url: always 43 characters. */
@@ -43,18 +45,46 @@ export function isExpired(times: { createdAt: string; lastSeenAt: string }, now:
   );
 }
 
-/** Starts a session for `userId`. Returns the cookie token (never stored) and the CSRF token. */
+/** A new session: the cookie token (never stored), its CSRF token and the stored id. */
+export interface NewSession {
+  token: string;
+  csrfToken: string;
+  id: string;
+}
+
+/**
+ * Starts a session for `userId`. `createdAt` defaults to `now`; rotation passes the old one so
+ * the absolute limit still counts from sign-in.
+ */
 export function createSession(
   db: SessionStore,
   userId: string,
   now: Date,
-): { token: string; csrfToken: string; id: string } {
+  createdAt: string = now.toISOString(),
+): NewSession {
   const token = randomToken();
   const csrfToken = randomToken();
   const id = tokenDigest(token);
-  const at = now.toISOString();
-  db.insert(session).values({ id, userId, csrfToken, createdAt: at, lastSeenAt: at }).run();
+  db.insert(session)
+    .values({ id, userId, csrfToken, createdAt, lastSeenAt: now.toISOString() })
+    .run();
   return { token, csrfToken, id };
+}
+
+/**
+ * Replaces a session with one for the same user: a new token, a new CSRF token and the same
+ * `created_at`, so the 8 h limit still counts from sign-in. Null when the session is gone. The
+ * caller sets the cookie to the returned token.
+ */
+export function rotateSession(db: SessionStore, sessionId: string, now: Date): NewSession | null {
+  const row = db
+    .select({ userId: session.userId, createdAt: session.createdAt })
+    .from(session)
+    .where(eq(session.id, sessionId))
+    .get();
+  if (!row) return null;
+  deleteSession(db, sessionId);
+  return createSession(db, row.userId, now, row.createdAt);
 }
 
 /**
@@ -79,6 +109,7 @@ export function resolveSession(
       displayName: user.displayName,
       role: user.role,
       active: user.active,
+      mustChangePassword: user.mustChangePassword,
     })
     .from(session)
     .innerJoin(user, eq(user.id, session.userId))
@@ -94,6 +125,7 @@ export function resolveSession(
     id,
     csrfToken: row.csrfToken,
     user: { id: row.userId, email: row.email, displayName: row.displayName, role: row.role },
+    mustChangePassword: row.mustChangePassword,
   };
 }
 
@@ -109,6 +141,13 @@ export function deleteSession(db: SessionStore, id: string): void {
 /** Ends every session a user has (deactivation, password reset). */
 export function deleteUserSessions(db: SessionStore, userId: string): void {
   db.delete(session).where(eq(session.userId, userId)).run();
+}
+
+/** Ends every session of a user except `keepId` (a password change keeps the caller's). */
+export function deleteOtherSessions(db: SessionStore, userId: string, keepId: string): void {
+  db.delete(session)
+    .where(and(eq(session.userId, userId), ne(session.id, keepId)))
+    .run();
 }
 
 /** Compares a request's CSRF header with the session's token in constant time. */

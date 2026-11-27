@@ -7,6 +7,7 @@ import { registerAssessmentRoutes } from '../assessment/routes';
 import { registerAuditRoutes } from '../audit/list';
 import { registerGuard } from '../auth/guard';
 import { registerAuthRoutes } from '../auth/routes';
+import { registerSessionRoutes } from '../auth/session-routes';
 import { registerEvidenceRoutes } from '../evidence/routes';
 import { registerPoamRoutes } from '../poam/routes';
 import { registerPolicyRoutes } from '../policies/routes';
@@ -40,6 +41,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiDeps): void {
     await api.register(cookie);
     registerGuard(api, deps);
     registerAuthRoutes(api, deps);
+    registerSessionRoutes(api, deps);
     registerUserRoutes(api, deps);
     registerAuditRoutes(api, deps);
     registerAssessmentRoutes(api, deps);

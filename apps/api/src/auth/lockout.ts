@@ -4,7 +4,7 @@ import { user } from '../../db/schema';
 import { recordAudit } from '../audit/record';
 import { AppError } from '../errors';
 import type { ApiDeps } from '../routes';
-import type { SessionStore } from './sessions';
+import { deleteUserSessions, type SessionStore } from './sessions';
 
 /** The 5th consecutive failure locks the account. */
 export const MAX_FAILED_SIGN_INS = 5;
@@ -45,13 +45,16 @@ export function clearFailures(db: SessionStore, userId: string): void {
 
 /**
  * Records one failed password on an existing, active account; the 5th in a row locks it.
- * Returns whether this failure locked the account.
+ * Sign-in, unlock and change password share the run. With `fromSession` (unlock, change), the
+ * lock also ends every session the user has, in the same transaction. Returns whether this
+ * failure locked the account.
  */
 export function recordFailure(
   deps: ApiDeps,
   userId: string,
   now: Date,
   requestId: string,
+  options: { fromSession?: boolean } = {},
 ): boolean {
   return deps.db.transaction((tx) => {
     const current = tx
@@ -72,6 +75,7 @@ export function recordFailure(
       .where(eq(user.id, userId))
       .run();
     if (locks) {
+      if (options.fromSession === true) deleteUserSessions(tx, userId);
       recordAudit(tx, {
         at: now,
         actorUserId: null,
