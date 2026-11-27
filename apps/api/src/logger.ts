@@ -16,6 +16,9 @@ export const SECRET_KEYS = [
   'code',
   'recoveryCode',
   'secret',
+  // sec-mfa: the enrollment URI carries the TOTP secret; recovery codes are shown once.
+  'otpauthUri',
+  'recoveryCodes',
 ] as const;
 
 /** Secrets that must never reach a log line. */

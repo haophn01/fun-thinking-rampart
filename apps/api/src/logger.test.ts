@@ -73,6 +73,8 @@ describe('redaction paths', () => {
       code: 'totp-code-918273',
       recoveryCode: 'top-level-recovery-6',
       secret: 'top-level-secret-7',
+      otpauthUri: 'otpauth://totp/top-level-uri-8',
+      recoveryCodes: ['top-level-codes-9'],
     };
     const nested = {
       password: 'nested-password-1',
@@ -83,6 +85,8 @@ describe('redaction paths', () => {
       code: 'totp-code-372819',
       recoveryCode: 'nested-recovery-6',
       secret: 'nested-secret-7',
+      otpauthUri: 'otpauth://totp/nested-uri-8',
+      recoveryCodes: ['nested-codes-9'],
     };
 
     log.info(
@@ -92,10 +96,19 @@ describe('redaction paths', () => {
       },
       'direct',
     );
+    log.info(
+      { otpauthUri: secrets.otpauthUri, body: { recoveryCodes: nested.recoveryCodes } },
+      'mfa',
+    );
     log.trace({ ...secrets, body: nested, user: { ...nested } }, 'every key');
 
-    expect(lines).toHaveLength(2);
-    const [direct, every] = lines;
+    expect(lines).toHaveLength(3);
+    const [direct, mfa, every] = lines;
+    expect(mfa).toMatchObject({
+      msg: 'mfa',
+      otpauthUri: '[Redacted]',
+      body: { recoveryCodes: '[Redacted]' },
+    });
     expect(direct).toMatchObject({
       msg: 'direct',
       password: '[Redacted]',
@@ -105,7 +118,7 @@ describe('redaction paths', () => {
     expect(every).toMatchObject({ ...censored, body: censored, user: censored });
 
     const text = JSON.stringify(lines);
-    for (const value of [...Object.values(secrets), ...Object.values(nested)]) {
+    for (const value of [...Object.values(secrets), ...Object.values(nested)].flat()) {
       expect(text).not.toContain(value);
     }
     for (const key of Object.keys(secrets)) {
