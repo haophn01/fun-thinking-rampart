@@ -5,7 +5,9 @@ import { z } from 'zod';
 import { user } from '../../db/schema';
 import { recordAudit } from '../audit/record';
 import { clearSessionCookie } from '../auth/cookie';
+import { clearFailures } from '../auth/lockout';
 import { hashPassword } from '../auth/password';
+import { checkNewPassword, pushPasswordHistory } from '../auth/password-policy';
 import { deleteUserSessions, type SessionStore } from '../auth/sessions';
 import {
   createUserRequestSchema,
@@ -75,6 +77,7 @@ export function profileChanges(
 
 async function createUser(deps: ApiDeps, request: FastifyRequest): Promise<UserRow> {
   const body = createUserRequestSchema.parse(request.body);
+  checkNewPassword(body.password);
   const taken = () => new AppError('email_taken', 'That email is already used.');
   if (deps.db.select({ id: user.id }).from(user).where(eq(user.email, body.email)).get()) {
     throw taken();
@@ -93,8 +96,17 @@ async function createUser(deps: ApiDeps, request: FastifyRequest): Promise<UserR
       role: body.role,
       active: true,
     };
+    // An admin-set password is temporary: the user chooses their own at first sign-in.
     tx.insert(user)
-      .values({ id, ...created, passwordHash, createdAt: at, updatedAt: at })
+      .values({
+        id,
+        ...created,
+        passwordHash,
+        mustChangePassword: true,
+        passwordChangedAt: at,
+        createdAt: at,
+        updatedAt: at,
+      })
       .run();
     recordAudit(tx, {
       at: now,
@@ -120,6 +132,7 @@ async function updateUser(
   const { id } = paramsSchema.parse(request.params);
   const body = updateUserRequestSchema.parse(request.body);
   if (!findUser(deps.db, id)) throw notFound();
+  if (body.password !== undefined) checkNewPassword(body.password);
   const passwordHash = body.password === undefined ? null : await hashPassword(body.password);
   const now = deps.now();
   const actorUserId = request.auth?.user.id ?? null;
@@ -138,11 +151,18 @@ async function updateUser(
       }
     }
 
+    if (passwordHash !== null) {
+      // A reset is temporary and remembered: the replaced hash goes to history, the user must
+      // choose their own at next sign-in, and a lockout lifts so the new password works at once.
+      pushPasswordHistory(tx, id, current.passwordHash, now);
+      clearFailures(tx, id);
+    }
     tx.update(user)
       .set({
         ...after,
-        // A reset also lifts a lockout, so the new password works at once.
-        ...(passwordHash === null ? {} : { passwordHash, failedSignIns: 0, lockedUntil: null }),
+        ...(passwordHash === null
+          ? {}
+          : { passwordHash, mustChangePassword: true, passwordChangedAt: now.toISOString() }),
         updatedAt: now.toISOString(),
       })
       .where(eq(user.id, id))
@@ -171,7 +191,9 @@ async function updateUser(
         requestId: request.id,
       });
     }
-    const endsSessions = passwordHash !== null || after.active === false;
+    // A reset, a deactivation or a real role change signs the user out everywhere.
+    const endsSessions =
+      passwordHash !== null || after.active === false || after.role !== undefined;
     if (endsSessions) deleteUserSessions(tx, id);
     const updated = findUser(tx, id);
     if (!updated) throw notFound();
