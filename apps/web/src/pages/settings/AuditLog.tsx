@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet } from '../../api/client';
 import { Alert, Button, Select } from '../../look';
 import { ACTION_LABELS, ENTITY_LABELS } from './auditLabels';
+import { AuditVerify } from './AuditVerify';
 import styles from './settings.module.css';
 
 const PAGE_SIZE = 50;
@@ -61,6 +62,7 @@ export function AuditLog() {
 
   return (
     <div className={styles.panel}>
+      <AuditVerify />
       <Select
         label="Entity type"
         value={filter}
