@@ -37,6 +37,8 @@ const LISTED_USER = {
   active: true,
   createdAt: '2026-11-26T10:00:00.000Z',
 };
+// Test fixture: the public RFC/Google Authenticator base32 example ("Hello!"), not a real secret.
+// nosemgrep: generic.secrets.security.detected-generic-secret.detected-generic-secret
 const SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
 const ENROLLMENT = {
   secret: SECRET,
