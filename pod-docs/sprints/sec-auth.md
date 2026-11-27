@@ -6,9 +6,9 @@ _From plan: pod-docs/plans/security-hardening.md · Slug: sec-auth · Status: ac
 
 | Wave | Slice | Title | Branch | PR | Status | Confidence | Depends on |
 |------|-------|-------|--------|----|--------|------------|------------|
-| 1 | D1 | DB: migration 0006 (auth, MFA and audit-chain columns, three tables, narrowed audit trigger) | sec-auth-d1 | — | pending | — | — |
-| 1 | K1 | Contract: session fields, auth and notice schemas, error codes, audit actions and labels | sec-auth-k1 | — | pending | — | — |
-| 1 | P1 | Password blocklist: bundled offline list, generator, licence record | sec-auth-p1 | — | pending | — | — |
+| 1 | D1 | DB: migration 0006 (auth, MFA and audit-chain columns, three tables, narrowed audit trigger) | sec-auth-d1 | #33 | done | 4db63e8 | — |
+| 1 | K1 | Contract: session fields, auth and notice schemas, error codes, audit actions and labels | sec-auth-k1 | #33 | done | 4db63e8 | — |
+| 1 | P1 | Password blocklist: bundled offline list, generator, licence record | sec-auth-p1 | #33 | done | 4db63e8 | — |
 | 2 | A1 | Auth api: 30 min / 8 h sessions, rotation, lock and unlock, change password, history, gates | sec-auth-a1 | — | pending | — | D1, K1, P1 |
 | 2 | G1 | Web session seams: lock and password states, 423 and 401 rules, 429 in the app shell | sec-auth-g1 | — | pending | — | K1 |
 | 3 | N1 | Sign-in notice api: settings route, session field, acknowledgement on sign-in | sec-auth-n1 | — | pending | — | A1 |
