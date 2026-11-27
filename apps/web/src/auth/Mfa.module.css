@@ -1,0 +1,84 @@
+/* The two-step sign-in screens: ballooned steps, the QR in Ink on Sheet, and keys and codes in mono. */
+.step {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* A step's heading: the ballooned label carries the look, so the h2 adds no size of its own. */
+.stepHead {
+  font-size: var(--rp-text-label);
+  font-weight: 400;
+}
+
+.qr {
+  width: 100%;
+  max-width: 232px;
+  height: auto;
+  border: var(--rp-rule) solid var(--rp-ink);
+}
+
+.qrSheet {
+  fill: var(--rp-sheet);
+}
+
+.qrModules {
+  fill: var(--rp-ink);
+}
+
+.manual {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 0;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+}
+
+.term {
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.term + .term,
+dd + .term {
+  margin-top: 8px;
+}
+
+.key {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.account {
+  overflow-wrap: anywhere;
+}
+
+/* The recovery codes: numbered, two to a row, one to a row on a phone. */
+.codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  padding: 12px 0 12px 40px;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+}
+
+.codes li {
+  overflow-wrap: anywhere;
+}
+
+.switch {
+  justify-self: start;
+}
+
+@media (max-width: 479px) {
+  .codes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
