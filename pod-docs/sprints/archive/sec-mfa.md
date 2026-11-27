@@ -12,8 +12,8 @@ _From plan: pod-docs/plans/security-hardening.md · Slug: sec-mfa · Status: act
 | 2 | R1 | MFA api: enroll, confirm, verify, recovery codes, replay guard, admin reset, limits | sec-mfa-r1 | #39 | done | fa81b22 | K1, C1, T1 |
 | 2 | G1 | Web: MFA session states, enrollment with QR, recovery codes, challenge | sec-mfa-g1 | #39 | done | fa81b22 | K1 |
 | 2 | U2 | Web: two-step status and reset in Settings › Users | sec-mfa-u2 | #39 | done | fa81b22 | K1 |
-| 3 | A2 | MFA required: pending sessions at sign-in, the guard gate, e2e, docs | sec-mfa-a2 | — | pending | — | R1, G1, U2 |
-| 3 | X1 | `pnpm admin:reset-mfa <email>` CLI for local recovery | sec-mfa-x1 | — | pending | — | R1 |
+| 3 | A2 | MFA required: pending sessions at sign-in, the guard gate, e2e, docs | sec-mfa-a2 | #41 | done | ec3972b | R1, G1, U2 |
+| 3 | X1 | `pnpm admin:reset-mfa <email>` CLI for local recovery | sec-mfa-x1 | #41 | done | ec3972b | R1 |
 
 Plan branch `security-hardening`. Wave heads `sec-mfa-w1` … `sec-mfa-w3`. Merge target `main`. There's no migration: 0006 already added every column and table this sprint uses. A2 is the one-way door: it turns MFA on for every account. Its wave stops for the human unless they pre-approve it.
 
@@ -446,3 +446,39 @@ The orchestrator records this in `decisions.md`. The only new packages are a QR 
 - **Depends on:** R1
 - **One-way door:** none
 - **Model:** opus
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date (`main` unchanged since 91161a6).
+- **Slices shipped:** K1, C1 and T1 (#38); R1, G1 and U2 (#39); A2 and X1 (#41). The one-way door is A2, MFA required; the human approved it ("Yes, merge the MFA wave"). The DB and key were backed up to `D:/Projects/Rampart-backups/2026-11-27-pre-mfa` (the human asked for key backups).
+- **Queue:**
+  - resolved: C1's docs item (by A2) and the A2 door
+  - added: the contract output-type friction (someday) and the key-file ACLs on Windows (before hosting)
+- **Decisions:**
+  - TOTP on `node:crypto`; `uqr`/`jsqr` for the QR
+  - HMAC recovery codes; the lockout rules
+  - re-enroll keeps the pending secret (a wave 2 fix)
+  - resetting an unfinished setup is audited
+  - an old full session of a user who enrolls elsewhere becomes pending
+- **Slice log:**
+  - K1: opus · high · gate 1 (7 placeholder lines)
+  - C1: opus · medium
+  - T1: opus · medium · the only lockfile change (`uqr` 0.1.3, `jsqr` 1.4.0)
+  - R1: opus · medium
+  - G1: opus · medium · its reload PENDING was fixed by the orchestrator
+  - U2: sonnet · medium
+  - A2: opus · medium · gate 1 (11 suites)
+  - X1: sonnet · high
+  - No stalls or limit stops this sprint.
+- **Wave fixes:**
+  - wave 1: constants imported from the contract, and Semgrep's nosemgrep on a public base32 example
+  - wave 2: re-enroll keeps the pending secret (red, then green)
+  - wave 3: a 120 s timeout for the spawned-CLI tests (Windows CI timed out at 5 s)
+- **Wave checks:** verify 1,229 → 1,277 → 1,297; e2e 24 → 24 → 26. CI was green on all 7 jobs for #38, #39 and #41, after their fixes.
+- **Agent context at hand-back:** about 1,600,000 tokens (the sum of final context sizes, not billed).
+- **For the next sprint (sec-integrity):**
+  - audit `prev_hash`/`hash` exist from 0006, and the narrowed trigger allows a one-time fill per row; backfill in code, in one transaction
+  - the upload allowlist by real bytes, and the zip-bomb guard
+  - FIPS_MODE plus the PBKDF2 option
+  - SECURITY.md with the 800-171 self-mapping
+  - e2e runs about 4 min because of the TOTP waits
