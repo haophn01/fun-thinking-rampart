@@ -10,7 +10,13 @@ import { base32Decode } from '../auth/mfa/base32';
 import { totpAt } from '../auth/mfa/totp';
 import { tokenDigest } from '../auth/sessions';
 import { loadConfig, type Config, type LogLevel } from '../config';
-import { CSRF_HEADER, sessionResponseSchema, type SessionUser } from '../contract';
+import {
+  CSRF_HEADER,
+  SESSION_COOKIE,
+  mfaEnrollmentResponseSchema,
+  sessionResponseSchema,
+  type SessionUser,
+} from '../contract';
 import { decryptSecret, deriveKeys, encryptSecret, type DerivedKeys } from '../security/secrets';
 
 /** The admin `setupAdmin()` creates unless told otherwise. */
@@ -350,4 +356,81 @@ function safeJson(text: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/** A session's request headers, for suites that call `app.inject` themselves. */
+export type SessionHeaders = Record<'cookie' | typeof CSRF_HEADER, string>;
+
+/** Each email's TOTP secret, kept across apps (and restarts) by `signInThroughApi`. */
+export type MfaSecrets = Map<string, Buffer>;
+
+const TOTP_STEP_MS = 30_000;
+
+/**
+ * Setup or sign-in for suites that drive `buildApp` without the harness (the restart tests),
+ * finishing the MFA step through the api as a user would. `enroll`: enroll and confirm, keeping
+ * the new secret in `secrets` under the user's email. `challenge`: verify with the kept secret,
+ * using the code of `at`'s step or, if that step was used, the next one's. Build those apps with
+ * `RAMPART_SECRET_KEY: HARNESS_SECRET_KEY`, so a secret stored before a restart opens after it.
+ * Throws when any step isn't a success. The full session's headers.
+ */
+export async function signInThroughApi(
+  app: FastifyInstance,
+  url: '/api/setup' | '/api/session',
+  payload: unknown,
+  options: { at: Date; secrets: MfaSecrets; cookieName?: string },
+): Promise<SessionHeaders> {
+  const name = options.cookieName ?? SESSION_COOKIE;
+  const post = async (path: string, headers: SessionHeaders | null, body?: unknown) => {
+    const response = await app.inject({
+      method: 'POST',
+      url: path,
+      headers: {
+        ...headers,
+        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      },
+      ...(body === undefined ? {} : { payload: JSON.stringify(body) }),
+    });
+    return response;
+  };
+  const ok = (response: LightMyRequestResponse, what: string) => {
+    if (response.statusCode >= 300) {
+      throw new Error(`${what} answered ${String(response.statusCode)}: ${response.body}`);
+    }
+    return response;
+  };
+  const headersOf = (response: LightMyRequestResponse): SessionHeaders => {
+    const cookie = response.cookies.find((item) => item.name === name)?.value ?? '';
+    const { csrfToken } = sessionResponseSchema.parse(response.json());
+    return { cookie: `${name}=${cookie}`, [CSRF_HEADER]: csrfToken ?? '' };
+  };
+
+  const signedIn = ok(await post(url, null, payload), url);
+  const state = sessionResponseSchema.parse(signedIn.json());
+  const email = state.user?.email ?? '';
+  let headers = headersOf(signedIn);
+  if (state.mfa === 'enroll') {
+    const started = ok(await post('/api/session/mfa/enroll', headers), 'enroll');
+    const secret = base32Decode(mfaEnrollmentResponseSchema.parse(started.json()).secret);
+    const code = totpAt(secret, options.at);
+    const confirmed = ok(
+      await post('/api/session/mfa/enroll/confirm', headers, { code }),
+      'enroll confirm',
+    );
+    options.secrets.set(email, secret);
+    headers = headersOf(confirmed);
+  } else if (state.mfa === 'challenge') {
+    const secret = options.secrets.get(email);
+    if (secret === undefined) throw new Error(`no TOTP secret kept for ${email}`);
+    const next = new Date(options.at.getTime() + TOTP_STEP_MS);
+    let verified = await post('/api/session/mfa/verify', headers, {
+      code: totpAt(secret, options.at),
+    });
+    // The step was used already (a sign-in in the same 30 s): the next step's code is in window.
+    if (verified.statusCode === 401) {
+      verified = await post('/api/session/mfa/verify', headers, { code: totpAt(secret, next) });
+    }
+    headers = headersOf(ok(verified, 'verify'));
+  }
+  return headers;
 }
