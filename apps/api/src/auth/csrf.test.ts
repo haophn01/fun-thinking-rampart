@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { user } from '../../db/schema';
 import { errorEnvelopeSchema } from '../contract';
 import { createHarness, type Client, type Harness } from '../testing/harness';
 
@@ -113,6 +114,42 @@ describe('csrf and check order', () => {
       headers: { 'content-type': 'text/plain' },
     });
     expect(adminText.statusCode).toBe(415);
+  });
+
+  it('guard order with lock and password gates', async () => {
+    const { h, admin, carl } = await world();
+    const noCsrf = { 'x-csrf-token': null };
+
+    // Signed out: 401 before any gate.
+    expect(code((await h.client().post('/api/session/lock')).body)).toBe('unauthenticated');
+
+    // Locked without CSRF: the token is checked before the lock.
+    expect((await admin.post('/api/session/lock')).statusCode).toBe(204);
+    const lockedNoCsrf = await admin.post('/api/users', NEW_USER, { headers: noCsrf });
+    expect(lockedNoCsrf.statusCode).toBe(403);
+    expect(code(lockedNoCsrf.body)).toBe('csrf_failed');
+    const lockedWrite = await admin.post('/api/users', NEW_USER);
+    expect(lockedWrite.statusCode).toBe(423);
+    expect(code(lockedWrite.body)).toBe('session_locked');
+
+    // Locked and must-change: the lock wins.
+    h.db.update(user).set({ mustChangePassword: true }).run();
+    expect(code((await admin.get('/api/assessment')).body)).toBe('session_locked');
+    expect(code((await admin.post('/api/session/password', {})).body)).toBe('session_locked');
+
+    // Must-change on an admin route as a contributor: the password change comes before the role.
+    const carlAdminRoute = await carl.post('/api/users', { bad: true });
+    expect(carlAdminRoute.statusCode).toBe(403);
+    expect(code(carlAdminRoute.body)).toBe('password_change_required');
+    const carlNoCsrf = await carl.post('/api/users', { bad: true }, { headers: noCsrf });
+    expect(code(carlNoCsrf.body)).toBe('csrf_failed');
+    // On its own routes the body is checked: 400, not a gate.
+    const carlBadBody = await carl.post('/api/session/password', { bad: true });
+    expect(carlBadBody.statusCode).toBe(400);
+    expect(code(carlBadBody.body)).toBe('validation_failed');
+    // Public routes are never gated.
+    expect((await carl.get('/api/session')).statusCode).toBe(200);
+    expect((await h.client().get('/api/health')).statusCode).toBe(200);
   });
 
   it('leaves health public and unknown routes 404', async () => {

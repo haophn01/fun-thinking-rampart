@@ -191,6 +191,37 @@ describe('hosted cookie is __Host- and Secure', () => {
     expectCleared(cookie);
     expect(admin.cookie).toBeNull();
   });
+
+  it('a password change rotates it with the same attributes and Max-Age', async () => {
+    const h = harness(hosted);
+    const admin = await h.setupAdmin();
+    const before = admin.cookie;
+    const response = await admin.post('/api/session/password', {
+      currentPassword: ADMIN.password,
+      newPassword: 'a brand new passphrase',
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    const cookie = onlyCookie(response);
+    expectHostedAttributes(cookie);
+    expect(cookie.value).not.toBe('');
+    expect(cookie.value).not.toBe(before);
+    expect(cookie.attributes.get('max-age')).toBe(String(SESSION_MAX_AGE_SECONDS));
+    expect((await admin.get('/api/users')).statusCode).toBe(200);
+  });
+
+  it('a lockout from a session clears it with the same attributes', async () => {
+    const h = harness(hosted);
+    const admin = await h.setupAdmin();
+    let last: LightMyRequestResponse | undefined;
+    for (let i = 0; i < 5; i += 1) {
+      last = await admin.post('/api/session/unlock', { password: 'not the password' });
+    }
+    if (last === undefined) throw new Error('no response');
+    expect(last.statusCode).toBe(401);
+    const cookie = onlyCookie(last);
+    expectHostedAttributes(cookie);
+    expectCleared(cookie);
+  });
 });
 
 describe('hosted mode reads only its own cookie name', () => {

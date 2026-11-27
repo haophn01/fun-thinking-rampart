@@ -1,13 +1,13 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import type { AppDb } from '../../db/client';
 import { session, user } from '../../db/schema';
-import type { SessionUser } from '../contract';
+import { SESSION_ABSOLUTE_LIMIT_MS, SESSION_IDLE_LIMIT_MS, type SessionUser } from '../contract';
 
-/** A session ends 2 h after its last request. */
-export const IDLE_LIMIT_MS = 2 * 60 * 60 * 1000;
-/** A session ends 12 h after sign-in, however busy. */
-export const ABSOLUTE_LIMIT_MS = 12 * 60 * 60 * 1000;
+/** A session ends 30 min after its last unlocked request. */
+export const IDLE_LIMIT_MS = SESSION_IDLE_LIMIT_MS;
+/** A session ends 8 h after sign-in, however busy. */
+export const ABSOLUTE_LIMIT_MS = SESSION_ABSOLUTE_LIMIT_MS;
 /** The cookie's Max-Age, equal to the absolute limit. */
 export const SESSION_MAX_AGE_SECONDS = ABSOLUTE_LIMIT_MS / 1000;
 
@@ -20,6 +20,10 @@ export interface ActiveSession {
   id: string;
   csrfToken: string;
   user: SessionUser;
+  /** Locked: only lock, unlock and the public routes answer until the password is entered. */
+  locked: boolean;
+  /** The password is temporary: only the session routes answer until it is changed. */
+  mustChangePassword: boolean;
 }
 
 /** 32 random bytes as base64url: always 43 characters. */
@@ -43,23 +47,52 @@ export function isExpired(times: { createdAt: string; lastSeenAt: string }, now:
   );
 }
 
-/** Starts a session for `userId`. Returns the cookie token (never stored) and the CSRF token. */
+/** A new session: the cookie token (never stored), its CSRF token and the stored id. */
+export interface NewSession {
+  token: string;
+  csrfToken: string;
+  id: string;
+}
+
+/**
+ * Starts a session for `userId`. `createdAt` defaults to `now`; rotation passes the old one so
+ * the absolute limit still counts from sign-in.
+ */
 export function createSession(
   db: SessionStore,
   userId: string,
   now: Date,
-): { token: string; csrfToken: string; id: string } {
+  createdAt: string = now.toISOString(),
+): NewSession {
   const token = randomToken();
   const csrfToken = randomToken();
   const id = tokenDigest(token);
-  const at = now.toISOString();
-  db.insert(session).values({ id, userId, csrfToken, createdAt: at, lastSeenAt: at }).run();
+  db.insert(session)
+    .values({ id, userId, csrfToken, createdAt, lastSeenAt: now.toISOString() })
+    .run();
   return { token, csrfToken, id };
 }
 
 /**
+ * Replaces a session with one for the same user: a new token, a new CSRF token and the same
+ * `created_at`, so the 8 h limit still counts from sign-in. Null when the session is gone. The
+ * caller sets the cookie to the returned token.
+ */
+export function rotateSession(db: SessionStore, sessionId: string, now: Date): NewSession | null {
+  const row = db
+    .select({ userId: session.userId, createdAt: session.createdAt })
+    .from(session)
+    .where(eq(session.id, sessionId))
+    .get();
+  if (!row) return null;
+  deleteSession(db, sessionId);
+  return createSession(db, row.userId, now, row.createdAt);
+}
+
+/**
  * The session a cookie token names, or null. An expired session, or one whose user is inactive,
- * is deleted. A live one has `last_seen_at` moved to `now`.
+ * is deleted. A live, unlocked one has `last_seen_at` moved to `now`; a locked one keeps it, so it
+ * ends 30 min after its last unlocked request however often it is polled.
  */
 export function resolveSession(
   db: SessionStore,
@@ -74,11 +107,13 @@ export function resolveSession(
       csrfToken: session.csrfToken,
       createdAt: session.createdAt,
       lastSeenAt: session.lastSeenAt,
+      lockedAt: session.lockedAt,
       userId: user.id,
       email: user.email,
       displayName: user.displayName,
       role: user.role,
       active: user.active,
+      mustChangePassword: user.mustChangePassword,
     })
     .from(session)
     .innerJoin(user, eq(user.id, session.userId))
@@ -89,12 +124,44 @@ export function resolveSession(
     deleteSession(db, id);
     return null;
   }
-  db.update(session).set({ lastSeenAt: now.toISOString() }).where(eq(session.id, id)).run();
+  const locked = row.lockedAt !== null;
+  if (!locked) {
+    db.update(session).set({ lastSeenAt: now.toISOString() }).where(eq(session.id, id)).run();
+  }
   return {
     id,
     csrfToken: row.csrfToken,
     user: { id: row.userId, email: row.email, displayName: row.displayName, role: row.role },
+    locked,
+    mustChangePassword: row.mustChangePassword,
   };
+}
+
+/** Locks a session. Returns true only when it was unlocked, so a repeat records nothing. */
+export function lockSession(db: SessionStore, id: string, now: Date): boolean {
+  const result = db
+    .update(session)
+    .set({ lockedAt: now.toISOString() })
+    .where(and(eq(session.id, id), isNull(session.lockedAt)))
+    .run();
+  return result.changes > 0;
+}
+
+/**
+ * Unlocks a session and moves `last_seen_at` to `now`. Returns true only when it was locked.
+ * The token stays: tabs share the cookie.
+ */
+export function unlockSession(db: SessionStore, id: string, now: Date): boolean {
+  const row = db
+    .select({ lockedAt: session.lockedAt })
+    .from(session)
+    .where(eq(session.id, id))
+    .get();
+  db.update(session)
+    .set({ lockedAt: null, lastSeenAt: now.toISOString() })
+    .where(eq(session.id, id))
+    .run();
+  return row !== undefined && row.lockedAt !== null;
 }
 
 /** Deletes the session a cookie token names, if any. */
@@ -109,6 +176,13 @@ export function deleteSession(db: SessionStore, id: string): void {
 /** Ends every session a user has (deactivation, password reset). */
 export function deleteUserSessions(db: SessionStore, userId: string): void {
   db.delete(session).where(eq(session.userId, userId)).run();
+}
+
+/** Ends every session of a user except `keepId` (a password change keeps the caller's). */
+export function deleteOtherSessions(db: SessionStore, userId: string, keepId: string): void {
+  db.delete(session)
+    .where(and(eq(session.userId, userId), ne(session.id, keepId)))
+    .run();
 }
 
 /** Compares a request's CSRF header with the session's token in constant time. */
