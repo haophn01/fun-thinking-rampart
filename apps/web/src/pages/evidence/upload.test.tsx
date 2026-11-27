@@ -167,6 +167,29 @@ describe('upload', () => {
       await within(detail).findByText('This item contains CUI, so no file can be stored.'),
     ).toBeVisible();
   });
+
+  it("shows a refused file's reason", async () => {
+    const message = 'This file expands to more than 100 times its size.';
+    const calls = fakeApi([item('e-1', 'Firewall config')], () =>
+      json(415, {
+        error: {
+          code: 'file_refused',
+          message,
+          requestId: 'r-415',
+          details: { reason: 'zip_ratio', extension: '.docx' },
+        },
+      }),
+    );
+    const { user, detail } = await openDetails('Firewall config');
+    await user.upload(
+      within(detail).getByLabelText('Upload a file'),
+      new File(['PK'], 'notes.docx'),
+    );
+    expect(await within(detail).findByText(message)).toBeVisible();
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
+      'POST /api/evidence/e-1/versions',
+    ]);
+  });
 });
 
 describe('CUI reference', () => {
