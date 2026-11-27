@@ -4,6 +4,8 @@
 /** The product name. Nothing else in the codebase spells it. */
 export const PRODUCT_NAME = 'Rampart';
 
+// First: in the browser it makes zod jitless before any schema below is built.
+export * from './browser';
 export * from './error';
 export * from './health';
 export * from './common';

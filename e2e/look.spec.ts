@@ -4,11 +4,13 @@
 // background and drawn border colours; every text pair at 4.5:1, or 3:1 for large text; and no
 // horizontal scroll at 375 px.
 //
+// Every page also loads under the production CSP with zero `securitypolicyviolation` events.
+//
 // Playwright runs spec files in name order against one api and database, so this file runs before
 // shell.spec.ts and smoke.spec.ts, which both need a fresh install. It therefore starts an api of
-// its own (the config's entry point, without pnpm) on a database of its own in the run folder,
-// seeds it through that api, and routes the browser's `/api` calls to it. The pages come from the
-// config's web app, so only one Vite serves the repo.
+// its own (tsx, without pnpm) on a database of its own in the run folder, seeds it through that
+// api, and routes the browser's `/api` calls to it. The pages, with their CSP, come from the
+// config's server: the production build served by the api.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -56,8 +58,7 @@ type StorageState = Awaited<ReturnType<APIRequestContext['storageState']>>;
 
 const API_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../apps/api');
 const HOST = '127.0.0.1';
-const API_PORT =
-  process.env.E2E_LOOK_API_PORT ?? String(Number(process.env.E2E_API_PORT ?? '3291') + 2);
+const API_PORT = process.env.E2E_LOOK_API_PORT ?? '3293';
 const API_ORIGIN = `http://${HOST}:${API_PORT}`;
 
 const WIDTHS = [1280, 375] as const;
@@ -75,7 +76,7 @@ const TOKEN_HEX = new Set(Object.values(COLORS).map((hex) => hex.toUpperCase()))
 let server: ChildProcess | null = null;
 const serverOutput: string[] = [];
 
-/** Starts the api the way the config does (tsx, no watch), on a database in the run folder. */
+/** Starts an api (tsx, no watch, no web app), on a database in the run folder. */
 async function startApi() {
   const runDir = join(process.env.E2E_RUN_DIR ?? '', 'look');
   mkdirSync(runDir, { recursive: true });
@@ -440,6 +441,32 @@ async function seedSspWorkspace(
 
 // ---------- checks ----------
 
+declare global {
+  interface Window {
+    __cspViolations?: string[];
+  }
+}
+
+/**
+ * Records every `securitypolicyviolation` in each page, from before the app's first script runs.
+ * Playwright injects init scripts outside the page's CSP, so the collector never trips it.
+ */
+async function collectCspViolations(context: BrowserContext) {
+  await context.addInitScript(() => {
+    window.__cspViolations = [];
+    document.addEventListener('securitypolicyviolation', (event) => {
+      window.__cspViolations?.push(
+        `csp: ${event.effectiveDirective} blocked ${event.blockedURI || '(inline)'} at ${event.sourceFile || document.location.pathname}:${String(event.lineNumber)}`,
+      );
+    });
+  });
+}
+
+/** The CSP violations the current page has recorded since it loaded. */
+async function cspViolations(page: Page): Promise<string[]> {
+  return page.evaluate(() => [...(window.__cspViolations ?? [])]);
+}
+
 interface Facts {
   scrollWidth: number;
   viewportWidth: number;
@@ -584,7 +611,8 @@ async function lookContext(
     ...(baseURL === undefined ? {} : { baseURL }),
     storageState,
   });
-  // Pages come from the config's web app; their api calls go to the look api.
+  await collectCspViolations(context);
+  // Pages come from the config's server; their api calls go to the look api.
   // Only the api's own paths: module URLs such as /@fs/…/apps/api/src/contract also hold "/api/".
   await context.route(
     (url) => url.pathname.startsWith('/api/'),
@@ -650,6 +678,7 @@ test.describe('look', () => {
 
     const found: string[] = [];
     let checked = 0;
+    let cspChecked = 0;
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 900 });
       for (const view of views) {
@@ -663,8 +692,9 @@ test.describe('look', () => {
         }
         const facts = await page.evaluate(collectFacts);
         checked += facts.texts.length;
-        for (const line of violations(facts, width))
-          found.push(`${String(width)}px ${view.name} ${line}`);
+        cspChecked += 1;
+        const lines = [...violations(facts, width), ...(await cspViolations(page))];
+        for (const line of lines) found.push(`${String(width)}px ${view.name} ${line}`);
       }
       if (width === PHONE) {
         // The phone nav is behind Menu.
@@ -672,13 +702,17 @@ test.describe('look', () => {
         await page.getByRole('button', { name: 'Menu' }).click();
         await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
         const facts = await page.evaluate(collectFacts);
-        for (const line of violations(facts, width))
-          found.push(`${String(width)}px / (menu open) ${line}`);
+        const lines = [...violations(facts, width), ...(await cspViolations(page))];
+        for (const line of lines) found.push(`${String(width)}px / (menu open) ${line}`);
       }
     }
+    // The pages were served under the strict CSP, so zero violations means something.
+    const served = await context.request.get('/');
     await context.close();
 
+    expect(served.headers()['content-security-policy']).toMatch(/^default-src 'self'; /);
     expect(checked, 'text elements checked').toBeGreaterThan(100);
+    expect(cspChecked, 'pages checked for CSP violations').toBe(views.length * WIDTHS.length);
     expect([...new Set(found)], [...new Set(found)].join('\n')).toEqual([]);
   });
 
