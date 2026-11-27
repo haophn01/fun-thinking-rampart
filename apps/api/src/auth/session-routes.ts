@@ -11,6 +11,7 @@ import {
 import { AppError } from '../errors';
 import { respond } from '../respond';
 import type { ApiDeps } from '../routes';
+import { getSignInNotice } from '../settings/repository';
 import { clearSessionCookie, setSessionCookie } from './cookie';
 import { assertAccountUnlocked, clearFailures, recordFailure } from './lockout';
 import { hashPassword, verifyPassword } from './password';
@@ -124,7 +125,7 @@ async function changePassword(
     csrfToken: rotated.csrfToken,
     locked: false,
     mustChangePassword: false,
-    signInNotice: null,
+    signInNotice: getSignInNotice(deps.db),
   };
 }
 
@@ -185,7 +186,7 @@ async function unlock(
     csrfToken: auth.csrfToken,
     locked: false,
     mustChangePassword: account.mustChangePassword,
-    signInNotice: null,
+    signInNotice: getSignInNotice(deps.db),
   };
 }
 

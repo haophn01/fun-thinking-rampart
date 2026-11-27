@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { Alert, Button } from '../look';
 import styles from './auth.module.css';
+import pageStyles from './ChangePasswordPage.module.css';
 import { ROLE_LABELS, useSession } from './session';
 
 /** The masthead's signed-in user: name, role and Sign out. */
@@ -27,6 +29,9 @@ export function UserSlot() {
         <span className={styles.name}>{session.user.displayName}</span>
         <span className={styles.role}>{ROLE_LABELS[session.user.role]}</span>
       </span>
+      <Link className={pageStyles.link} to="/account/password">
+        Change password
+      </Link>
       <Button disabled={pending} onClick={() => void signOut()}>
         Sign out
       </Button>

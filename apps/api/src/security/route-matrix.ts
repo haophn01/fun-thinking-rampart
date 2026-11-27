@@ -268,6 +268,13 @@ export const ROUTE_MATRIX: Readonly<Record<string, MatrixEntry>> = {
   },
   'GET /api/audit': { access: 'session', sample: { url: '/api/audit' }, idor: NO_URL_ID },
 
+  // App-wide settings.
+  'PUT /api/settings/sign-in-notice': {
+    access: 'admin',
+    sample: { url: '/api/settings/sign-in-notice', body: { text: 'Matrix notice.' } },
+    idor: { notApplicable: 'one global setting' },
+  },
+
   // The assessment.
   'GET /api/assessment': { access: 'session', sample: { url: '/api/assessment' }, idor: NO_URL_ID },
   'PATCH /api/assessment': {

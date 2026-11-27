@@ -14,6 +14,7 @@ import { useSession } from './session';
 const EMAIL_RULE = 'Enter a valid email address.';
 const NAME_RULE = 'Enter a name of 1 to 80 characters.';
 const PASSWORD_RULE = 'Use 12 to 128 characters.';
+const TOO_COMMON = 'This password is too common. Choose another.';
 const PASSWORD_MISMATCH = "The passwords don't match.";
 
 type Field = 'email' | 'displayName' | 'password' | 'confirm';
@@ -62,6 +63,10 @@ export function SetupPage() {
       // Someone finished setup first: re-reading the session moves the gate on to Sign in.
       if (error instanceof ApiError && error.code === 'setup_complete') {
         await session.refresh();
+        return;
+      }
+      if (error instanceof ApiError && error.code === 'password_too_common') {
+        setErrors({ password: TOO_COMMON });
         return;
       }
       setFailure(

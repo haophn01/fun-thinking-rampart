@@ -12,6 +12,7 @@ import { registerEvidenceRoutes } from '../evidence/routes';
 import { registerPoamRoutes } from '../poam/routes';
 import { registerPolicyRoutes } from '../policies/routes';
 import { markGuardedScope } from '../security/route-table';
+import { registerSettingsRoutes } from '../settings/routes';
 import { registerSspDataRoutes } from '../ssp-data/routes';
 import { registerSspRoutes } from '../ssp/routes';
 import { registerSystemProfileRoutes } from '../system-profile/routes';
@@ -43,6 +44,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiDeps): void {
     registerAuthRoutes(api, deps);
     registerSessionRoutes(api, deps);
     registerUserRoutes(api, deps);
+    registerSettingsRoutes(api, deps);
     registerAuditRoutes(api, deps);
     registerAssessmentRoutes(api, deps);
     registerPoamRoutes(api, deps);
