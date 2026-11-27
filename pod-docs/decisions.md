@@ -86,3 +86,8 @@ Consequences: near the end of the US day, countdowns and "due today" can be off 
 - **Lockout:** a wrong code at enrollment doesn't count toward the 5-failure lockout; a wrong code at the sign-in challenge does. The replay guard is monotonic.
 - **Order and reset:** a user with a temporary password enrolls in MFA first, then changes the password. The admin MFA reset has no confirm step.
 - **One-way door:** A2, turning the MFA gate on for every account. There's no migration. Back up `apps/api/data/rampart-secret.key` together with the database.
+
+## 2026-11-27 — MFA enrollment keeps its pending secret; reset of an unfinished setup is audited (sec-mfa)
+
+- **Pending secret:** showing enrollment again (a reload) returns the stored pending secret while it still decrypts, so a QR already scanned keeps working. A new secret is made only when none is stored or it can't be read. This came from G1's PENDING and was fixed in wave 2.
+- **Unfinished setup:** an admin reset of a user who started but never confirmed setup clears the secret, ends their sessions and writes `user.mfa_reset` with `pendingSetup: true → false` (R1's choice, accepted).

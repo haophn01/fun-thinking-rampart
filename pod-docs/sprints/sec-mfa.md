@@ -9,9 +9,9 @@ _From plan: pod-docs/plans/security-hardening.md · Slug: sec-mfa · Status: act
 | 1 | K1 | Contract: MFA schemas, session `mfa` state, error codes, audit actions and labels | sec-mfa-k1 | #38 | done | f6704c6 | — |
 | 1 | C1 | Secret key (`RAMPART_SECRET_KEY` or a generated key file), AES-256-GCM, startup rule | sec-mfa-c1 | #38 | done | f6704c6 | — |
 | 1 | T1 | TOTP and base32 on `node:crypto`, recovery codes, QR path; the one dependency add | sec-mfa-t1 | #38 | done | f6704c6 | — |
-| 2 | R1 | MFA api: enroll, confirm, verify, recovery codes, replay guard, admin reset, limits | sec-mfa-r1 | — | pending | — | K1, C1, T1 |
-| 2 | G1 | Web: MFA session states, enrollment with QR, recovery codes, challenge | sec-mfa-g1 | — | pending | — | K1 |
-| 2 | U2 | Web: two-step status and reset in Settings › Users | sec-mfa-u2 | — | pending | — | K1 |
+| 2 | R1 | MFA api: enroll, confirm, verify, recovery codes, replay guard, admin reset, limits | sec-mfa-r1 | #39 | done | fa81b22 | K1, C1, T1 |
+| 2 | G1 | Web: MFA session states, enrollment with QR, recovery codes, challenge | sec-mfa-g1 | #39 | done | fa81b22 | K1 |
+| 2 | U2 | Web: two-step status and reset in Settings › Users | sec-mfa-u2 | #39 | done | fa81b22 | K1 |
 | 3 | A2 | MFA required: pending sessions at sign-in, the guard gate, e2e, docs | sec-mfa-a2 | — | pending | — | R1, G1, U2 |
 | 3 | X1 | `pnpm admin:reset-mfa <email>` CLI for local recovery | sec-mfa-x1 | — | pending | — | R1 |
 
