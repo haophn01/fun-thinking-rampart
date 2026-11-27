@@ -1,11 +1,16 @@
 // Calls the api as the signed-in browser user: `page.request` shares the page's cookie jar, and
 // every write carries the session's CSRF token, the same way the web app sends it.
 import type { APIRequestContext, APIResponse, Page } from '@playwright/test';
+import { base32Decode } from '../../apps/api/src/auth/mfa/base32.ts';
+import { totpAt, totpStep } from '../../apps/api/src/auth/mfa/totp.ts';
 import {
   CSRF_HEADER,
   FILE_NAME_HEADER,
+  TOTP_PERIOD_SECONDS,
   diagramResponseSchema,
   evidenceItemResponseSchema,
+  mfaEnrolledResponseSchema,
+  mfaEnrollmentResponseSchema,
   sessionResponseSchema,
   type DiagramKind,
   type DiagramLink,
@@ -32,15 +37,99 @@ export interface Api {
   write<T>(method: Method, path: string, body: unknown, schema: Schema<T>): Promise<T>;
 }
 
+const STEP_MS = TOTP_PERIOD_SECONDS * 1000;
+/** The newest TOTP step this run used for each secret, so no code is ever sent twice. */
+const usedSteps = new Map<string, number>();
+
+/** The manual key as the enrollment page shows it (groups of 4), as the base32 secret. */
+export function manualKey(shown: string): string {
+  return shown.replace(/\s+/g, '');
+}
+
+/**
+ * A code for `secret` (base32) the api will take: never a step this run already used for it. The
+ * current step's code, else the next step's (inside the api's window of one step), else it waits
+ * for the next step to start. Codes typed in the browser come from here too.
+ */
+export async function nextTotpCode(secret: string): Promise<string> {
+  const key = base32Decode(secret);
+  for (;;) {
+    const now = new Date();
+    const step = totpStep(now);
+    const last = usedSteps.get(secret) ?? -1;
+    const use = step > last ? step : step + 1 > last ? step + 1 : null;
+    if (use !== null) {
+      usedSteps.set(secret, use);
+      return totpAt(key, new Date(use * STEP_MS));
+    }
+    await new Promise((done) => setTimeout(done, STEP_MS - (now.getTime() % STEP_MS) + 50));
+  }
+}
+
+/** A session after its MFA step, with what the step used or handed out. */
+export type SignedIn = SessionResponse & {
+  /** The account's TOTP secret (base32): the one given, or the one enrollment just made. */
+  totpSecret: string | null;
+  /** The recovery codes enrollment just showed; empty when the session only verified. */
+  recoveryCodes: string[];
+};
+
+export interface SignInOptions {
+  /** The enrolled account's secret (base32), for the challenge. */
+  totpSecret?: string;
+  /** `password_only`: stop after the password, leaving the session as sign-in made it. */
+  mfa?: 'password_only';
+}
+
+/**
+ * Finishes the session's MFA step as it asks: `enroll` enrolls (and returns the new secret and
+ * the recovery codes), `challenge` verifies with `totpSecret`, `none` is left alone.
+ */
+export async function completeMfa(
+  request: APIRequestContext,
+  session: SessionResponse,
+  totpSecret: string | null = null,
+): Promise<SignedIn> {
+  if (session.mfa === 'none') return { ...session, totpSecret, recoveryCodes: [] };
+  const headers = { [CSRF_HEADER]: session.csrfToken ?? '' };
+  if (session.mfa === 'enroll') {
+    const started = await ensureOk(
+      await request.post('/api/session/mfa/enroll', { headers }),
+      'POST /api/session/mfa/enroll',
+    );
+    const { secret } = mfaEnrollmentResponseSchema.parse(await started.json());
+    const confirmed = await ensureOk(
+      await request.post('/api/session/mfa/enroll/confirm', {
+        headers,
+        data: { code: await nextTotpCode(secret) },
+      }),
+      'POST /api/session/mfa/enroll/confirm',
+    );
+    const { recoveryCodes, ...rest } = mfaEnrolledResponseSchema.parse(await confirmed.json());
+    return { ...rest, totpSecret: secret, recoveryCodes };
+  }
+  if (totpSecret === null) throw new Error('The session asks for a code: pass its totpSecret.');
+  const verified = await ensureOk(
+    await request.post('/api/session/mfa/verify', {
+      headers,
+      data: { code: await nextTotpCode(totpSecret) },
+    }),
+    'POST /api/session/mfa/verify',
+  );
+  return { ...sessionResponseSchema.parse(await verified.json()), totpSecret, recoveryCodes: [] };
+}
+
 /**
  * Signs `request` in as the given user, acknowledging the sign-in notice when one is set (its
- * digest comes from `GET /api/session`, as the web app's does). The session it answers.
+ * digest comes from `GET /api/session`, as the web app's does), then finishes the MFA step as
+ * `completeMfa` does, unless `{ mfa: 'password_only' }`.
  */
 export async function signIn(
   request: APIRequestContext,
   email: string,
   password: string,
-): Promise<SessionResponse> {
+  options: SignInOptions = {},
+): Promise<SignedIn> {
   const before = sessionResponseSchema.parse(
     await (await ensureOk(await request.get('/api/session'), 'GET /api/session')).json(),
   );
@@ -48,7 +137,21 @@ export async function signIn(
   const response = await request.post('/api/session', {
     data: { email, password, ...(noticeDigest === undefined ? {} : { noticeDigest }) },
   });
-  return sessionResponseSchema.parse(await (await ensureOk(response, `sign in ${email}`)).json());
+  const session = sessionResponseSchema.parse(
+    await (await ensureOk(response, `sign in ${email}`)).json(),
+  );
+  const totpSecret = options.totpSecret ?? null;
+  if (options.mfa === 'password_only') return { ...session, totpSecret, recoveryCodes: [] };
+  return completeMfa(request, session, totpSecret);
+}
+
+/** First-run setup through the api, then enrollment: the admin's full session and its secret. */
+export async function setUp(
+  request: APIRequestContext,
+  admin: { email: string; displayName: string; password: string },
+): Promise<SignedIn> {
+  const response = await ensureOk(await request.post('/api/setup', { data: admin }), 'setup');
+  return completeMfa(request, sessionResponseSchema.parse(await response.json()));
 }
 
 /** Throws with the status and body when a response isn't 2xx, so a failure says why. */

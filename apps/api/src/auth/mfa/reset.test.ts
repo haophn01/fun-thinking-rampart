@@ -6,6 +6,7 @@ import {
   errorEnvelopeSchema,
   mfaEnrolledResponseSchema,
   mfaEnrollmentResponseSchema,
+  sessionResponseSchema,
   userResponseSchema,
 } from '../../contract';
 import { ADMIN, createHarness, type Client, type Harness } from '../../testing/harness';
@@ -135,7 +136,12 @@ describe('admin reset is audited and signs out everywhere', () => {
     expect(second.statusCode).toBe(200);
     expect(userResponseSchema.parse(second.json()).user.mfaEnrolled).toBe(false);
     expect(resets(h)).toHaveLength(1);
-    expect((await carlAgain.get('/api/users')).statusCode).toBe(200);
+    // That session wasn't ended: it waits for enrollment, and still has its user.
+    const gated = await carlAgain.get('/api/users');
+    expect(gated.statusCode).toBe(403);
+    expect(codeOf(gated)).toBe('mfa_required');
+    const status = sessionResponseSchema.parse((await carlAgain.get('/api/session')).json());
+    expect(status.user?.id).toBe(carlId);
 
     const unknown = await admin.post(resetUrl(NO_ROW));
     expect(unknown.statusCode).toBe(404);

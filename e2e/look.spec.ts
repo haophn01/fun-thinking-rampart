@@ -7,7 +7,8 @@
 // Every page also loads under the production CSP with zero `securitypolicyviolation` events.
 // The auth screens get the same checks: the sign-in notice and the form after it, the forced
 // password change (and its refusal), the lock screen (and a wrong password), Change password,
-// Settings with a notice on, and the app shell's 429.
+// Settings with a notice on, the app shell's 429, and two-step sign-in's three screens
+// (enrollment, its recovery codes and the challenge), with the manual key in Space Mono.
 //
 // Playwright runs spec files in name order against one api and database, so this file runs before
 // shell.spec.ts and smoke.spec.ts, which both need a fresh install. It therefore starts an api of
@@ -48,7 +49,7 @@ import {
 import { BODY_TEXT_MIN, LARGE_TEXT_MIN, contrastRatio } from '../apps/web/src/look/contrast.ts';
 import { COLORS, TEXT_SIZES_PX } from '../apps/web/src/look/tokens.ts';
 import { SSP_TABS } from '../apps/web/src/pages/ssp/tabs.ts';
-import { api, ensureOk, signIn, type Api } from './helpers/api';
+import { api, ensureOk, manualKey, nextTotpCode, setUp, signIn, type Api } from './helpers/api';
 import {
   firstObjectiveId,
   planHold,
@@ -157,6 +158,8 @@ const COLE = { email: 'cole@example.test', password: 'contributor-pass-1' };
 /** On the bundled blocklist, so the forced change refuses it. */
 const TOO_COMMON = 'QwertyUiop12';
 const SIGNED_OUT: StorageState = { cookies: [], origins: [] };
+/** Lena's TOTP secret (base32), from enrollment at setup. */
+let lenaSecret = '';
 
 /** A value for every SSP profile field, so every group's form is filled. */
 const SSP_PROFILE = {
@@ -181,12 +184,9 @@ const SSP_PROFILE = {
  * the SSP workspace's profile, roles, assets, provider, matrix row, diagrams and document control.
  */
 async function seed(request: APIRequestContext): Promise<Seeded> {
-  await ensureOk(
-    await request.post('/api/setup', {
-      data: { ...LENA, displayName: 'Lena Look' },
-    }),
-    'POST /api/setup',
-  );
+  // Setup, then enrollment through the api, so the seeded session is a full one.
+  const lena = await setUp(request, { ...LENA, displayName: 'Lena Look' });
+  lenaSecret = lena.totpSecret ?? '';
   const client = await api(request);
 
   const barred = requirementByNist(catalog, '3.1.20');
@@ -848,7 +848,7 @@ test.describe('look', () => {
     expect((await signIn(cole, COLE.email, COLE.password)).mustChangePassword).toBe(true);
     // A second session for Lena, locked, so the seeded one stays open.
     const locked = await lookApi();
-    await signIn(locked, LENA.email, LENA.password);
+    await signIn(locked, LENA.email, LENA.password, { totpSecret: lenaSecret });
     expect((await (await api(locked)).send('POST', '/api/session/lock')).status()).toBe(204);
 
     const contexts = {
@@ -988,6 +988,59 @@ test.describe('look', () => {
     }
     for (const context of Object.values(contexts)) await context.close();
 
+    // Two-step sign-in's screens, for a new user per width (each width enrolls once): enrollment,
+    // the recovery codes it shows, then the challenge at the user's next sign-in.
+    let mfaChecked = 0;
+    for (const width of WIDTHS) {
+      const mia = { email: `mia-${String(width)}@example.test`, password: 'mia-look-pass-1' };
+      await admin.write(
+        'POST',
+        '/api/users',
+        { ...mia, displayName: `Mia ${String(width)}`, role: 'contributor' },
+        userResponseSchema,
+      );
+      const opened = async (name: string) => {
+        const request = await lookApi();
+        await signIn(request, mia.email, mia.password, { mfa: 'password_only' });
+        const context = await lookContext(browser, baseURL, await request.storageState());
+        const page = await context.newPage();
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto('/');
+        await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+        return { context, page };
+      };
+
+      const enroll = await opened('Set up two-step sign-in');
+      await expect(
+        enroll.page.getByRole('img', { name: 'QR code for your authenticator app' }),
+      ).toBeVisible();
+      const key = enroll.page.getByTestId('mfa-manual-key');
+      found.push(...(await measure(enroll.page, width, 'two-step enrollment')));
+      const keyFont = await key.evaluate((el) => getComputedStyle(el).fontFamily);
+      if (!keyFont.includes('Space Mono')) {
+        found.push(`${String(width)}px two-step enrollment: the key is in ${keyFont}`);
+      }
+      mfaChecked += 1;
+
+      await enroll.page
+        .getByLabel('6-digit code')
+        .fill(await nextTotpCode(manualKey(await key.innerText())));
+      await enroll.page.getByRole('button', { name: 'Confirm' }).click();
+      await expect(
+        enroll.page.getByRole('heading', { level: 1, name: 'Save your recovery codes' }),
+      ).toBeVisible();
+      await expect(enroll.page.getByTestId('recovery-codes').getByRole('listitem')).toHaveCount(10);
+      found.push(...(await measure(enroll.page, width, 'recovery codes')));
+      mfaChecked += 1;
+      await enroll.context.close();
+
+      const challenge = await opened('Enter your code');
+      await expect(challenge.page.getByLabel('6-digit code')).toBeVisible();
+      found.push(...(await measure(challenge.page, width, 'two-step challenge')));
+      mfaChecked += 1;
+      await challenge.context.close();
+    }
+
     // Turn the notice off again.
     await ensureOk(
       await admin.send('PUT', '/api/settings/sign-in-notice', { text: null }),
@@ -996,6 +1049,7 @@ test.describe('look', () => {
     for (const request of requests) await request.dispose();
 
     expect(cspChecked, 'screens checked for CSP violations').toBe(screens.length * WIDTHS.length);
+    expect(mfaChecked, 'two-step screens checked').toBe(3 * WIDTHS.length);
     expect([...new Set(found)], [...new Set(found)].join('\n')).toEqual([]);
   });
 });

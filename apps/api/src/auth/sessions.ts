@@ -2,7 +2,12 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import type { AppDb } from '../../db/client';
 import { session, user } from '../../db/schema';
-import { SESSION_ABSOLUTE_LIMIT_MS, SESSION_IDLE_LIMIT_MS, type SessionUser } from '../contract';
+import {
+  SESSION_ABSOLUTE_LIMIT_MS,
+  SESSION_IDLE_LIMIT_MS,
+  type MfaState,
+  type SessionUser,
+} from '../contract';
 
 /** A session ends 30 min after its last unlocked request. */
 export const IDLE_LIMIT_MS = SESSION_IDLE_LIMIT_MS;
@@ -24,6 +29,18 @@ export interface ActiveSession {
   locked: boolean;
   /** The password is temporary: only the session routes answer until it is changed. */
   mustChangePassword: boolean;
+  /**
+   * The session's two-step state, from the user row and the session as they are now: `enroll`
+   * until the user is enrolled, `challenge` while an enrolled user's session waits for its code,
+   * `none` once it is a full session. Anything but `none` reaches only the MFA and lock routes.
+   */
+  mfa: MfaState;
+}
+
+/** The contract's MFA state of a session, from the user's enrollment and the session's flag. */
+export function mfaStateOf(enrolledAt: string | null, mfaPending: boolean): MfaState {
+  if (enrolledAt === null) return 'enroll';
+  return mfaPending ? 'challenge' : 'none';
 }
 
 /** 32 random bytes as base64url: always 43 characters. */
@@ -54,29 +71,45 @@ export interface NewSession {
   id: string;
 }
 
-/**
- * Starts a session for `userId`. `createdAt` defaults to `now`; rotation passes the old one so
- * the absolute limit still counts from sign-in.
- */
+export interface CreateSessionOptions {
+  /** Defaults to `now`; rotation passes the old one so the 8 h limit still counts from sign-in. */
+  createdAt?: string;
+  /**
+   * Sign-in and setup pass true: the session waits for the user's MFA step. Rotation leaves it
+   * false, since confirm and verify rotate to finish that step.
+   */
+  mfaPending?: boolean;
+}
+
+/** Starts a session for `userId`. */
 export function createSession(
   db: SessionStore,
   userId: string,
   now: Date,
-  createdAt: string = now.toISOString(),
+  options: CreateSessionOptions = {},
 ): NewSession {
   const token = randomToken();
   const csrfToken = randomToken();
   const id = tokenDigest(token);
   db.insert(session)
-    .values({ id, userId, csrfToken, createdAt, lastSeenAt: now.toISOString() })
+    .values({
+      id,
+      userId,
+      csrfToken,
+      createdAt: options.createdAt ?? now.toISOString(),
+      lastSeenAt: now.toISOString(),
+      mfaPending: options.mfaPending ?? false,
+    })
     .run();
   return { token, csrfToken, id };
 }
 
 /**
  * Replaces a session with one for the same user: a new token, a new CSRF token and the same
- * `created_at`, so the 8 h limit still counts from sign-in. Null when the session is gone. The
- * caller sets the cookie to the returned token.
+ * `created_at`, so the 8 h limit still counts from sign-in. The new session is never MFA-pending:
+ * only confirm and verify, which finish that step, and change password, which a pending session
+ * can't reach, rotate. Null when the session is gone. The caller sets the cookie to the returned
+ * token.
  */
 export function rotateSession(db: SessionStore, sessionId: string, now: Date): NewSession | null {
   const row = db
@@ -86,13 +119,17 @@ export function rotateSession(db: SessionStore, sessionId: string, now: Date): N
     .get();
   if (!row) return null;
   deleteSession(db, sessionId);
-  return createSession(db, row.userId, now, row.createdAt);
+  return createSession(db, row.userId, now, { createdAt: row.createdAt });
 }
 
 /**
  * The session a cookie token names, or null. An expired session, or one whose user is inactive,
  * is deleted. A live, unlocked one has `last_seen_at` moved to `now`; a locked one keeps it, so it
  * ends 30 min after its last unlocked request however often it is polled.
+ *
+ * A session of an unenrolled user that isn't MFA-pending (one made before MFA was required) is
+ * marked pending here, so once the user enrolls (in this session or another) it asks for a code
+ * instead of becoming a full session that never passed one.
  */
 export function resolveSession(
   db: SessionStore,
@@ -114,6 +151,8 @@ export function resolveSession(
       role: user.role,
       active: user.active,
       mustChangePassword: user.mustChangePassword,
+      mfaEnrolledAt: user.mfaEnrolledAt,
+      mfaPending: session.mfaPending,
     })
     .from(session)
     .innerJoin(user, eq(user.id, session.userId))
@@ -125,8 +164,13 @@ export function resolveSession(
     return null;
   }
   const locked = row.lockedAt !== null;
-  if (!locked) {
-    db.update(session).set({ lastSeenAt: now.toISOString() }).where(eq(session.id, id)).run();
+  const mfaPending = row.mfaPending || row.mfaEnrolledAt === null;
+  const changes = {
+    ...(locked ? {} : { lastSeenAt: now.toISOString() }),
+    ...(mfaPending && !row.mfaPending ? { mfaPending: true } : {}),
+  };
+  if (Object.keys(changes).length > 0) {
+    db.update(session).set(changes).where(eq(session.id, id)).run();
   }
   return {
     id,
@@ -134,6 +178,7 @@ export function resolveSession(
     user: { id: row.userId, email: row.email, displayName: row.displayName, role: row.role },
     locked,
     mustChangePassword: row.mustChangePassword,
+    mfa: mfaStateOf(row.mfaEnrolledAt, mfaPending),
   };
 }
 

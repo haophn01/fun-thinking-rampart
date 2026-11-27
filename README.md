@@ -117,18 +117,19 @@ The specs, in the order Playwright runs them (file name order):
 
 Run these from the repo root.
 
-| Script            | What it does                                                               |
-| ----------------- | -------------------------------------------------------------------------- |
-| `pnpm start`      | Frozen install, build, `db:migrate`, then serve all on `WEB_PORT` (3000)   |
-| `pnpm dev`        | Development: the api (`tsx watch`) and the web app (Vite) in parallel      |
-| `pnpm lint`       | `eslint .`, then `prettier --check .`                                      |
-| `pnpm format`     | `prettier --write .`                                                       |
-| `pnpm typecheck`  | `tsc --noEmit` in every workspace package                                  |
-| `pnpm test`       | `vitest run` across every package plus the repo checks in `tests/`         |
-| `pnpm build`      | Bundles the api with tsup and the web app with Vite                        |
-| `pnpm verify`     | lint, typecheck, test, build, in that order, stopping at the first failure |
-| `pnpm e2e`        | Playwright specs in `e2e/` against a fresh production build (see above)    |
-| `pnpm db:migrate` | Applies pending database migrations (the api also does this on start)      |
+| Script                         | What it does                                                                      |
+| ------------------------------ | --------------------------------------------------------------------------------- |
+| `pnpm start`                   | Frozen install, build, `db:migrate`, then serve all on `WEB_PORT` (3000)          |
+| `pnpm dev`                     | Development: the api (`tsx watch`) and the web app (Vite) in parallel             |
+| `pnpm lint`                    | `eslint .`, then `prettier --check .`                                             |
+| `pnpm format`                  | `prettier --write .`                                                              |
+| `pnpm typecheck`               | `tsc --noEmit` in every workspace package                                         |
+| `pnpm test`                    | `vitest run` across every package plus the repo checks in `tests/`                |
+| `pnpm build`                   | Bundles the api with tsup and the web app with Vite                               |
+| `pnpm verify`                  | lint, typecheck, test, build, in that order, stopping at the first failure        |
+| `pnpm e2e`                     | Playwright specs in `e2e/` against a fresh production build (see above)           |
+| `pnpm db:migrate`              | Applies pending database migrations (the api also does this on start)             |
+| `pnpm admin:reset-mfa <email>` | Resets one user's two-step sign-in on this machine, for when no admin can sign in |
 
 Run `pnpm verify` before you open a pull request; CI runs the same command, and runs `pnpm e2e`
 in a job of its own on Ubuntu and Windows.
@@ -143,23 +144,31 @@ committed.
 The api reads these environment variables and refuses to start (exit code 1) if any is invalid,
 naming every bad one:
 
-| Variable                | Default               | Rules                                                                                                                                                                                                                                                                     |
-| ----------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `API_PORT`              | `3001`                | An integer from 1 to 65535                                                                                                                                                                                                                                                |
-| `DATABASE_PATH`         | `data/rampart.sqlite` | Relative paths are resolved from `apps/api`; the folder is created; `:memory:` works                                                                                                                                                                                      |
-| `LOG_LEVEL`             | `info`                | A pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                                                                                                                                              |
-| `STORAGE_PATH`          | `data/files`          | The evidence and policy file store. Relative paths are resolved from `apps/api`; the folder is created on the first upload; whitespace only is refused                                                                                                                    |
-| `HOSTED`                | `false`               | Exactly `true` or `false`. `true` means the api sits behind one local reverse proxy on 127.0.0.1 that terminates HTTPS: HSTS, the `__Host-rampart_session` Secure cookie, `upgrade-insecure-requests` in the page CSP, and `X-Forwarded-For` honoured only from 127.0.0.1 |
-| `SERVE_WEB`             | `false`               | Exactly `true` or `false`. `true` serves the built web app (`WEB_DIST_PATH`) from the api; a missing `index.html` stops the start (run `pnpm build` first). `pnpm start` sets it                                                                                          |
-| `WEB_DIST_PATH`         | `../web/dist`         | The built web app's folder. Relative paths are resolved from `apps/api`. Read once at start: files added later aren't served                                                                                                                                              |
-| `RATE_LIMIT_MULTIPLIER` | `1`                   | Digits only, 1 to 1000. Multiplies every rate limit's maximum (600 requests a minute per IP, and 10 a minute per IP each for setup, sign-in, change password and unlock). Tests and e2e raise it; hosted mode needs 1                                                     |
+| Variable                | Default                   | Rules                                                                                                                                                                                                                                                                     |
+| ----------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `API_PORT`              | `3001`                    | An integer from 1 to 65535                                                                                                                                                                                                                                                |
+| `DATABASE_PATH`         | `data/rampart.sqlite`     | Relative paths are resolved from `apps/api`; the folder is created; `:memory:` works                                                                                                                                                                                      |
+| `LOG_LEVEL`             | `info`                    | A pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                                                                                                                                              |
+| `STORAGE_PATH`          | `data/files`              | The evidence and policy file store. Relative paths are resolved from `apps/api`; the folder is created on the first upload; whitespace only is refused                                                                                                                    |
+| `HOSTED`                | `false`                   | Exactly `true` or `false`. `true` means the api sits behind one local reverse proxy on 127.0.0.1 that terminates HTTPS: HSTS, the `__Host-rampart_session` Secure cookie, `upgrade-insecure-requests` in the page CSP, and `X-Forwarded-For` honoured only from 127.0.0.1 |
+| `SERVE_WEB`             | `false`                   | Exactly `true` or `false`. `true` serves the built web app (`WEB_DIST_PATH`) from the api; a missing `index.html` stops the start (run `pnpm build` first). `pnpm start` sets it                                                                                          |
+| `WEB_DIST_PATH`         | `../web/dist`             | The built web app's folder. Relative paths are resolved from `apps/api`. Read once at start: files added later aren't served                                                                                                                                              |
+| `RATE_LIMIT_MULTIPLIER` | `1`                       | Digits only, 1 to 1000. Multiplies every rate limit's maximum (600 requests a minute per IP, and 10 a minute per IP each for setup, sign-in, change password, unlock and the three two-step routes). Tests and e2e raise it; hosted mode needs 1                          |
+| `RAMPART_SECRET_KEY`    | unset                     | The master key that seals two-step secrets and recovery-code hashes: 64 hex characters (any case), not 32 equal bytes. When set, it wins and the key file is never read or written. Hosted mode needs it                                                                  |
+| `SECRET_KEY_PATH`       | `data/rampart-secret.key` | The key file used when `RAMPART_SECRET_KEY` is unset. Relative paths are resolved from `apps/api`. Created on the first local start (64 hex characters, mode 0600) and never regenerated: a file that isn't a key stops the start                                         |
 
 An empty value counts as unset. The host is always `127.0.0.1`. With `HOSTED=true` the api also
 refuses to start (exit code 1, before it opens the database) unless `SERVE_WEB=true`,
 `RATE_LIMIT_MULTIPLIER` is 1 and `LOG_LEVEL` isn't `debug` or `trace`, naming every rule broken.
-A request over a rate limit gets 429 `too_many_attempts` with `Retry-After`. On start the api opens the SQLite
-database (WAL, foreign keys on), applies pending migrations, then listens. There is no seed data
-yet.
+A request over a rate limit gets 429 `too_many_attempts` with `Retry-After`. On start the api
+loads the secret key (above), then opens the SQLite database (WAL, foreign keys on), applies
+pending migrations, and listens. There is no seed data yet.
+
+**Back up the key with the database.** Once anyone has set up two-step sign-in, back up
+`apps/api/data/rampart-secret.key` (or keep `RAMPART_SECRET_KEY`) together with
+`apps/api/data/rampart.sqlite`. The secrets in the database open only with that key: restoring
+the database without it, or losing the key, means every user's two-step sign-in must be reset
+(`pnpm admin:reset-mfa <email>`, below) before they can sign in again.
 
 Uploaded files are content-addressed: each is stored once under its SHA-256 at
 `<STORAGE_PATH>/<first two hex characters>/<sha256>`, and its bytes are hashed again on every
@@ -180,6 +189,30 @@ self-assessment. After that, setup answers 409 and admins add people under Setti
 
 - **Every api route needs a signed-in user** except `GET /api/health`, `GET /api/session`,
   `POST /api/setup`, `POST /api/session` (sign in) and `DELETE /api/session` (sign out).
+- **Two-step sign-in (3.5.3), for every account:** the password is only the first step. Setup and
+  every sign-in start a session that waits for the second, and `GET /api/session` reports it as
+  `mfa`: `enroll` for an account without an authenticator app, `challenge` for one with, `none`
+  once done. Until then every route but lock, unlock and the three two-step routes answers 403
+  `mfa_required`.
+  - **Enroll:** "Set up two-step sign-in" shows a QR code and the key in groups of 4 for any TOTP
+    app (RFC 6238: SHA-1, 6 digits, 30 seconds); the first code confirms it
+    (`POST /api/session/mfa/enroll`, then `POST /api/session/mfa/enroll/confirm` `{ code }`). Ten
+    recovery codes are shown once, right after. A user with a temporary password enrolls first,
+    then changes the password.
+  - **Each sign-in after that:** "Enter your code" takes the app's current code, or "Use a
+    recovery code" takes one of the ten (`POST /api/session/mfa/verify` `{ code }` or
+    `{ recoveryCode }`). Each code's 30-second step is accepted once, so a code can't be replayed,
+    and each recovery code works once. A wrong code counts toward the lockout, like a wrong
+    password.
+  - **Accounts from before two-step sign-in** keep their password. Their next sign-in, or their
+    next click if already signed in, shows "Set up two-step sign-in".
+  - **Reset:** an admin's **Reset two-step sign-in** under Settings › Users
+    (`POST /api/users/:id/mfa/reset`) clears the user's app and recovery codes and ends their
+    sessions; they set it up again at their next sign-in. With no admin able to sign in, stop the
+    app or leave it running and use `pnpm admin:reset-mfa <email>` on the machine.
+  - The secret is stored sealed with AES-256-GCM under the secret key (see Configuration), and
+    recovery codes only as keyed hashes. Neither, nor any code, ever appears in a log line or the
+    audit log.
 - **Passwords** are hashed with Argon2id (`@node-rs/argon2` defaults). Passwords, hashes and
   session tokens never appear in a response, a log line or the audit log.
 - **Sessions** live in the database; the browser holds a random token in the `rampart_session`
@@ -216,15 +249,17 @@ self-assessment. After that, setup answers 409 and admins add people under Setti
 - **CSRF:** every `POST`, `PUT`, `PATCH` and `DELETE` made with a session must send the
   session's token (from `GET /api/session`) in the `x-csrf-token` header. Bodies must be
   `application/json`, so a cross-site form can't post.
-- **Lockout:** the 5th wrong password in a row, counted across sign-in, unlock and change
-  password, locks the account for 15 minutes (429 with `Retry-After`). When the 5th comes from a
-  signed-in session (unlock or change), all that user's sessions end too. Unknown emails, wrong
+- **Lockout:** the 5th wrong password or two-step code in a row, counted across sign-in, unlock,
+  change password and the sign-in code (not the enrollment's confirm), locks the account for 15
+  minutes (429 with `Retry-After`). When the 5th comes from a session (unlock, change or the
+  code), all that user's sessions end too. Unknown emails, wrong
   passwords and inactive users all get the same 401.
 - **Roles:** `admin` manages users and assessment settings; `contributor` records results. The
   last active admin can't be demoted or deactivated. Users are never deleted.
 - **Audit log:** every change is written to an append-only `audit_event` table in the same
   transaction; `GET /api/audit` pages through it newest first. Password changes, session lock and
-  unlock, notice acknowledgements and settings changes are audited too. The `prev_hash` and `hash`
+  unlock, notice acknowledgements, settings changes, two-step set up and verified (with the
+  method), and an admin's two-step reset are audited too. The `prev_hash` and `hash`
   columns stay empty until the hash chain arrives.
 
 ## API endpoints

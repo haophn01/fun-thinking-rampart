@@ -12,17 +12,24 @@ import {
   CSRF_HEADER,
   DEFAULT_CATEGORIZATION,
   DEFAULT_REVIEW_CADENCE_MONTHS,
-  SESSION_COOKIE,
   SSP_PROFILE_FIELDS,
   auditPageSchema,
   errorEnvelopeSchema,
-  sessionResponseSchema,
   sspProfileResponseSchema,
   userResponseSchema,
   type AuditPage,
   type SspProfile,
 } from '../../contract';
-import { ADMIN, START, createHarness, type Client, type Harness } from '../../testing/harness';
+import {
+  ADMIN,
+  HARNESS_SECRET_KEY,
+  START,
+  createHarness,
+  signInThroughApi,
+  type Client,
+  type Harness,
+  type MfaSecrets,
+} from '../../testing/harness';
 import { loadSspProfile } from './repository';
 
 const URL = '/api/ssp/profile';
@@ -314,7 +321,11 @@ describe('ssp profile routes', () => {
     function start(): { app: FastifyInstance; handle: DbHandle } {
       const handle = openDb(path);
       runMigrations(handle.db);
-      const config = loadConfig({ DATABASE_PATH: path, LOG_LEVEL: 'silent' });
+      const config = loadConfig({
+        DATABASE_PATH: path,
+        LOG_LEVEL: 'silent',
+        RAMPART_SECRET_KEY: HARNESS_SECRET_KEY,
+      });
       const app = buildApp({ config, db: handle.db, now, store: createMemoryStore() });
       cleanups.push(async () => {
         await app.close();
@@ -323,12 +334,10 @@ describe('ssp profile routes', () => {
       return { app, handle };
     }
 
+    // Setup or sign-in, then the MFA step as a user would, the secret kept across the restart.
+    const secrets: MfaSecrets = new Map();
     async function session(app: FastifyInstance, url: string, payload: unknown) {
-      const response = await app.inject({ method: 'POST', url, payload: payload as object });
-      expect(response.statusCode, response.body).toBeLessThan(300);
-      const cookie = response.cookies.find((c) => c.name === SESSION_COOKIE)?.value ?? '';
-      const { csrfToken } = sessionResponseSchema.parse(response.json());
-      return { cookie: `${SESSION_COOKIE}=${cookie}`, [CSRF_HEADER]: csrfToken ?? '' };
+      return signInThroughApi(app, url, payload, { at: now(), secrets });
     }
 
     const first = start();

@@ -10,18 +10,25 @@ import { buildApp } from '../../app';
 import { loadConfig } from '../../config';
 import {
   CSRF_HEADER,
-  SESSION_COOKIE,
   auditPageSchema,
   errorEnvelopeSchema,
   providerResponseSchema,
   responsibilityMatrixSchema,
   responsibilityRowResponseSchema,
-  sessionResponseSchema,
   type AuditPage,
   type ResponsibilityRow,
   type ServiceProvider,
 } from '../../contract';
-import { ADMIN, START, createHarness, type Client, type Harness } from '../../testing/harness';
+import {
+  ADMIN,
+  HARNESS_SECRET_KEY,
+  START,
+  createHarness,
+  signInThroughApi,
+  type Client,
+  type Harness,
+  type MfaSecrets,
+} from '../../testing/harness';
 import { loadResponsibilityMatrix } from './repository';
 
 const URL = '/api/ssp/responsibilities';
@@ -300,7 +307,11 @@ describe('responsibility matrix', () => {
     function start(): { app: FastifyInstance; handle: DbHandle } {
       const handle = openDb(path);
       runMigrations(handle.db);
-      const config = loadConfig({ DATABASE_PATH: path, LOG_LEVEL: 'silent' });
+      const config = loadConfig({
+        DATABASE_PATH: path,
+        LOG_LEVEL: 'silent',
+        RAMPART_SECRET_KEY: HARNESS_SECRET_KEY,
+      });
       const app = buildApp({ config, db: handle.db, now, store: createMemoryStore() });
       cleanups.push(async () => {
         await app.close();
@@ -309,12 +320,10 @@ describe('responsibility matrix', () => {
       return { app, handle };
     }
 
+    // Setup or sign-in, then the MFA step as a user would, the secret kept across the restart.
+    const secrets: MfaSecrets = new Map();
     async function session(app: FastifyInstance, url: string, payload: object) {
-      const response = await app.inject({ method: 'POST', url, payload });
-      expect(response.statusCode, response.body).toBeLessThan(300);
-      const cookie = response.cookies.find((c) => c.name === SESSION_COOKIE)?.value ?? '';
-      const { csrfToken } = sessionResponseSchema.parse(response.json());
-      return { cookie: `${SESSION_COOKIE}=${cookie}`, [CSRF_HEADER]: csrfToken ?? '' };
+      return signInThroughApi(app, url, payload, { at: now(), secrets });
     }
 
     async function send(

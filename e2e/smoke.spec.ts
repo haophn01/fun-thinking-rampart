@@ -36,7 +36,7 @@ import {
   type SystemProfileFieldKey,
 } from '../apps/api/src/contract/index.ts';
 import { docxPart, pngOf } from '../apps/api/ssp/testing/docx-text.ts';
-import { api, linkDiagram, uploadEvidence, type Api } from './helpers/api';
+import { api, linkDiagram, manualKey, nextTotpCode, uploadEvidence, type Api } from './helpers/api';
 import { docxMedia, docxText } from './helpers/docx';
 import {
   firstObjectiveId,
@@ -276,6 +276,31 @@ test.describe('verification path', () => {
     const created = answer(page, 'POST', '/api/setup');
     await page.getByRole('button', { name: 'Create admin' }).click();
     expect((await created).ok()).toBe(true);
+
+    // Two-step sign-in comes next: add the key by hand, as an authenticator app would, and
+    // confirm with the code it shows.
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Set up two-step sign-in' }),
+    ).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toHaveCount(0);
+    const secret = manualKey(await page.getByTestId('mfa-manual-key').innerText());
+    expect(secret).toMatch(/^[A-Z2-7]{32}$/);
+    await page.getByLabel('6-digit code').fill(await nextTotpCode(secret));
+    const confirmed = answer(page, 'POST', '/api/session/mfa/enroll/confirm');
+    await page.getByRole('button', { name: 'Confirm' }).click();
+    expect((await confirmed).status()).toBe(200);
+
+    // The recovery codes, shown once: Continue waits for the checkbox.
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Save your recovery codes' }),
+    ).toBeVisible();
+    await expect(page.getByTestId('recovery-codes').getByRole('listitem')).toHaveCount(10);
+    const proceed = page.getByRole('button', { name: 'Continue' });
+    await expect(proceed).toBeDisabled();
+    // The box is the Look's: its native input is visually hidden, so click the label.
+    await page.getByText('I saved my recovery codes', { exact: true }).click();
+    await expect(page.getByLabel('I saved my recovery codes')).toBeChecked();
+    await proceed.click();
     await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
 
     client = await api(page);
@@ -284,6 +309,7 @@ test.describe('verification path', () => {
     );
     adminId = session.user?.id ?? '';
     expect(session.user).toMatchObject({ displayName: ADMIN.displayName, role: 'admin' });
+    expect(session.mfa).toBe('none');
   });
 
   test('hold at 72 and 3.1.20 refused', async () => {
