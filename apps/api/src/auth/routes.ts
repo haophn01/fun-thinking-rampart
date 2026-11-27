@@ -16,6 +16,7 @@ import type { ApiDeps } from '../routes';
 import { clearSessionCookie, readSessionToken, setSessionCookie } from './cookie';
 import { assertAccountUnlocked, clearFailures, recordFailure } from './lockout';
 import { hashPassword, verifyPassword } from './password';
+import { checkNewPassword } from './password-policy';
 import { createSession, deleteSession, deleteSessionByToken, type SessionStore } from './sessions';
 
 const INVALID_CREDENTIALS = 'Email or password is incorrect.';
@@ -87,6 +88,7 @@ async function setup(
   const body = setupRequestSchema.parse(request.body);
   const complete = () => new AppError('setup_complete', 'Setup is already complete.');
   if (!setupRequired(deps.db)) throw complete();
+  checkNewPassword(body.password);
   const passwordHash = await hashPassword(body.password);
   const now = deps.now();
   const at = now.toISOString();
@@ -103,7 +105,14 @@ async function setup(
       active: true,
     };
     tx.insert(user)
-      .values({ id: userId, ...admin, passwordHash, createdAt: at, updatedAt: at })
+      .values({
+        id: userId,
+        ...admin,
+        passwordHash,
+        passwordChangedAt: at,
+        createdAt: at,
+        updatedAt: at,
+      })
       .run();
     recordAudit(tx, {
       at: now,

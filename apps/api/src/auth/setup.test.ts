@@ -139,6 +139,33 @@ describe('first run setup', () => {
   });
 });
 
+describe('setup refuses a common password', () => {
+  it('gives 400 password_too_common and creates nothing', async () => {
+    const h = harness();
+    for (const password of ['password1234', 'PassWord1234']) {
+      const response = await h.client().post('/api/setup', { ...ADMIN, password });
+      expect(response.statusCode, password).toBe(400);
+      const envelope = errorEnvelopeSchema.parse(response.json());
+      expect(envelope.error.code).toBe('password_too_common');
+      expect(envelope.error.message).toBe('This password is too common. Choose another.');
+      expect(response.headers['set-cookie']).toBeUndefined();
+    }
+    expect(h.db.select().from(user).all()).toHaveLength(0);
+    expect(h.db.select().from(assessment).all()).toHaveLength(0);
+    expect(h.db.select().from(session).all()).toHaveLength(0);
+    expect(h.db.select().from(auditEvent).all()).toHaveLength(0);
+  });
+
+  it('records when the first password was set', async () => {
+    const h = harness();
+    await h.setupAdmin();
+    expect(h.db.select().from(user).get()).toMatchObject({
+      passwordChangedAt: START.toISOString(),
+      mustChangePassword: false,
+    });
+  });
+});
+
 describe('secrets never leave', () => {
   it('stores an argon2id hash and the token hash, and leaks neither password nor token', async () => {
     const h = harness({ logLevel: 'trace' });
