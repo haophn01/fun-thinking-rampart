@@ -42,8 +42,13 @@ export type SendMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export interface ApiSessionHooks {
   /** The current session's CSRF token, or `null` when signed out. */
   csrfToken: () => string | null;
-  /** Called on a 401 from any call except sign-in and setup. */
+  /**
+   * Called on a 401 from any call except sign-in and setup, unless its code is
+   * `invalid_credentials` (a wrong password on unlock or change, not an ended session).
+   */
   onUnauthenticated: () => void;
+  /** Called on a 423 `session_locked` from any call. */
+  onLocked: () => void;
 }
 
 let sessionHooks: ApiSessionHooks | null = null;
@@ -55,6 +60,14 @@ export function setApiSessionHooks(hooks: ApiSessionHooks | null): void {
 
 /** A 401 from these means the credentials were wrong, not that a session ended. */
 const CREDENTIAL_CALLS = new Set(['POST /api/session', 'POST /api/setup']);
+
+/** Tells the session store that a call found its session ended or locked. */
+function runSessionHooks(status: number, code: string | undefined, call: string): void {
+  if (status === 423 && code === 'session_locked') sessionHooks?.onLocked();
+  if (status === 401 && code !== 'invalid_credentials' && !CREDENTIAL_CALLS.has(call)) {
+    sessionHooks?.onUnauthenticated();
+  }
+}
 
 async function readJson(response: Response): Promise<{ ok: true; value: unknown } | { ok: false }> {
   try {
@@ -81,9 +94,6 @@ async function request<T>(
     });
   }
 
-  if (response.status === 401 && !CREDENTIAL_CALLS.has(`${method} ${path}`)) {
-    sessionHooks?.onUnauthenticated();
-  }
   if (response.status === 204) return undefined;
 
   const body = await readJson(response);
@@ -92,6 +102,11 @@ async function request<T>(
 
   if (!response.ok) {
     const envelope = body.ok ? errorEnvelopeSchema.safeParse(body.value) : undefined;
+    runSessionHooks(
+      response.status,
+      envelope?.success ? envelope.data.error.code : undefined,
+      `${method} ${path}`,
+    );
     if (envelope?.success) {
       const { code, message, requestId, details } = envelope.data.error;
       throw new ApiError({ status: response.status, code, message, requestId, details });
