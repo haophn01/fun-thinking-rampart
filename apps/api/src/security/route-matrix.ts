@@ -245,6 +245,17 @@ export const ROUTE_MATRIX: Readonly<Record<string, MatrixEntry>> = {
     },
     idor: SESSION_ROUTE,
   },
+  // Two-step sign-in (sec-mfa): the caller's own enrollment and challenge.
+  'POST /api/session/mfa/enroll': {
+    access: 'session',
+    sample: { url: '/api/session/mfa/enroll' },
+    idor: SESSION_ROUTE,
+  },
+  'POST /api/session/mfa/enroll/confirm': {
+    access: 'session',
+    sample: { url: '/api/session/mfa/enroll/confirm', body: { code: '123456' } },
+    idor: SESSION_ROUTE,
+  },
 
   // Users and the audit log.
   'GET /api/users': { access: 'session', sample: { url: '/api/users' }, idor: USERS_GLOBAL },
