@@ -28,7 +28,7 @@ type Profile = Pick<UserRow, (typeof PROFILE_KEYS)[number]>;
 
 const paramsSchema = z.object({ id: z.string() });
 
-/** The public shape: no hash, no lockout state. */
+/** The public shape: no hash, no lockout state, no MFA secret (only whether it is set up). */
 function toUser(row: UserRow): User {
   return {
     id: row.id,
@@ -37,7 +37,7 @@ function toUser(row: UserRow): User {
     role: row.role,
     active: row.active,
     createdAt: row.createdAt,
-    mfaEnrolled: false,
+    mfaEnrolled: row.mfaEnrolledAt !== null,
   };
 }
 
