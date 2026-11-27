@@ -1,3 +1,6 @@
+// Keep this import first: loading the contract makes zod jitless in the browser before any
+// schema is built (here or in @rampart/catalog), so zod never probes eval under the page CSP.
+import '@rampart/api/contract';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
