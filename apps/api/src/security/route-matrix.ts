@@ -227,6 +227,16 @@ export const ROUTE_MATRIX: Readonly<Record<string, MatrixEntry>> = {
     idor: SESSION_ROUTE,
   },
   // The signed-in session's own routes: any session, with its CSRF token.
+  'POST /api/session/lock': {
+    access: 'session',
+    sample: { url: '/api/session/lock' },
+    idor: SESSION_ROUTE,
+  },
+  'POST /api/session/unlock': {
+    access: 'session',
+    sample: { url: '/api/session/unlock', body: { password: 'not the password' } },
+    idor: SESSION_ROUTE,
+  },
   'POST /api/session/password': {
     access: 'session',
     sample: {

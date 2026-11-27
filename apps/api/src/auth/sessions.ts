@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import type { AppDb } from '../../db/client';
 import { session, user } from '../../db/schema';
 import { SESSION_ABSOLUTE_LIMIT_MS, SESSION_IDLE_LIMIT_MS, type SessionUser } from '../contract';
@@ -20,6 +20,8 @@ export interface ActiveSession {
   id: string;
   csrfToken: string;
   user: SessionUser;
+  /** Locked: only lock, unlock and the public routes answer until the password is entered. */
+  locked: boolean;
   /** The password is temporary: only the session routes answer until it is changed. */
   mustChangePassword: boolean;
 }
@@ -89,7 +91,8 @@ export function rotateSession(db: SessionStore, sessionId: string, now: Date): N
 
 /**
  * The session a cookie token names, or null. An expired session, or one whose user is inactive,
- * is deleted. A live one has `last_seen_at` moved to `now`.
+ * is deleted. A live, unlocked one has `last_seen_at` moved to `now`; a locked one keeps it, so it
+ * ends 30 min after its last unlocked request however often it is polled.
  */
 export function resolveSession(
   db: SessionStore,
@@ -104,6 +107,7 @@ export function resolveSession(
       csrfToken: session.csrfToken,
       createdAt: session.createdAt,
       lastSeenAt: session.lastSeenAt,
+      lockedAt: session.lockedAt,
       userId: user.id,
       email: user.email,
       displayName: user.displayName,
@@ -120,13 +124,44 @@ export function resolveSession(
     deleteSession(db, id);
     return null;
   }
-  db.update(session).set({ lastSeenAt: now.toISOString() }).where(eq(session.id, id)).run();
+  const locked = row.lockedAt !== null;
+  if (!locked) {
+    db.update(session).set({ lastSeenAt: now.toISOString() }).where(eq(session.id, id)).run();
+  }
   return {
     id,
     csrfToken: row.csrfToken,
     user: { id: row.userId, email: row.email, displayName: row.displayName, role: row.role },
+    locked,
     mustChangePassword: row.mustChangePassword,
   };
+}
+
+/** Locks a session. Returns true only when it was unlocked, so a repeat records nothing. */
+export function lockSession(db: SessionStore, id: string, now: Date): boolean {
+  const result = db
+    .update(session)
+    .set({ lockedAt: now.toISOString() })
+    .where(and(eq(session.id, id), isNull(session.lockedAt)))
+    .run();
+  return result.changes > 0;
+}
+
+/**
+ * Unlocks a session and moves `last_seen_at` to `now`. Returns true only when it was locked.
+ * The token stays: tabs share the cookie.
+ */
+export function unlockSession(db: SessionStore, id: string, now: Date): boolean {
+  const row = db
+    .select({ lockedAt: session.lockedAt })
+    .from(session)
+    .where(eq(session.id, id))
+    .get();
+  db.update(session)
+    .set({ lockedAt: null, lastSeenAt: now.toISOString() })
+    .where(eq(session.id, id))
+    .run();
+  return row !== undefined && row.lockedAt !== null;
 }
 
 /** Deletes the session a cookie token names, if any. */

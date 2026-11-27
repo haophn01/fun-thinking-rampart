@@ -17,6 +17,7 @@ export const AUTH_LIMITED_ROUTES: readonly string[] = [
   'POST /api/setup',
   'POST /api/session',
   'POST /api/session/password',
+  'POST /api/session/unlock',
 ];
 
 export const RATE_LIMITED_MESSAGE = 'Too many requests. Try again later.';

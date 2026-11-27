@@ -189,6 +189,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: ApiDeps): void {
       setupRequired: setupRequired(deps.db),
       user: request.auth?.user ?? null,
       csrfToken: request.auth?.csrfToken ?? null,
+      locked: request.auth?.locked ?? false,
       mustChangePassword: request.auth?.mustChangePassword ?? false,
     }),
   );

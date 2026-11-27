@@ -331,6 +331,15 @@ describe('password change gate', () => {
       }
     }
 
+    // Lock and unlock still work, and unlock reports the flag.
+    expect((await carl.post('/api/session/lock')).statusCode).toBe(204);
+    const unlocked = await carl.post('/api/session/unlock', { password: CARL.password });
+    expect(unlocked.statusCode, unlocked.body).toBe(200);
+    expect(sessionResponseSchema.parse(unlocked.json())).toMatchObject({
+      locked: false,
+      mustChangePassword: true,
+    });
+
     const changed = await carl.post(CHANGE, {
       currentPassword: CARL.password,
       newPassword: 'carl chose his own',

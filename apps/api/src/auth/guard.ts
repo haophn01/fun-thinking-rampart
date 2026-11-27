@@ -47,9 +47,9 @@ export interface AccessCheck {
 
 /**
  * Decides whether a request may reach its handler, in the contract's order: session (401), then
- * CSRF (403 `csrf_failed`), then a required password change (403 `password_change_required`),
- * then role (403 `forbidden`). Public routes are never gated by the password change. Returns the
- * refusal's code, or null.
+ * CSRF (403 `csrf_failed`), then lock (423 `session_locked`), then a required password change
+ * (403 `password_change_required`), then role (403 `forbidden`). Public routes are never gated by
+ * lock or by a password change. Returns the refusal's code, or null.
  */
 export function checkAccess(check: AccessCheck): ErrorCode | null {
   const { auth } = check;
@@ -58,6 +58,7 @@ export function checkAccess(check: AccessCheck): ErrorCode | null {
     if (!csrfMatches(auth.csrfToken, check.csrfHeader)) return 'csrf_failed';
   }
   if (check.public === true) return null;
+  if (auth.locked && !LOCKED_SESSION_ROUTES.includes(check.route)) return 'session_locked';
   if (auth.mustChangePassword && !PASSWORD_CHANGE_ROUTES.includes(check.route)) {
     return 'password_change_required';
   }

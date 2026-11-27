@@ -263,16 +263,29 @@ describe('multiplier scales the limits', () => {
 });
 
 describe('tight routes are pinned', () => {
-  it('is setup, sign-in and change password, and each is a real route', async () => {
+  it('is the old list plus change password and unlock, and each is a real route', async () => {
     expect(AUTH_LIMITED_ROUTES).toEqual([
       'POST /api/setup',
       'POST /api/session',
       'POST /api/session/password',
+      'POST /api/session/unlock',
     ]);
     const h = harness();
     await h.app.ready();
     const routes = new Set(listRoutes(h.app).map((entry) => `${entry.method} ${entry.url}`));
     for (const route of AUTH_LIMITED_ROUTES) expect(routes.has(route), route).toBe(true);
+  });
+
+  it('the 11th unlock in a minute gives 429; lock uses the general bucket', async () => {
+    const h = harness();
+    const unlock = () => send(h, { method: 'POST', url: '/api/session/unlock', body: {} });
+    expect(await statuses(10, unlock)).toEqual(Array<number>(10).fill(401));
+    expectLimited(await unlock());
+    const password = () => send(h, { method: 'POST', url: '/api/session/password', body: {} });
+    expect(await statuses(10, password)).toEqual(Array<number>(10).fill(401));
+    expectLimited(await password());
+    const lock = () => send(h, { method: 'POST', url: '/api/session/lock' });
+    expect(await statuses(11, lock)).toEqual(Array<number>(11).fill(401));
   });
 });
 
