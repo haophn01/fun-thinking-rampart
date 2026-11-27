@@ -77,3 +77,12 @@ Consequences: near the end of the US day, countdowns and "due today" can be off 
 
 - **What:** `apps/api/src/contract/browser.ts` is the contract's first module. When it loads where a DOM exists (`window` and `document`), it calls `configureZodForBrowser()` (`z.config({ jitless: true })`), before any schema is built. The api (Node) keeps zod's JIT. A call in `main.tsx` would come too late, because zod decides per schema when the schema is built.
 - **Why:** zod v4 probes `Function('')` on its first parse to decide whether to JIT. The strict web CSP (`script-src 'self'`, no `unsafe-eval`) blocks the probe and logs a `securitypolicyviolation` on every page. The app still worked, but the CSP would never be clean. Running jitless in the browser removes the probe without weakening the CSP or changing the lockfile. Found by E1 (plan `security-hardening`, sprint `sec-baseline`).
+
+## 2026-11-26 — MFA design choices (sprint sec-mfa, agent defaults)
+
+- **TOTP on `node:crypto`** (HMAC-SHA1, RFC 6238/4226, tested against the RFC vectors), not otplib. Replay state is ours either way, there's no dependency, and the e2e helpers share the module. This overrides the plan's "using otplib".
+- **QR code:** `uqr` (runtime encoder) and `jsqr` (decoder, used only in tests) at exact versions. The api sends only an SVG path, checked by a strict regex. The web draws it as an inline `<svg>`, with no `data:` URL and no innerHTML.
+- **Recovery codes:** 10 codes, stored as HMAC-SHA-256 under a key derived from `RAMPART_SECRET_KEY`. Saving them is confirmed in the browser only.
+- **Lockout:** a wrong code at enrollment doesn't count toward the 5-failure lockout; a wrong code at the sign-in challenge does. The replay guard is monotonic.
+- **Order and reset:** a user with a temporary password enrolls in MFA first, then changes the password. The admin MFA reset has no confirm step.
+- **One-way door:** A2, turning the MFA gate on for every account. There's no migration. Back up `apps/api/data/rampart-secret.key` together with the database.
