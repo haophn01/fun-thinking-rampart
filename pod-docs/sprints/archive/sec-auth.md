@@ -16,7 +16,7 @@ _From plan: pod-docs/plans/security-hardening.md · Slug: sec-auth · Status: ac
 | 3 | W1 | Web: change-password page, forced change, temporary-password UI | sec-auth-w1 | #35 | done | 3c4cda8 | G1 |
 | 3 | W2 | Web: idle lock, lock screen, keep-alive | sec-auth-w2 | #35 | done | 3c4cda8 | G1 |
 | 3 | W3 | Web: sign-in notice step and Settings › Sign-in notice | sec-auth-w3 | #35 | done | 3c4cda8 | G1 |
-| 4 | E1 | e2e for notice, forced change and lock; redaction over the new flows; docs | sec-auth-e1 | — | pending | — | N1, U1, W1, W2, W3 |
+| 4 | E1 | e2e for notice, forced change and lock; redaction over the new flows; docs | sec-auth-e1 | #36 | done | 4fd344f | N1, U1, W1, W2, W3 |
 
 Plan branch `security-hardening`; wave heads `sec-auth-w1` … `sec-auth-w4`. Merge target `main`. Wave 1 holds the plan's one migration (D1, a one-way door): it stops for the human unless they pre-approve it.
 
@@ -469,3 +469,47 @@ Everything in the earlier sprints' contracts still holds (foundation, assessment
 - **Depends on:** N1, U1, W1, W2, W3
 - **One-way door:** none
 - **Model:** opus
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date (`main` unchanged since 91161a6).
+- **Slices shipped:**
+  - D1, K1 and P1 (PR #33, the one-way door, migration 0006, which the human approved)
+  - A1 and G1 (#34)
+  - N1, U1, W1, W2 and W3 (#35)
+  - E1 (#36)
+- **One-way door:** migration 0006. The human approved it ("merge the migration wave"). The DB was backed up to `rampart.pre-0006.sqlite`, and the human's app migrated to 7 migrations with the account intact.
+- **Queue:**
+  - resolved T1's 429 UX (G1) and the D1 door
+  - the `signInNotice` gap on unlock and change was fixed by the wave 3 fix
+- **Decisions taken as defaults:**
+  - ERROR_MESSAGES
+  - a successful unlock resets the failure count
+  - a failed refresh keeps the app
+  - an unconfirmed lock survives a re-read
+  - password FKs are `no action`
+  - "Save notice" naming
+  - the blocklist kept 46,146 entries, not ~100k
+  - the notice is off by default
+- **Slice log:**
+  - D1: opus · high · gate 1 on `record.test`
+  - K1: opus · medium · gate 1 on 4 auth lines
+  - P1: opus · medium · `.gitleaks.toml` allowlist
+  - A1: opus · medium · gate 1 on the document-control step
+  - G1: opus · medium
+  - N1: opus · medium · left the unlock/change null (wave fix)
+  - U1: opus · high
+  - W1: sonnet · medium
+  - W2: opus · medium
+  - W3: sonnet · medium · notice look measured by the orchestrator
+  - E1: opus · medium · red only via planted faults
+  - **Stops:** wave 3 hit a 5-hour limit (5 slices), resumed with nothing lost. No stalls.
+- **Wave fixes:** wave 3 sent `signInNotice` on unlock and change (red, then green). There were none in the other waves.
+- **Wave checks:** verify ran 1,042 → 1,091 → 1,164 → 1,164 tests; e2e ran 20 → 20 → 20 → 24. CI was green on all 7 jobs for #33–#36. The orchestrator ran end-to-end checks of lock and unlock (#34) and of the notice and forced change (#35). The known Windows worker crash hit once, and the rerun was clean.
+- **Agent context at hand-back:** about 1,750,000 tokens (the sum of the agents' final context sizes, not tokens billed).
+- **For the next sprint (sec-mfa):**
+  - The MFA columns already exist from 0006 (`mfa_secret_enc`, `mfa_last_step`, `mfa_enrolled_at`, `mfa_recovery_code`, `session.mfa_pending`).
+  - The redaction keys cover `code`.
+  - The route matrix needs entries.
+  - `e2e/auth.spec.ts` on 3295 is the place for MFA sign-in.
+  - The human's account must enroll at next sign-in.
