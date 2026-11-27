@@ -17,7 +17,7 @@ import type { ApiDeps } from '../routes';
 import { getSignInNotice, getSignInNoticeText, noticeDigest } from '../settings/repository';
 import { clearSessionCookie, readSessionToken, setSessionCookie } from './cookie';
 import { assertAccountUnlocked, clearFailures, recordFailure } from './lockout';
-import { hashPassword, verifyPassword } from './password';
+import { hashPassword, passwordSchemeFor, verifyPassword } from './password';
 import { checkNewPassword } from './password-policy';
 import {
   createSession,
@@ -63,8 +63,13 @@ async function signIn(
   const account = found?.active === true ? found : undefined;
 
   assertAccountUnlocked(reply, account?.lockedUntil ?? null, now);
-  // Unknown emails and inactive users still pay for a verify, so timing says nothing.
-  const matched = await verifyPassword(account?.passwordHash ?? null, body.password);
+  // Unknown emails and inactive users still pay for a verify in the mode's scheme, so timing
+  // says nothing.
+  const matched = await verifyPassword(
+    account?.passwordHash ?? null,
+    body.password,
+    passwordSchemeFor(deps.config),
+  );
   if (!account) throw new AppError('invalid_credentials', INVALID_CREDENTIALS);
   if (!matched) {
     recordFailure(deps, account.id, now, request.id);
@@ -131,7 +136,7 @@ async function setup(
   const complete = () => new AppError('setup_complete', 'Setup is already complete.');
   if (!setupRequired(deps.db)) throw complete();
   checkNewPassword(body.password);
-  const passwordHash = await hashPassword(body.password);
+  const passwordHash = await hashPassword(body.password, passwordSchemeFor(deps.config));
   const now = deps.now();
   const at = now.toISOString();
 
