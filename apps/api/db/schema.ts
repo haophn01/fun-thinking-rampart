@@ -69,6 +69,19 @@ export const user = sqliteTable(
     lockedUntil: text('locked_until'),
     createdAt: text('created_at').notNull().default(isoNow),
     updatedAt: text('updated_at').notNull().default(isoNow),
+    // Migration 0006 (sec-auth). Rows from before it read false and null.
+    /** Set for a temporary password: the next sign-in must choose a new one. */
+    mustChangePassword: integer('must_change_password', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    /** ISO timestamp of the last password set; null for passwords set before 0006. */
+    passwordChangedAt: text('password_changed_at'),
+    /** The TOTP secret, encrypted by the api (sec-mfa). Null until MFA is enrolled. */
+    mfaSecretEnc: text('mfa_secret_enc'),
+    /** The last TOTP time step accepted, so a code is never accepted twice (sec-mfa). */
+    mfaLastStep: integer('mfa_last_step'),
+    /** ISO timestamp; when MFA enrolment finished (sec-mfa). */
+    mfaEnrolledAt: text('mfa_enrolled_at'),
   },
   (table) => [
     check('user_role_check', sql`${table.role} in ('admin', 'contributor')`),
@@ -89,13 +102,20 @@ export const session = sqliteTable(
     /** ISO timestamps from the api's clock (`buildApp({ now })`), so no default. */
     createdAt: text('created_at').notNull(),
     lastSeenAt: text('last_seen_at').notNull(),
+    // Migration 0006 (sec-auth). Sessions from before it read unlocked and not MFA-pending.
+    /** ISO timestamp; while set, the session is locked and only unlock and sign-out work. */
+    lockedAt: text('locked_at'),
+    /** Signed in with a password but the MFA step is still to come (sec-mfa). */
+    mfaPending: integer('mfa_pending', { mode: 'boolean' }).notNull().default(false),
   },
   (table) => [index('session_user_id_idx').on(table.userId)],
 );
 
 /**
- * Append-only history of every status or content change. Triggers (migration 0002) abort any
- * UPDATE or DELETE. Write rows only through `recordAudit` (src/audit/record.ts).
+ * Append-only history of every status or content change. Triggers abort any DELETE (migration
+ * 0002) and any UPDATE (narrowed by 0006) except filling a row's null `prev_hash` and `hash`
+ * once, with every other column unchanged. Write rows only through `recordAudit`
+ * (src/audit/record.ts).
  */
 export const auditEvent = sqliteTable(
   'audit_event',
@@ -114,6 +134,11 @@ export const auditEvent = sqliteTable(
     /** JSON of the changed fields after the change. */
     after: text('after'),
     requestId: text('request_id'),
+    // Migration 0006 (sec-auth). Null until sec-integrity's hash chain fills them, once.
+    /** The previous event's `hash`; null on the chain's first event. */
+    prevHash: text('prev_hash'),
+    /** This event's hash in the chain. */
+    hash: text('hash'),
   },
   (table) => [index('audit_event_entity_idx').on(table.entityType, table.entityId, table.id)],
 );
@@ -643,3 +668,55 @@ export const sspApproval = sqliteTable('ssp_approval', {
   /** ISO timestamp; set once, when the approval is removed. */
   removedAt: text('removed_at'),
 });
+
+// The sec-auth tables (migration 0006). Timestamps and `*_by` come from the api, so none has a
+// default.
+
+/** Earlier password hashes of each user, so a password set again can be refused. */
+export const passwordHistory = sqliteTable(
+  'password_history',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    /** An Argon2id hash. Never returned, logged or audited. */
+    passwordHash: text('password_hash').notNull(),
+    /** ISO timestamp from the api's clock. */
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [index('password_history_user_id_idx').on(table.userId, table.id)],
+);
+
+/** One-time MFA recovery codes (sec-mfa); only their hashes are stored. */
+export const mfaRecoveryCode = sqliteTable(
+  'mfa_recovery_code',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    codeHash: text('code_hash').notNull(),
+    /** ISO timestamp from the api's clock. */
+    createdAt: text('created_at').notNull(),
+    /** ISO timestamp; set once, when the code is used. */
+    usedAt: text('used_at'),
+  },
+  (table) => [index('mfa_recovery_code_user_id_idx').on(table.userId)],
+);
+
+/** App-wide settings: one row, id 1, created by the first write. */
+export const settings = sqliteTable(
+  'settings',
+  {
+    id: integer('id').primaryKey(),
+    /** Shown at sign-in, to be acknowledged before the app opens; null shows none. */
+    signInNotice: text('sign_in_notice'),
+    updatedBy: text('updated_by')
+      .notNull()
+      .references(() => user.id),
+    /** ISO timestamp from the api's clock. */
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [check('settings_single_row_check', sql`${table.id} = 1`)],
+);

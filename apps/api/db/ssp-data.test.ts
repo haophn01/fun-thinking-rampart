@@ -439,7 +439,7 @@ function statementsOf(sql: string): string[] {
 describe('ssp data migration', () => {
   it('0005 is additive', () => {
     const tags = readJournal().entries.map((entry) => entry.tag);
-    expect(tags.at(-1)).toBe('0005_ssp_data');
+    expect(tags.indexOf('0005_ssp_data')).toBe(5);
 
     const statements = statementsOf(readFileSync(join(MIGRATIONS, '0005_ssp_data.sql'), 'utf8'));
     const created: string[] = [];
@@ -469,7 +469,11 @@ describe('ssp data migration', () => {
     const journal = readJournal();
     const at0004 = journal.entries.findIndex((entry) => entry.tag === '0004_system_profile');
     expect(at0004).toBe(4);
-    expect(journal.entries.map((entry) => entry.tag).slice(at0004 + 1)).toEqual(['0005_ssp_data']);
+    // 0006_sec_auth follows; it has its own upgrade test (sec-auth.test.ts).
+    expect(journal.entries.map((entry) => entry.tag).slice(at0004 + 1)).toEqual([
+      '0005_ssp_data',
+      '0006_sec_auth',
+    ]);
 
     // A database exactly as ssp-dashboard left it (0000–0004), with a row in every table.
     const path = join(tempDir(), 'ssp-dashboard.sqlite');
@@ -490,10 +494,11 @@ describe('ssp data migration', () => {
     const oldRequirementColumns = columnInfo(old, 'requirement_state');
     old.sqlite.close();
 
-    // Upgrade: every row is kept and the eight tables are added.
+    // Upgrade to 0005 exactly: every row is kept and the eight tables are added.
+    const upTo0005 = migrationsUpTo(at0004 + 2);
     const upgraded = track(openDb(path));
-    runMigrations(upgraded.db);
-    expect(appliedMigrations(upgraded)).toBe(journal.entries.length);
+    migrate(upgraded.db, { migrationsFolder: upTo0005 });
+    expect(appliedMigrations(upgraded)).toBe(at0004 + 2);
     expect(tables(upgraded)).toEqual([...KEPT_TABLES, ...Object.keys(NEW_TABLES)].sort());
     expect(rowsOf(upgraded)).toEqual({
       ...before,
@@ -541,7 +546,7 @@ describe('ssp data migration', () => {
     const applied = appliedMigrations(upgraded);
     const schemaBefore = schemaSql(upgraded);
     const rowsBefore = rowsOf(upgraded);
-    runMigrations(upgraded.db);
+    migrate(upgraded.db, { migrationsFolder: upTo0005 });
     expect(appliedMigrations(upgraded)).toBe(applied);
     expect(schemaSql(upgraded)).toEqual(schemaBefore);
     expect(rowsOf(upgraded)).toEqual(rowsBefore);
@@ -696,9 +701,11 @@ describe('ssp data migration', () => {
     refuses('ssp_approval', { id: 'ap0', updated_by: 'ghost' }, FOREIGN);
   });
 
+  // 0006 only adds tables and columns, so everything the 0005 snapshot holds is still in
+  // schema.ts unchanged; sec-auth.test.ts checks the newest snapshot equals schema.ts.
   it('schema matches the snapshot', () => {
     const journal = readJournal();
-    expect(journal.entries.at(-1)?.tag).toBe('0005_ssp_data');
+    expect(journal.entries.map((entry) => entry.tag)).toContain('0005_ssp_data');
     const snapshot = JSON.parse(
       readFileSync(join(MIGRATIONS, 'meta', '0005_snapshot.json'), 'utf8'),
     ) as {
@@ -714,34 +721,31 @@ describe('ssp data migration', () => {
     const fromSchema = Object.values(schema).flatMap((value: unknown) =>
       is(value, SQLiteTable) ? [getTableConfig(value)] : [],
     );
-    expect(Object.keys(snapshot.tables).sort()).toEqual(
-      fromSchema.map((config) => config.name).sort(),
-    );
+    const schemaNames = fromSchema.map((config) => config.name);
+    for (const name of Object.keys(snapshot.tables)) expect(schemaNames).toContain(name);
     for (const config of fromSchema) {
       const stored = snapshot.tables[config.name];
-      expect(stored, config.name).toBeDefined();
+      if (stored === undefined) continue;
+      const storedNames = Object.keys(stored.columns);
       expect(
         Object.fromEntries(
-          config.columns.map((column) => [
-            column.name,
-            { notNull: column.notNull, type: column.getSQLType() },
-          ]),
+          config.columns
+            .filter((column) => storedNames.includes(column.name))
+            .map((column) => [column.name, { notNull: column.notNull, type: column.getSQLType() }]),
         ),
         config.name,
       ).toEqual(
         Object.fromEntries(
-          Object.entries(stored?.columns ?? {}).map(([name, column]) => [
+          Object.entries(stored.columns).map(([name, column]) => [
             name,
             { notNull: column.notNull, type: column.type },
           ]),
         ),
       );
-      expect(Object.keys(stored?.checkConstraints ?? {}).sort(), config.name).toEqual(
+      expect(Object.keys(stored.checkConstraints).sort(), config.name).toEqual(
         config.checks.map((check) => check.name).sort(),
       );
-      expect(Object.keys(stored?.foreignKeys ?? {}).length, config.name).toBe(
-        config.foreignKeys.length,
-      );
+      expect(Object.keys(stored.foreignKeys).length, config.name).toBe(config.foreignKeys.length);
     }
     for (const table of Object.keys(NEW_TABLES)) {
       expect(Object.keys(snapshot.tables[table]?.columns ?? {}), table).toEqual(NEW_TABLES[table]);
