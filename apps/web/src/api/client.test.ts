@@ -116,6 +116,7 @@ const USER = {
   role: 'contributor',
   active: true,
   createdAt: '2026-11-24T10:00:00.000Z',
+  mfaEnrolled: false,
 } as const;
 
 function envelope(code: string, message: string, details?: unknown) {

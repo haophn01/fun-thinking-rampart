@@ -108,6 +108,7 @@ async function signIn(
     locked: false,
     mustChangePassword: account.mustChangePassword,
     signInNotice: created.signInNotice,
+    mfa: 'none',
   };
 }
 
@@ -191,6 +192,7 @@ async function setup(
     mustChangePassword: false,
     // No user existed before setup, so no notice can be set: the settings row needs an author.
     signInNotice: getSignInNotice(deps.db),
+    mfa: 'none',
   };
 }
 

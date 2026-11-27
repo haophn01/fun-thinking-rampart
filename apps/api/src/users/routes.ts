@@ -37,6 +37,7 @@ function toUser(row: UserRow): User {
     role: row.role,
     active: row.active,
     createdAt: row.createdAt,
+    mfaEnrolled: false,
   };
 }
 
