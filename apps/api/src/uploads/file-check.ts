@@ -164,9 +164,8 @@ export function checkFileContent(extension: string, bytes: Uint8Array): FileCont
     detected: detectFileType(bytes),
   });
   const kind = KIND_BY_EXTENSION[extension.toLowerCase()];
+  if (kind === undefined) return mismatch();
   switch (kind) {
-    case undefined:
-      return mismatch();
     case 'pdf':
       return isPdf(bytes) ? null : mismatch();
     case 'png':
