@@ -26,6 +26,9 @@ describe('first run setup', () => {
       setupRequired: true,
       user: null,
       csrfToken: null,
+      locked: false,
+      mustChangePassword: false,
+      signInNotice: null,
     });
 
     const c = h.client();
@@ -84,7 +87,14 @@ describe('first run setup', () => {
     expect(mine.user?.email).toBe('ada@example.com');
     expect(mine.csrfToken).toBe(body.csrfToken);
     const theirs = sessionResponseSchema.parse((await anon.get('/api/session')).json());
-    expect(theirs).toEqual({ setupRequired: false, user: null, csrfToken: null });
+    expect(theirs).toEqual({
+      setupRequired: false,
+      user: null,
+      csrfToken: null,
+      locked: false,
+      mustChangePassword: false,
+      signInNotice: null,
+    });
 
     // A second call is refused and changes nothing.
     const again = await h.client().post('/api/setup', {

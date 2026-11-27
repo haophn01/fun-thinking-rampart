@@ -46,7 +46,14 @@ describe('expiry edges', () => {
     const c = await h.setupAdmin();
     h.clock.advance(2 * HOUR);
     const status = sessionResponseSchema.parse((await c.get('/api/session')).json());
-    expect(status).toEqual({ setupRequired: false, user: null, csrfToken: null });
+    expect(status).toEqual({
+      setupRequired: false,
+      user: null,
+      csrfToken: null,
+      locked: false,
+      mustChangePassword: false,
+      signInNotice: null,
+    });
     expect(sessionRows(h)).toHaveLength(0);
   });
 

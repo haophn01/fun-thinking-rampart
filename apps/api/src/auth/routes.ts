@@ -133,6 +133,9 @@ async function signIn(
       role: account.role,
     },
     csrfToken: created.csrfToken,
+    locked: false,
+    mustChangePassword: false,
+    signInNotice: null,
   };
 }
 
@@ -204,6 +207,9 @@ async function setup(
     setupRequired: false,
     user: { id: result.userId, email: body.email, displayName: body.displayName, role: 'admin' },
     csrfToken: result.session.csrfToken,
+    locked: false,
+    mustChangePassword: false,
+    signInNotice: null,
   };
 }
 
