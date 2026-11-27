@@ -17,3 +17,6 @@ packages/catalog/data
 packages/catalog/src/types.ts
 packages/rules/src/types.ts
 packages/rules/src/errors.ts
+
+# Generated password blocklist: one entry per line, written by scripts/build-blocklist.ts
+apps/api/src/auth/blocklist/common-passwords.json

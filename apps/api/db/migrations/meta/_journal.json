@@ -43,6 +43,13 @@
       "when": 1795640371586,
       "tag": "0005_ssp_data",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795739667063,
+      "tag": "0006_sec_auth",
+      "breakpoints": true
     }
   ]
 }

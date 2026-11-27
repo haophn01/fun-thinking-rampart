@@ -43,13 +43,28 @@ const SSP_DATA_TABLES = [
   'ssp_revision',
   'system_role',
 ];
+/** The three tables migration 0006_sec_auth adds. */
+const SEC_AUTH_TABLES = ['mfa_recovery_code', 'password_history', 'settings'];
 const ALL_TABLES = [
   'assessment',
   ...ASSESSMENT_TABLES,
   ...POAM_EVIDENCE_TABLES,
   'system_profile',
   ...SSP_DATA_TABLES,
+  ...SEC_AUTH_TABLES,
 ].sort();
+/** What 0006 gives the rows that were there before it: no MFA, no lock, no hash yet. */
+const SEC_AUTH_DEFAULTS: Record<string, Record<string, number | null>> = {
+  user: {
+    must_change_password: 0,
+    password_changed_at: null,
+    mfa_secret_enc: null,
+    mfa_last_step: null,
+    mfa_enrolled_at: null,
+  },
+  session: { locked_at: null, mfa_pending: 0 },
+  audit_event: { prev_hash: null, hash: null },
+};
 /** requirement_state's columns: 0001's, then the two 0005 adds. */
 const REQUIREMENT_STATE_COLUMNS = [
   'assessment_id',
@@ -138,7 +153,8 @@ describe('database', () => {
     runMigrations(handle.db);
 
     // assessment, the five assessment-sprint tables, the seven POA&M and evidence tables, the
-    // system profile and the eight SSP data tables (and drizzle's own journal table).
+    // system profile, the eight SSP data tables and the three sec-auth tables (and drizzle's own
+    // journal table).
     expect(
       tables(handle)
         .filter((name) => name !== '__drizzle_migrations')
@@ -233,6 +249,11 @@ describe('database', () => {
       'locked_until',
       'created_at',
       'updated_at',
+      'must_change_password',
+      'password_changed_at',
+      'mfa_secret_enc',
+      'mfa_last_step',
+      'mfa_enrolled_at',
     ]);
     expect(columnsOf(handle, 'session')).toEqual([
       'id',
@@ -240,6 +261,8 @@ describe('database', () => {
       'csrf_token',
       'created_at',
       'last_seen_at',
+      'locked_at',
+      'mfa_pending',
     ]);
     expect(columnsOf(handle, 'audit_event')).toEqual([
       'id',
@@ -252,6 +275,8 @@ describe('database', () => {
       'before',
       'after',
       'request_id',
+      'prev_hash',
+      'hash',
     ]);
     expect(columnsOf(handle, 'objective_result')).toEqual([
       'assessment_id',
@@ -509,9 +534,18 @@ describe('database', () => {
         .filter((name) => name !== '__drizzle_migrations')
         .sort(),
     ).toEqual(ALL_TABLES);
-    // Every row is kept; 0005 gives requirement_state rows two new, empty columns.
+    // Every row is kept; 0005 gives requirement_state rows two new, empty columns, and 0006 gives
+    // user, session and audit rows theirs.
+    const widened = (table: string) =>
+      (before[table] as Record<string, unknown>[]).map((row) => ({
+        ...row,
+        ...SEC_AUTH_DEFAULTS[table],
+      }));
     expect(rowsOf(upgraded)).toEqual({
       ...before,
+      user: widened('user'),
+      session: widened('session'),
+      audit_event: widened('audit_event'),
       requirement_state: (before.requirement_state as Record<string, unknown>[]).map((row) => ({
         ...row,
         planned_implementation: null,
