@@ -109,7 +109,7 @@ export function replaceRecoveryCodes(
 }
 
 /** Marks one unused code of this user used. False: no such unused code (wrong, used or not theirs). */
-export function useRecoveryCode(
+export function spendRecoveryCode(
   db: SessionStore,
   userId: string,
   codeHash: string,

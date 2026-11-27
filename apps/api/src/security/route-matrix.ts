@@ -256,6 +256,11 @@ export const ROUTE_MATRIX: Readonly<Record<string, MatrixEntry>> = {
     sample: { url: '/api/session/mfa/enroll/confirm', body: { code: '123456' } },
     idor: SESSION_ROUTE,
   },
+  'POST /api/session/mfa/verify': {
+    access: 'session',
+    sample: { url: '/api/session/mfa/verify', body: { code: '123456' } },
+    idor: SESSION_ROUTE,
+  },
 
   // Users and the audit log.
   'GET /api/users': { access: 'session', sample: { url: '/api/users' }, idor: USERS_GLOBAL },

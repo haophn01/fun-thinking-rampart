@@ -109,6 +109,7 @@ describe('the matrix covers every api route', () => {
     expect(ROUTE_MATRIX).toMatchObject({
       'POST /api/session/mfa/enroll': { access: 'session' },
       'POST /api/session/mfa/enroll/confirm': { access: 'session' },
+      'POST /api/session/mfa/verify': { access: 'session' },
     });
     expect(matrixMismatches(routes, ROUTE_MATRIX)).toEqual({ missing: [], extra: [] });
   });
