@@ -123,7 +123,8 @@ const resets = (path: string) =>
   );
 
 describe("resets one user's MFA", () => {
-  it("resets one user's MFA", () => {
+  // Each test spawns the CLI (tsx) one or more times; Windows CI needs more than vitest's 5 s.
+  it("resets one user's MFA", { timeout: 120_000 }, () => {
     const path = join(tempDir(), 'app.sqlite');
     const ids = seededDb(path);
     const result = runCli(path, ['ada@example.com']);
@@ -155,36 +156,42 @@ describe("resets one user's MFA", () => {
 });
 
 describe('argument and user edges', () => {
-  it('matches the email trimmed and case-folded; refuses unknown users and bad arguments', () => {
-    const path = join(tempDir(), 'app.sqlite');
-    const ids = seededDb(path);
+  // Each test spawns the CLI (tsx) one or more times; Windows CI needs more than vitest's 5 s.
+  it(
+    'matches the email trimmed and case-folded; refuses unknown users and bad arguments',
+    { timeout: 120_000 },
+    () => {
+      const path = join(tempDir(), 'app.sqlite');
+      const ids = seededDb(path);
 
-    const folded = runCli(path, [' Ada@Example.COM ']);
-    expect(folded.status, folded.out).toBe(0);
-    expect(resets(path).map((event) => event.entityId)).toEqual([ids.ada]);
+      const folded = runCli(path, [' Ada@Example.COM ']);
+      expect(folded.status, folded.out).toBe(0);
+      expect(resets(path).map((event) => event.entityId)).toEqual([ids.ada]);
 
-    const unknown = runCli(path, ['nobody@example.com']);
-    expect(unknown.status).toBe(1);
-    expect(unknown.out).toContain('nobody@example.com');
-    expect(resets(path)).toHaveLength(1);
+      const unknown = runCli(path, ['nobody@example.com']);
+      expect(unknown.status).toBe(1);
+      expect(unknown.out).toContain('nobody@example.com');
+      expect(resets(path)).toHaveLength(1);
 
-    for (const args of [[], ['a@example.com', 'b@example.com']]) {
-      const bad = runCli(path, args);
-      expect(bad.status, args.join(' ')).toBe(2);
-      expect(bad.out).toContain('Usage: pnpm admin:reset-mfa <email>');
-    }
+      for (const args of [[], ['a@example.com', 'b@example.com']]) {
+        const bad = runCli(path, args);
+        expect(bad.status, args.join(' ')).toBe(2);
+        expect(bad.out).toContain('Usage: pnpm admin:reset-mfa <email>');
+      }
 
-    const nothing = runCli(path, ['cy@example.com']);
-    expect(nothing.status, nothing.out).toBe(0);
-    expect(nothing.out).toContain(
-      'cy@example.com has no two-step sign-in set up. Nothing changed.',
-    );
-    expect(resets(path)).toHaveLength(1);
-  });
+      const nothing = runCli(path, ['cy@example.com']);
+      expect(nothing.status, nothing.out).toBe(0);
+      expect(nothing.out).toContain(
+        'cy@example.com has no two-step sign-in set up. Nothing changed.',
+      );
+      expect(resets(path)).toHaveLength(1);
+    },
+  );
 });
 
 describe('never creates or migrates a database', () => {
-  it('a missing path exits 1 without creating a file', () => {
+  // Each test spawns the CLI (tsx) one or more times; Windows CI needs more than vitest's 5 s.
+  it('a missing path exits 1 without creating a file', { timeout: 120_000 }, () => {
     const dir = tempDir();
     const path = join(dir, 'sub', 'missing.sqlite');
     const result = runCli(path, ['ada@example.com']);
@@ -194,7 +201,8 @@ describe('never creates or migrates a database', () => {
     expect(readdirSync(dir)).toEqual([]);
   });
 
-  it('a database at migration 0005 exits 1 and stays at 0005', () => {
+  // Each test spawns the CLI (tsx) one or more times; Windows CI needs more than vitest's 5 s.
+  it('a database at migration 0005 exits 1 and stays at 0005', { timeout: 120_000 }, () => {
     const dir = tempDir();
     const folder = join(dir, 'migrations');
     cpSync(join(apiRoot, 'db', 'migrations'), folder, { recursive: true });
@@ -235,7 +243,8 @@ describe('never creates or migrates a database', () => {
 });
 
 describe('works while the app runs', () => {
-  it('succeeds while another connection holds the WAL database open', () => {
+  // Each test spawns the CLI (tsx) one or more times; Windows CI needs more than vitest's 5 s.
+  it('succeeds while another connection holds the WAL database open', { timeout: 120_000 }, () => {
     const path = join(tempDir(), 'app.sqlite');
     const ids = seededDb(path);
     const app = openDb(path);
@@ -260,7 +269,8 @@ describe('works while the app runs', () => {
 });
 
 describe('scripts are wired', () => {
-  it('the root script calls the api script, which runs the cli', () => {
+  // Each test spawns the CLI (tsx) one or more times; Windows CI needs more than vitest's 5 s.
+  it('the root script calls the api script, which runs the cli', { timeout: 120_000 }, () => {
     const read = (dir: string) =>
       (
         JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
