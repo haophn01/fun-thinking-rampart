@@ -1,0 +1,27 @@
+/* The lock screen's "Signed in as" block: who must enter the password. */
+.who {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 0;
+  border-top: var(--rp-rule) solid var(--rp-ink);
+  border-bottom: var(--rp-rule) solid var(--rp-ink);
+}
+
+.term {
+  color: var(--rp-graphite);
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-label);
+}
+
+.name {
+  font-size: var(--rp-text-body-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.email {
+  font-family: var(--rp-font-mono);
+  font-size: var(--rp-text-mono);
+  overflow-wrap: anywhere;
+}
