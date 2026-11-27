@@ -47,6 +47,9 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'auth.session_unlocked': 'Session unlocked',
   'auth.notice_acknowledged': 'Sign-in notice acknowledged',
   'settings.updated': 'Settings changed',
+  'auth.mfa_enrolled': 'Two-step sign-in set up',
+  'auth.mfa_verified': 'Two-step sign-in verified',
+  'user.mfa_reset': 'Two-step sign-in reset',
 };
 
 export const ENTITY_LABELS: Record<AuditEntityType, string> = {

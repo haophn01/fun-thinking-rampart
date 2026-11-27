@@ -15,6 +15,9 @@ export const ADMIN = {
   password: 'correct horse battery',
 } as const;
 
+/** `RAMPART_SECRET_KEY` for every harness app unless `env` overrides it: a test key only. */
+export const HARNESS_SECRET_KEY = '0123456789abcdef'.repeat(4);
+
 /** Where every harness clock starts. */
 export const START = new Date('2026-11-23T09:00:00.000Z');
 
@@ -101,8 +104,9 @@ export interface HarnessOptions {
   logLevel?: LogLevel;
   /**
    * Merged over the harness's env (`DATABASE_PATH=:memory:`, `RATE_LIMIT_MULTIPLIER=1000` so
-   * suites don't trip limits) before `loadConfig`. Rate-limit tests pass
-   * `{ RATE_LIMIT_MULTIPLIER: '1' }`; hosted tests pass `{ HOSTED: 'true' }`.
+   * suites don't trip limits, `RAMPART_SECRET_KEY=HARNESS_SECRET_KEY`) before `loadConfig`.
+   * Rate-limit tests pass `{ RATE_LIMIT_MULTIPLIER: '1' }`; hosted tests pass `{ HOSTED: 'true' }`;
+   * `{ RAMPART_SECRET_KEY: '' }` runs the app on a random in-memory key.
    */
   env?: Record<string, string>;
   start?: Date;
@@ -152,6 +156,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     DATABASE_PATH: ':memory:',
     LOG_LEVEL: options.logLevel ?? 'info',
     RATE_LIMIT_MULTIPLIER: '1000',
+    RAMPART_SECRET_KEY: HARNESS_SECRET_KEY,
     ...options.env,
   });
   // The client keeps whichever session cookie the app's mode uses.

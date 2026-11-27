@@ -59,6 +59,7 @@ describe('30 min idle and 8 h absolute', () => {
       locked: false,
       mustChangePassword: false,
       signInNotice: null,
+      mfa: 'none',
     });
     expect(sessionRows(h)).toHaveLength(0);
   });

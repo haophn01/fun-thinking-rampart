@@ -95,6 +95,9 @@ describe('api contract', () => {
       'password_change_required',
       'session_locked',
       'notice_not_acknowledged',
+      'mfa_required',
+      'invalid_mfa_code',
+      'mfa_wrong_step',
     ]);
 
     const envelope = { error: { code: 'not_found', message: 'No route', requestId: 'abc' } };

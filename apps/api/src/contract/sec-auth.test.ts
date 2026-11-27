@@ -24,13 +24,14 @@ const USER = { id: 'u1', email: 'ada@example.com', displayName: 'Ada', role: 'ad
 
 describe('sec-auth contract', () => {
   it('session response defaults', () => {
-    // An answer from before this sprint (and every old mock) still parses.
+    // An answer from before this sprint (and every old mock) still parses; sec-mfa adds `mfa`.
     const old = { setupRequired: false, user: USER, csrfToken: 'csrf' };
     expect(sessionResponseSchema.parse(old)).toEqual({
       ...old,
       locked: false,
       mustChangePassword: false,
       signInNotice: null,
+      mfa: 'none',
     });
     expect(
       sessionResponseSchema.parse({ setupRequired: true, user: null, csrfToken: null }),
@@ -41,6 +42,7 @@ describe('sec-auth contract', () => {
       locked: false,
       mustChangePassword: false,
       signInNotice: null,
+      mfa: 'none',
     });
 
     // Sent values are kept.
@@ -49,6 +51,7 @@ describe('sec-auth contract', () => {
       locked: true,
       mustChangePassword: true,
       signInNotice: { text: 'Authorized use only.', digest: DIGEST },
+      mfa: 'challenge',
     };
     expect(sessionResponseSchema.parse(full)).toEqual(full);
     expect(sessionResponseSchema.parse({ ...old, signInNotice: null }).signInNotice).toBeNull();

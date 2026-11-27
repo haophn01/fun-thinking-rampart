@@ -11,6 +11,7 @@ export * from './health';
 export * from './common';
 export * from './settings';
 export * from './auth';
+export * from './mfa';
 export * from './users';
 export * from './audit';
 export * from './evaluation';

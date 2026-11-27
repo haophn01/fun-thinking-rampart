@@ -30,6 +30,9 @@ export const ERROR_CODES = [
   'password_change_required',
   'session_locked',
   'notice_not_acknowledged',
+  'mfa_required',
+  'invalid_mfa_code',
+  'mfa_wrong_step',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -89,6 +92,12 @@ export const ERROR_STATUS = {
   session_locked: 423,
   /** A sign-in while a notice is set, without the current notice's digest. */
   notice_not_acknowledged: 400,
+  /** The session still needs two-step sign-in (`mfa` is `enroll` or `challenge`). */
+  mfa_required: 403,
+  /** The TOTP or recovery code is wrong, already used, or a step at or before the last one. */
+  invalid_mfa_code: 401,
+  /** The MFA route doesn't fit the user's or session's state (already enrolled, not pending). */
+  mfa_wrong_step: 409,
 } as const satisfies Record<ErrorCode, number>;
 
 /** The fixed message the api sends, and the web may show as is, for these codes. */
@@ -98,6 +107,9 @@ export const ERROR_MESSAGES = {
   password_change_required: 'Change your password to continue.',
   session_locked: 'Your session is locked. Enter your password to unlock it.',
   notice_not_acknowledged: 'Acknowledge the sign-in notice to continue.',
+  mfa_required: 'Finish two-step sign-in to continue.',
+  invalid_mfa_code: "That code didn't work. Enter the newest code from your app.",
+  mfa_wrong_step: "This two-step sign-in step doesn't apply now. Reload the page.",
 } as const satisfies Partial<Record<ErrorCode, string>>;
 
 /**

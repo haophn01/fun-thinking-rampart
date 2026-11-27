@@ -28,6 +28,13 @@ export interface Config {
   webDistPath: string;
   /** Scales every rate limit's `max`; 1 is the real limits, and hosted mode needs it. */
   rateLimitMultiplier: number;
+  /**
+   * `RAMPART_SECRET_KEY`: the 32-byte master key as 64 lowercase hex characters, or null when
+   * unset (locally, `loadSecretKey` then uses the key file). Never log it.
+   */
+  secretKeyHex: string | null;
+  /** Absolute: the local key file `loadSecretKey` reads, or creates when it is missing. */
+  secretKeyPath: string;
 }
 
 /** Thrown when the environment is invalid. `keys` names every bad variable, sorted. */
@@ -63,6 +70,23 @@ const booleanSetting = z.preprocess(
     .transform((value) => value === 'true'),
 );
 
+/** True when every byte of a hex key is the same one, such as 64 zeros: never a real key. */
+const oneByteRepeated = (hex: string) => hex === hex.slice(0, 2).repeat(hex.length / 2);
+
+/**
+ * 64 hex characters in either case, stored lowercase. The messages never echo the value, so a
+ * near-miss key never reaches a log line.
+ */
+const secretKeySetting = z.preprocess(
+  unsetIfEmpty,
+  z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'must be exactly 64 hex characters (32 bytes)')
+    .transform((value) => value.toLowerCase())
+    .refine((value) => !oneByteRepeated(value), 'must not be one byte repeated 32 times')
+    .optional(),
+);
+
 const envSchema = z.object({
   API_PORT: z.preprocess(
     unsetIfEmpty,
@@ -79,6 +103,7 @@ const envSchema = z.object({
   DATABASE_PATH: pathSetting('data/rampart.sqlite'),
   HOSTED: booleanSetting,
   LOG_LEVEL: z.preprocess(unsetIfEmpty, z.enum(LOG_LEVELS).default('info')),
+  RAMPART_SECRET_KEY: secretKeySetting,
   RATE_LIMIT_MULTIPLIER: z.preprocess(
     unsetIfEmpty,
     z
@@ -88,6 +113,7 @@ const envSchema = z.object({
       .pipe(z.number().int().min(1, 'must be from 1 to 1000').max(1000, 'must be from 1 to 1000'))
       .default(1),
   ),
+  SECRET_KEY_PATH: pathSetting('data/rampart-secret.key'),
   SERVE_WEB: booleanSetting,
   STORAGE_PATH: pathSetting('data/files'),
   WEB_DIST_PATH: pathSetting('../web/dist'),
@@ -126,5 +152,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     serveWeb: result.data.SERVE_WEB,
     webDistPath: resolveApiPath(result.data.WEB_DIST_PATH),
     rateLimitMultiplier: result.data.RATE_LIMIT_MULTIPLIER,
+    secretKeyHex: result.data.RAMPART_SECRET_KEY ?? null,
+    secretKeyPath: resolveApiPath(result.data.SECRET_KEY_PATH),
   };
 }

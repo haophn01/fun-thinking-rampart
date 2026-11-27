@@ -7,7 +7,7 @@ interface StartupRule {
   explain: string;
 }
 
-/** In the order the error lists them. Later sprints append FIPS and secret-key rules. */
+/** In the order the error lists them. Later sprints append the FIPS rule. */
 const STARTUP_RULES: readonly StartupRule[] = [
   {
     id: 'hosted-needs-serve-web',
@@ -24,6 +24,12 @@ const STARTUP_RULES: readonly StartupRule[] = [
     broken: (config) =>
       config.hosted && (config.logLevel === 'debug' || config.logLevel === 'trace'),
     explain: 'HOSTED=true refuses LOG_LEVEL debug and trace',
+  },
+  {
+    id: 'hosted-needs-secret-key',
+    broken: (config) => config.hosted && config.secretKeyHex === null,
+    explain:
+      'HOSTED=true needs RAMPART_SECRET_KEY (64 hex characters); hosted mode never uses a key file',
   },
 ];
 

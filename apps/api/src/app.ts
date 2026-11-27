@@ -14,6 +14,8 @@ import type { SecurityContext } from './security/context';
 import { registerSecurityHeaders } from './security/headers';
 import { registerRateLimit } from './security/rate-limit';
 import { registerRouteTable } from './security/route-table';
+import { resolveMasterKey } from './security/secret-key';
+import { deriveKeys } from './security/secrets';
 import { registerWebApp } from './security/web-app';
 
 /** JSON bodies over 1 MiB are refused with 413. */
@@ -28,6 +30,11 @@ export interface BuildAppOptions {
   logStream?: DestinationStream;
   /** The app clock; the real one when omitted. Tests pass a clock they can move. */
   now?: () => Date;
+  /**
+   * The 32-byte master key `server.ts` loaded. Omitted, `config.secretKeyHex` is used, else a
+   * random in-memory key (tests only: nothing sealed with it outlives the app).
+   */
+  secretKey?: Buffer;
   /** Where uploaded files live; a local store at `config.storagePath` when omitted. */
   store?: FileStore;
 }
@@ -47,8 +54,10 @@ export function buildApp({
   db,
   logStream,
   now = () => new Date(),
+  secretKey,
   store = createLocalStore(config.storagePath),
 }: BuildAppOptions): FastifyInstance {
+  const keys = deriveKeys(resolveMasterKey(secretKey, config));
   const app = Fastify({
     loggerInstance: createLogger(config.logLevel, logStream),
     logController: new LogController({ requestIdLogLabel: 'requestId' }),
@@ -90,7 +99,7 @@ export function buildApp({
   });
 
   // Everything else under /api needs a session unless the route says it is public.
-  registerApiRoutes(app, { config, db, now, store });
+  registerApiRoutes(app, { config, db, keys, now, store });
 
   // Last, so the api routes always win over the web app's fallback.
   registerWebApp(app, ctx);
