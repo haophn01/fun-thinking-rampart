@@ -367,4 +367,97 @@ describe('UsersPanel', () => {
     await user.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('listitem', { name: 'Ada Admin' })).toBeInTheDocument();
   });
+
+  it('two-step status per user', async () => {
+    usersApi(ADA, {
+      'GET /api/users': () =>
+        json(200, {
+          users: [
+            { ...ADA, mfaEnrolled: true },
+            { ...KIM, mfaEnrolled: false },
+          ],
+        }),
+    });
+    await renderSettings();
+    await screen.findByRole('listitem', { name: 'Kim' });
+    expect(within(row('Ada Admin')).getByText('Two-step sign-in: Set up')).toBeInTheDocument();
+    expect(within(row('Kim')).getByText('Two-step sign-in: Not set up')).toBeInTheDocument();
+  });
+
+  it('two-step status reads Not set up when the field is missing', async () => {
+    usersApi(ADA);
+    await renderSettings();
+    await screen.findByRole('listitem', { name: 'Kim' });
+    expect(within(row('Kim')).getByText('Two-step sign-in: Not set up')).toBeInTheDocument();
+    expect(within(row('Ada Admin')).getByText('Two-step sign-in: Not set up')).toBeInTheDocument();
+  });
+
+  describe('reset two-step sign-in', () => {
+    const RESET = 'Reset two-step sign-in';
+    function enrolledApi(me: User, resetHandler?: Handler) {
+      let kim: Record<string, unknown> = { ...KIM, mfaEnrolled: true };
+      return usersApi(me, {
+        'GET /api/users': () => json(200, { users: [{ ...ADA, mfaEnrolled: false }, kim] }),
+        'POST /api/users/u-2/mfa/reset':
+          resetHandler ??
+          (() => {
+            kim = { ...KIM, mfaEnrolled: false };
+            return json(200, { user: kim });
+          }),
+      });
+    }
+
+    it('resets an enrolled user once and shows the notice', async () => {
+      const user = userEvent.setup();
+      const api = enrolledApi(ADA);
+      await renderSettings();
+      await screen.findByRole('listitem', { name: 'Kim' });
+      // The unenrolled admin row has no button.
+      expect(within(row('Ada Admin')).queryByRole('button', { name: RESET })).toBeNull();
+      await user.click(within(row('Kim')).getByRole('button', { name: RESET }));
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        'Two-step sign-in reset for Kim. They set it up again at their next sign-in.',
+      );
+      expect(api.sent('POST /api/users/u-2/mfa/reset')).toHaveLength(1);
+      expect(api.sent('POST /api/users/u-2/mfa/reset')[0]?.body).toBeUndefined();
+      expect(within(row('Kim')).getByText('Two-step sign-in: Not set up')).toBeInTheDocument();
+      expect(within(row('Kim')).queryByRole('button', { name: RESET })).toBeNull();
+    });
+
+    it('gives a contributor no button', async () => {
+      const api = enrolledApi(KIM);
+      await renderSettings();
+      expect(screen.queryByRole('button', { name: RESET })).toBeNull();
+      expect(api.sent('GET /api/users')).toHaveLength(0);
+    });
+
+    it('shows an Alert when the reset fails and keeps the row enrolled', async () => {
+      const user = userEvent.setup();
+      enrolledApi(ADA, () => apiError(500, 'internal_error'));
+      await renderSettings();
+      await screen.findByRole('listitem', { name: 'Kim' });
+      await user.click(within(row('Kim')).getByRole('button', { name: RESET }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        "Couldn't save the change. Try again.",
+      );
+      expect(within(row('Kim')).getByText('Two-step sign-in: Set up')).toBeInTheDocument();
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+  });
+
+  it('resetting your own two-step sign-in signs you out', async () => {
+    const user = userEvent.setup();
+    const api = usersApi(ADA, {
+      'GET /api/users': () => json(200, { users: [{ ...ADA, mfaEnrolled: true }, KIM] }),
+      'POST /api/users/u-1/mfa/reset': () => json(200, { user: { ...ADA, mfaEnrolled: false } }),
+    });
+    await renderSettings();
+    await screen.findByRole('listitem', { name: 'Ada Admin' });
+    api.signOut();
+    await user.click(
+      within(row('Ada Admin')).getByRole('button', { name: 'Reset two-step sign-in' }),
+    );
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByText('Your session ended. Sign in again.')).toBeInTheDocument();
+  });
 });
