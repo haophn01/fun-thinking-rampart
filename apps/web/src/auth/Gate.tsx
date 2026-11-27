@@ -1,9 +1,13 @@
 import { PRODUCT_NAME } from '@rampart/api/contract';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { tooManyRequestsText } from '../api/too-many';
 import { Alert, Button } from '../look';
 import { usePageTitle } from '../pages/usePageTitle';
 import { RegistrationMarks } from '../shell/RegistrationMarks';
 import styles from './auth.module.css';
+import { ChangePasswordPage } from './ChangePasswordPage';
+import { IdleLock } from './IdleLock';
+import { LockScreen } from './LockScreen';
 import { useSession } from './session';
 import { SetupPage } from './SetupPage';
 import { SignInPage } from './SignInPage';
@@ -26,24 +30,84 @@ function AuthFrame({ children }: { children: ReactNode }) {
   );
 }
 
-function SessionError({ onRetry }: { onRetry: () => void }) {
+function SessionError({
+  retryAfterSeconds,
+  onRetry,
+}: {
+  retryAfterSeconds: number | null;
+  onRetry: () => void;
+}) {
   usePageTitle('Unavailable');
+  const retry = (
+    <Button className={styles.retry} onClick={onRetry}>
+      Retry
+    </Button>
+  );
+  // A 429 is the api answering: say how long to wait, not that it can't be reached.
+  if (retryAfterSeconds !== null) {
+    return (
+      <Alert tone="error">
+        <p>{tooManyRequestsText({ retryAfterSeconds })}</p>
+        {retry}
+      </Alert>
+    );
+  }
   return (
     <Alert tone="error" title="Can't load your session">
       <p>Check that the API is running, then retry.</p>
-      <Button className={styles.retry} onClick={onRetry}>
-        Retry
-      </Button>
+      {retry}
     </Alert>
   );
 }
 
-/** Shows what the session allows: Loading, Setup, Sign in, an error with Retry, or the app. */
+/**
+ * The app while a session holds: shown when signed in; kept mounted but `hidden` and `inert`
+ * (drafts survive, nothing shows or takes focus) next to the lock screen when the session locks.
+ */
+function HeldApp({ locked, children }: { locked: boolean; children: ReactNode }) {
+  return (
+    <>
+      <div data-testid="gate-app" hidden={locked} inert={locked}>
+        {children}
+      </div>
+      {locked ? (
+        <AuthFrame>
+          <LockScreen />
+        </AuthFrame>
+      ) : (
+        <IdleLock />
+      )}
+    </>
+  );
+}
+
+/**
+ * Shows what the session allows: Loading, Setup, Sign in, an error with Retry, the lock screen,
+ * the forced password change, or the app.
+ */
 export function Gate({ children }: { children: ReactNode }) {
   const session = useSession();
+  // Whether the app has been shown since the page loaded, so a lock keeps it mounted. A page
+  // that loads into a locked session never mounts it.
+  const [appShown, setAppShown] = useState(false);
+  const holdApp = session.status === 'signed_in' || (session.status === 'locked' && appShown);
+  if (holdApp !== appShown) setAppShown(holdApp);
+
+  if (holdApp) return <HeldApp locked={session.status === 'locked'}>{children}</HeldApp>;
   switch (session.status) {
     case 'signed_in':
-      return children;
+    case 'locked':
+      return (
+        <AuthFrame>
+          <LockScreen />
+        </AuthFrame>
+      );
+    case 'password_change':
+      return (
+        <AuthFrame>
+          <ChangePasswordPage forced />
+        </AuthFrame>
+      );
     case 'setup':
       return (
         <AuthFrame>
@@ -59,7 +123,10 @@ export function Gate({ children }: { children: ReactNode }) {
     case 'error':
       return (
         <AuthFrame>
-          <SessionError onRetry={() => void session.refresh()} />
+          <SessionError
+            retryAfterSeconds={session.retryAfterSeconds}
+            onRetry={() => void session.refresh()}
+          />
         </AuthFrame>
       );
     case 'loading':

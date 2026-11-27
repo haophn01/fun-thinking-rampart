@@ -1,27 +1,37 @@
 import { healthResponseSchema } from '@rampart/api/contract';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet } from '../api/client';
+import { ApiError, apiGet } from '../api/client';
+import { tooManyRequestsText } from '../api/too-many';
 import { Button } from '../look';
 import styles from './ApiStatus.module.css';
 
-/** Calls health once on load. Silent while ok; an alert with Retry when the api cannot be reached. */
+/** What the banner says for a failed health check: the wait on a 429, else unreachable. */
+function failureText(error: unknown): string {
+  if (error instanceof ApiError && error.status === 429) return tooManyRequestsText(error.details);
+  return "Can't reach the API";
+}
+
+/**
+ * Calls health once on load. Silent while ok; an alert with Retry when the api cannot be reached,
+ * or the wait when it answers 429.
+ */
 export function ApiStatus() {
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
   const latest = useRef(0);
 
   const check = useCallback(async () => {
     latest.current += 1;
     const run = latest.current;
-    let reachable = true;
+    let next: string | null = null;
     try {
       await apiGet('/api/health', healthResponseSchema);
-    } catch {
-      reachable = false;
+    } catch (error) {
+      next = failureText(error);
     }
     // A newer check (or an unmount) supersedes this one.
     if (run !== latest.current) return;
-    setFailed(!reachable);
+    setFailure(next);
     setChecking(false);
   }, []);
 
@@ -32,10 +42,10 @@ export function ApiStatus() {
     };
   }, [check]);
 
-  if (!failed) return null;
+  if (failure === null) return null;
   return (
     <div role="alert" className={styles.alert}>
-      <p className={styles.message}>Can&apos;t reach the API</p>
+      <p className={styles.message}>{failure}</p>
       <Button
         disabled={checking}
         onClick={() => {
