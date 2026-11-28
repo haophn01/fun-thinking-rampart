@@ -35,3 +35,4 @@ An append-only record of every status and content change: who, what, before and 
 - 2026-11-27 · plan security-hardening · two-step set up, verified and reset actions (sec-mfa sprint, PRs #38, #39 and wave 3)
 - 2026-11-27 · plan security-hardening · hash chain on write, one-time legacy backfill at start, `GET /api/audit/verify` (sec-integrity A1)
 - 2026-11-27 · plan security-hardening · Settings › Audit log › **Verify audit log** button: "Audit log intact" with the event count, the newest hash and the time checked, or "Audit log broken" naming the first broken event and why; only the newest answer is shown, with Retry and the 429 wait on failure (sec-integrity V1, PR #43)
+- 2026-11-27 · plan security-hardening · plan complete: hash chain with Verify merged; the chain is unkeyed and unanchored (SECURITY.md Known gaps), found in review round 1 · [report](../reports/security-hardening.html) · [PR #45](https://github.com/haophn01/fun-thinking-rampart/pull/45)

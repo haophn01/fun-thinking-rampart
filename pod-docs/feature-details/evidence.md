@@ -36,3 +36,4 @@ flowchart TD
 ## History
 - 2026-11-25 · plan cmmc-l2-grc · built (poam-evidence sprint, PRs #7 to #9) · [report](../reports/cmmc-l2-grc.html)
 - 2026-11-27 · plan security-hardening · uploads checked by content: the allowed list narrowed to eight types, `file_refused`, the zip guard and sanitized names (sec-integrity sprint, U2)
+- 2026-11-27 · plan security-hardening · plan complete: byte-based upload checks merged to main; a .txt starting <body><script> is still accepted (queued, someday) · [report](../reports/security-hardening.html) · [PR #45](https://github.com/haophn01/fun-thinking-rampart/pull/45)

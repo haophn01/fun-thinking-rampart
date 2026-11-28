@@ -62,3 +62,4 @@ sequenceDiagram
 - 2026-11-26 · plan security-hardening · 30 min / 8 h sessions, session lock, password blocklist and history, temporary passwords, sign-in notice (sec-auth sprint, PRs #33 to #35); driven end to end by `e2e/auth.spec.ts`, the screens measured by `e2e/look.spec.ts`, and the logs checked for secrets over the new flows
 - 2026-11-27 · plan security-hardening · two-step sign-in required for every account: pending sessions at sign-in and setup, the `mfa_required` gate (sec-mfa sprint, A2, wave 3)
 - 2026-11-27 · plan security-hardening · `FIPS_MODE` startup check and PBKDF2-SHA-256 passwords when FIPS is required, Argon2id hashes still verifying with no rehash (sec-integrity sprint, F1)
+- 2026-11-27 · plan security-hardening · plan complete: sessions, lock, passwords, notice, MFA gate and FIPS_MODE merged to main; reviewed in two rounds · [report](../reports/security-hardening.html) · [PR #45](https://github.com/haophn01/fun-thinking-rampart/pull/45)

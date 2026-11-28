@@ -1,9 +1,8 @@
 # Plan: Security hardening — Rampart as a Security Protection Asset
 
-_Generated: 2026-11-26 · Status: active · Grilled-with: pod (fast)_
+_Generated: 2026-11-26 · Status: archived · Grilled-with: pod (fast)_
 
 Port base: 3200
-<!-- autopilot-run: started=2026-11-26T09:30:00-08:00 sprints=0 waves=0 -->
 
 ## Goal
 Harden Rampart to the standard its own users are assessed against. The human chose to treat Rampart as a **Security Protection Asset** (Q8), so the tool itself meets the NIST SP 800-171 requirements it touches:
