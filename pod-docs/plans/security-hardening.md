@@ -177,7 +177,7 @@ erDiagram
 | sec-baseline | Route authz/CSRF/IDOR matrix; supply-chain CI (pinned actions, OSV/audit, Semgrep, pnpm settings); production web serving with CSP and headers; `HOSTED` mode; rate limiting; log redaction tests | done | — |
 | sec-auth | Migration 0006; sessions (30 min / 8 h, rotation, sign out everywhere); password blocklist, history, change page, temporary password; sign-in notice; session lock screen | done | sec-baseline |
 | sec-mfa | TOTP enrollment and challenge for every user, recovery codes, replay guard, encrypted secrets, admin reset; e2e sign-in path | done | sec-auth |
-| sec-integrity | Upload hardening; hash-chained audit log with Verify; FIPS_MODE check and PBKDF2 option; SECURITY.md (disclosure, STRIDE, 800-171 self-mapping); docs and e2e | active | sec-mfa |
+| sec-integrity | Upload hardening; hash-chained audit log with Verify; FIPS_MODE check and PBKDF2 option; SECURITY.md (disclosure, STRIDE, 800-171 self-mapping); docs and e2e | done | sec-mfa |
 
 ## Look
 `Inherits plan cmmc-l2-grc: **C · Inspection**`, unchanged, with existing controls only. New screens follow the existing Setup and Sign in pages: a Sheet card on Vellum, ballooned section labels, and 16 px minimum text. The QR code is rendered as an inline SVG in Ink on Sheet, with the manual key shown in Space Mono. (default: no new look round, as in plan ssp-export-v2)

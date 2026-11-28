@@ -11,8 +11,8 @@ _From plan: pod-docs/plans/security-hardening.md · Slug: sec-integrity · Statu
 | 1 | F1 | FIPS_MODE startup check and PBKDF2-SHA-256 passwords | sec-integrity-F1 | #42 | done | deb2cc3 | — |
 | 2 | U2 | Upload hardening wired into evidence and policies | sec-integrity-U2 | #43 | done | 5f5d0a7 | U1 |
 | 2 | V1 | Settings › Audit log: Verify audit log | sec-integrity-V1 | #43 | done | 5f5d0a7 | A1 |
-| 3 | E1 | e2e: upload refusals, Verify, look of the Verify result | sec-integrity-E1 | — | pending | — | A1, U1, U2, V1 |
-| 3 | D1 | SECURITY.md: disclosure, STRIDE, 800-171 self-mapping | sec-integrity-D1 | — | pending | — | A1, U2, F1, V1 |
+| 3 | E1 | e2e: upload refusals, Verify, look of the Verify result | sec-integrity-E1 | #44 | done | a5ed547 | A1, U1, U2, V1 |
+| 3 | D1 | SECURITY.md: disclosure, STRIDE, 800-171 self-mapping | sec-integrity-D1 | #44 | done | a5ed547 | A1, U2, F1, V1 |
 
 ## Shared contract
 
@@ -245,3 +245,33 @@ Everything in the earlier contracts still holds (foundation, assessment, sec-bas
 - **Depends on:** A1, U2, F1, V1
 - **One-way door:** none
 - **Model:** opus
+
+## Sprint summary
+
+- **Synced with merge-target:** up to date (`main` has not moved since 91161a6).
+- **Slices shipped:** A1, U1 and F1 (#42); U2 and V1 (#43); E1 and D1 (#44).
+- **One-way door:** A1, the audit backfill. The human approved it ("merge the audit-chain wave"). The DB was backed up to `apps/api/data/rampart.pre-chain.sqlite` and to `D:/Projects/Rampart-backups/2026-11-27-pre-chain`. The human's app chained all 11 events.
+- **Queue:**
+  - resolved the A1 door
+  - added the human item "enable GitHub private vulnerability reporting" (before hosting)
+- **Decisions taken:**
+  - a corrupt stored hash fails sign-in with 401
+  - a fake file on a CUI item gets 415 before 409
+  - the web pre-check refuses invisible characters in names
+  - E1's red step shown by mutating the expected values
+- **Slice log:**
+  - A1: opus · high
+  - U1: opus · medium
+  - F1: opus · medium
+  - U2: opus · medium
+  - V1: sonnet · medium
+  - E1: opus · medium
+  - D1: opus · medium
+  - One 5-hour limit stop (E1 and D1), resumed with nothing lost. No stalls.
+- **Wave fixes:** none. The only board fix was that the branch names on the board are uppercase.
+- **Wave checks:** verify 1,350 → 1,368 → 1,373; e2e 26 → 26 → 29. CI green on all 7 jobs for #42, #43 and #44.
+- **Agent context at hand-back:** about 1,180,000 tokens (the sum of final context sizes, not billed).
+- **For plan complete:**
+  - `SECURITY.md` maps every plan Verification item to a test.
+  - `features.md` rows were updated by the slices.
+  - Known gaps are listed in `SECURITY.md`.
