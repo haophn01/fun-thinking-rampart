@@ -3,6 +3,8 @@
 // Scores are planned from the catalog and the regulation data, never from spelled-out points.
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { expect, test, type Page, type Response } from '@playwright/test';
 import { loadCatalog, type Requirement } from '@rampart/catalog';
 import { SSP_LINT_RULES, scoreMax } from '@rampart/rules';
@@ -11,13 +13,16 @@ import {
   NIST_STATUS_LABELS,
   PRODUCT_NAME,
   SYSTEM_PROFILE_FIELDS,
+  UPLOAD_EXTENSIONS,
   approvalResponseSchema,
   assessmentViewSchema,
   assetResponseSchema,
   auditPageSchema,
+  auditVerifyResponseSchema,
   diagramsResponseSchema,
   documentControlSchema,
   evidenceItemResponseSchema,
+  evidenceListSchema,
   objectiveWriteResponseSchema,
   poamItemResponseSchema,
   policyListSchema,
@@ -36,6 +41,15 @@ import {
   type SystemProfileFieldKey,
 } from '../apps/api/src/contract/index.ts';
 import { docxPart, pngOf } from '../apps/api/ssp/testing/docx-text.ts';
+import {
+  fakeExe,
+  sampleDocx,
+  samplePdf,
+  samplePng,
+  sampleXlsx,
+  zipBombDocx,
+} from '../apps/api/src/uploads/testing/samples.ts';
+import { ACTION_LABELS } from '../apps/web/src/pages/settings/auditLabels.ts';
 import { api, linkDiagram, manualKey, nextTotpCode, uploadEvidence, type Api } from './helpers/api';
 import { docxMedia, docxText } from './helpers/docx';
 import {
@@ -89,6 +103,9 @@ const POLICY_FILE = {
   bytes: Buffer.from('# Access policy\n\nLeast privilege.\n'),
 };
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+const bytesOf = (text: string) => new TextEncoder().encode(text);
+/** What Evidence shows for a program renamed .pdf: `fileRefusedMessage`'s exact text. */
+const PROGRAM_AS_PDF = "This file's contents aren't a real PDF file. It looks like a program.";
 
 /** The export v2 outline: its ten level-1 headings, exact text, in document order. */
 const SSP_HEADINGS = [
@@ -169,7 +186,7 @@ const APPROVAL = {
 const FUTURE_REQUIREMENT = requirementById(catalog, catalog.requirements[1]?.id ?? '');
 const FUTURE_STATEMENT = `${FUTURE_REQUIREMENT.id} will be met once MFA is rolled out; the date is TBD.`;
 
-const pathOf = (response: Response) => decodeURIComponent(new URL(response.url()).pathname);
+const pathOf = (message: { url(): string }) => decodeURIComponent(new URL(message.url()).pathname);
 
 /** Waits for the answer to `method path` (exact, decoded). Start it before the action. */
 function answer(page: Page, method: string, path: string | RegExp) {
@@ -923,7 +940,213 @@ test.describe('verification path', () => {
     expectStamped(profile, 'created');
     expect(profile?.after).toMatchObject({ systemName: PROFILE.systemName });
   });
+
+  test('upload refusals', async () => {
+    const title = 'Upload guard check';
+    const { item } = await client.write(
+      'POST',
+      '/api/evidence',
+      { title, description: null, containsCui: false, objectiveIds: [] },
+      evidenceItemResponseSchema,
+    );
+    const versionsPath = `/api/evidence/${item.id}/versions`;
+    const versionCount = async () =>
+      (await client.read('/api/evidence', evidenceListSchema)).items.find((i) => i.id === item.id)
+        ?.versions.length;
+
+    // Every upload the page sends for this item, so a pre-check refusal can show it sent none.
+    const sent: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && pathOf(request) === versionsPath) sent.push(request.url());
+    });
+
+    const loaded = answer(page, 'GET', '/api/evidence');
+    await page.goto('/evidence');
+    await loaded;
+    const card = page.getByRole('listitem').filter({
+      has: page.getByRole('heading', { name: title, exact: true }),
+    });
+    await card.getByRole('button', { name: `Details for ${title}` }).click();
+    const field = card.getByLabel('Upload a file');
+
+    // A program renamed report.pdf: the api reads its bytes and refuses them.
+    const refused = answer(page, 'POST', versionsPath);
+    await field.setInputFiles({
+      name: 'report.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from(fakeExe()),
+    });
+    const refusal = await refused;
+    expect(refusal.status()).toBe(415);
+    expect(await refusal.json()).toMatchObject({
+      error: { code: 'file_refused', details: { reason: 'content_mismatch', extension: '.pdf' } },
+    });
+    await expect(
+      card.getByText(PROGRAM_AS_PDF, {
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(sent).toHaveLength(1);
+
+    // An SVG is refused by its name before anything is sent, with the allowed list.
+    await field.setInputFiles({
+      name: 'diagram.svg',
+      mimeType: 'image/svg+xml',
+      buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+    });
+    await expect(
+      card.getByText(`This file type can't be uploaded. Allowed: ${UPLOAD_EXTENSIONS.join(' ')}`, {
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(sent).toHaveLength(1);
+
+    // Saved data counts after a reload: neither added a version.
+    const reloaded = answer(page, 'GET', '/api/evidence');
+    await page.reload();
+    await reloaded;
+    await expect(card.getByText('No versions yet', { exact: true })).toBeVisible();
+    expect(await versionCount()).toBe(0);
+    expect(sent).toHaveLength(1);
+
+    // The rest through the api, as the same user.
+    const html = await client.upload(versionsPath, 'page.html', bytesOf('<!doctype html><p>x'));
+    expect(html.status()).toBe(415);
+    expect(await html.json()).toMatchObject({
+      error: { code: 'unsupported_file_type', details: { allowed: [...UPLOAD_EXTENSIONS] } },
+    });
+    const markup = await client.upload(
+      versionsPath,
+      'notes.txt',
+      bytesOf('<!doctype html>\n<html><body>hi</body></html>\n'),
+    );
+    expect(markup.status()).toBe(415);
+    expect(await markup.json()).toMatchObject({
+      error: {
+        code: 'file_refused',
+        message: "This text file holds web markup (HTML, SVG or XML), which can't be uploaded.",
+        details: { reason: 'markup_in_text', extension: '.txt' },
+      },
+    });
+    const bomb = await client.upload(versionsPath, 'controls.docx', zipBombDocx());
+    expect(bomb.status()).toBe(415);
+    expect(await bomb.json()).toMatchObject({
+      error: {
+        code: 'file_refused',
+        message: 'This file expands to more than 100 times its size.',
+        details: { reason: 'zip_ratio', extension: '.docx' },
+      },
+    });
+    expect(await versionCount()).toBe(0);
+
+    const real: [string, Uint8Array][] = [
+      ['scan.pdf', samplePdf()],
+      ['photo.png', samplePng()],
+      ['procedure.docx', sampleDocx()],
+      ['inventory.xlsx', sampleXlsx()],
+    ];
+    for (const [name, bytes] of real) {
+      const accepted = await client.upload(versionsPath, name, bytes);
+      expect(accepted.status(), `${name} accepted`).toBe(201);
+    }
+    expect(await versionCount()).toBe(real.length);
+  });
+
+  test('audit log verifies', async () => {
+    const verified = await openVerify(page);
+    const shown = auditVerifyResponseSchema.parse(await verified.json());
+    const intact = page.getByRole('status').filter({ hasText: 'Audit log intact' });
+    await expect(intact).toBeVisible();
+
+    // The api's own answer, asked again: nothing was written in between.
+    const fromApi = await client.read('/api/audit/verify', auditVerifyResponseSchema);
+    expect(fromApi).toMatchObject({ ok: true, firstBroken: null });
+    expect(fromApi.checked).toBe(fromApi.total);
+    expect(fromApi.checked).toBeGreaterThan(1);
+    expect(shown.headHash).toBe(fromApi.headHash);
+    await expect(
+      intact.getByText(`All ${fromApi.checked.toLocaleString('en-US')} events check out.`, {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(intact.getByText(fromApi.headHash ?? '', { exact: true })).toBeVisible();
+    const hashFont = await intact
+      .getByText(fromApi.headHash ?? '', { exact: true })
+      .evaluate((el) => getComputedStyle(el).fontFamily);
+    expect(hashFont).toContain('Space Mono');
+  });
+
+  // Last: it tampers with this run's scratch database, so nothing may run after it.
+  test('audit log names an edited event', async () => {
+    const events = (
+      await client.read('/api/audit?entityType=evidence_item&limit=200', auditPageSchema)
+    ).events;
+    const target = events.find((e) => e.action === 'evidence.version_added');
+    expect(target, 'an evidence.version_added event').toBeDefined();
+    if (target === undefined) return;
+    editAuditEventAfter(target.id);
+
+    const verified = await openVerify(page);
+    const shown = auditVerifyResponseSchema.parse(await verified.json());
+    expect(shown).toMatchObject({
+      ok: false,
+      checked: target.id - 1,
+      firstBroken: { id: target.id, problem: 'hash_mismatch', action: 'evidence.version_added' },
+    });
+    const broken = page.getByRole('alert').filter({ hasText: 'Audit log broken' });
+    await expect(broken).toBeVisible();
+    const at = await page.evaluate((iso) => new Date(iso).toLocaleString(), target.at);
+    await expect(
+      broken.getByText(
+        `The chain breaks at event ${String(target.id)}: ${ACTION_LABELS['evidence.version_added']}, ${at}.`,
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      broken.getByText("Its contents don't match its hash: it was changed after it was written.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      broken.getByText(`${(target.id - 1).toLocaleString('en-US')} events before it check out.`, {
+        exact: true,
+      }),
+    ).toBeVisible();
+  });
 });
+
+/** Opens Settings › Audit log, clicks Verify audit log, and returns its answer. */
+async function openVerify(page: Page): Promise<Response> {
+  const loaded = answer(page, 'GET', '/api/audit');
+  await page.goto('/settings');
+  await loaded;
+  const section = page.getByRole('region', { name: 'Audit log' });
+  const verified = answer(page, 'GET', '/api/audit/verify');
+  await section.getByRole('button', { name: 'Verify audit log' }).click();
+  const response = await verified;
+  expect(response.status()).toBe(200);
+  return response;
+}
+
+/**
+ * Rewrites one audit event's `after` in this run's scratch database, as someone with the file
+ * could. The update trigger refuses that edit, so it is dropped first. Only the e2e run's own
+ * database (the config's `E2E_RUN_DIR`) is ever opened.
+ */
+function editAuditEventAfter(id: number) {
+  const runDir = process.env.E2E_RUN_DIR;
+  if (runDir === undefined || runDir === '') throw new Error('E2E_RUN_DIR is not set');
+  const db = new DatabaseSync(join(runDir, 'e2e.sqlite'));
+  try {
+    db.exec('DROP TRIGGER IF EXISTS audit_event_no_update');
+    const changed = db
+      .prepare('UPDATE audit_event SET after = ? WHERE id = ?')
+      .run(JSON.stringify({ edited: 'outside Rampart' }), id);
+    expect(changed.changes).toBe(1);
+  } finally {
+    db.close();
+  }
+}
 
 /** Section 3's lines: from "3. Requirements" up to "4. Record of changes". */
 function requirementsSection(lines: readonly string[]): readonly string[] {
