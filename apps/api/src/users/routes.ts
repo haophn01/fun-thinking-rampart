@@ -4,10 +4,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { user } from '../../db/schema';
 import { recordAudit } from '../audit/record';
-import { hashPassword } from '../auth/password';
+import { clearSessionCookie } from '../auth/cookie';
+import { clearFailures } from '../auth/lockout';
+import { resetMfa } from '../auth/mfa/reset';
+import { hashPassword, passwordSchemeFor } from '../auth/password';
+import { checkNewPassword, pushPasswordHistory } from '../auth/password-policy';
 import { deleteUserSessions, type SessionStore } from '../auth/sessions';
 import {
-  SESSION_COOKIE,
   createUserRequestSchema,
   updateUserRequestSchema,
   userResponseSchema,
@@ -26,7 +29,7 @@ type Profile = Pick<UserRow, (typeof PROFILE_KEYS)[number]>;
 
 const paramsSchema = z.object({ id: z.string() });
 
-/** The public shape: no hash, no lockout state. */
+/** The public shape: no hash, no lockout state, no MFA secret (only whether it is set up). */
 function toUser(row: UserRow): User {
   return {
     id: row.id,
@@ -35,6 +38,7 @@ function toUser(row: UserRow): User {
     role: row.role,
     active: row.active,
     createdAt: row.createdAt,
+    mfaEnrolled: row.mfaEnrolledAt !== null,
   };
 }
 
@@ -75,11 +79,12 @@ export function profileChanges(
 
 async function createUser(deps: ApiDeps, request: FastifyRequest): Promise<UserRow> {
   const body = createUserRequestSchema.parse(request.body);
+  checkNewPassword(body.password);
   const taken = () => new AppError('email_taken', 'That email is already used.');
   if (deps.db.select({ id: user.id }).from(user).where(eq(user.email, body.email)).get()) {
     throw taken();
   }
-  const passwordHash = await hashPassword(body.password);
+  const passwordHash = await hashPassword(body.password, passwordSchemeFor(deps.config));
   const now = deps.now();
   const at = now.toISOString();
   return deps.db.transaction((tx) => {
@@ -93,8 +98,17 @@ async function createUser(deps: ApiDeps, request: FastifyRequest): Promise<UserR
       role: body.role,
       active: true,
     };
+    // An admin-set password is temporary: the user chooses their own at first sign-in.
     tx.insert(user)
-      .values({ id, ...created, passwordHash, createdAt: at, updatedAt: at })
+      .values({
+        id,
+        ...created,
+        passwordHash,
+        mustChangePassword: true,
+        passwordChangedAt: at,
+        createdAt: at,
+        updatedAt: at,
+      })
       .run();
     recordAudit(tx, {
       at: now,
@@ -120,7 +134,11 @@ async function updateUser(
   const { id } = paramsSchema.parse(request.params);
   const body = updateUserRequestSchema.parse(request.body);
   if (!findUser(deps.db, id)) throw notFound();
-  const passwordHash = body.password === undefined ? null : await hashPassword(body.password);
+  if (body.password !== undefined) checkNewPassword(body.password);
+  const passwordHash =
+    body.password === undefined
+      ? null
+      : await hashPassword(body.password, passwordSchemeFor(deps.config));
   const now = deps.now();
   const actorUserId = request.auth?.user.id ?? null;
 
@@ -138,11 +156,18 @@ async function updateUser(
       }
     }
 
+    if (passwordHash !== null) {
+      // A reset is temporary and remembered: the replaced hash goes to history, the user must
+      // choose their own at next sign-in, and a lockout lifts so the new password works at once.
+      pushPasswordHistory(tx, id, current.passwordHash, now);
+      clearFailures(tx, id);
+    }
     tx.update(user)
       .set({
         ...after,
-        // A reset also lifts a lockout, so the new password works at once.
-        ...(passwordHash === null ? {} : { passwordHash, failedSignIns: 0, lockedUntil: null }),
+        ...(passwordHash === null
+          ? {}
+          : { passwordHash, mustChangePassword: true, passwordChangedAt: now.toISOString() }),
         updatedAt: now.toISOString(),
       })
       .where(eq(user.id, id))
@@ -171,15 +196,36 @@ async function updateUser(
         requestId: request.id,
       });
     }
-    const endsSessions = passwordHash !== null || after.active === false;
+    // A reset, a deactivation or a real role change signs the user out everywhere.
+    const endsSessions =
+      passwordHash !== null || after.active === false || after.role !== undefined;
     if (endsSessions) deleteUserSessions(tx, id);
     const updated = findUser(tx, id);
     if (!updated) throw notFound();
     return { row: updated, endedOwnSession: endsSessions && id === actorUserId };
   });
   if (endedOwnSession) {
-    void reply.clearCookie(SESSION_COOKIE, { httpOnly: true, sameSite: 'strict', path: '/' });
+    clearSessionCookie(reply, deps);
   }
+  return row;
+}
+
+/**
+ * `POST /api/users/:id/mfa/reset`: clears the user's two-step sign-in and ends all their sessions
+ * (clearing the cookie when they are the caller). Nothing stored: 200 with nothing changed.
+ */
+function resetUserMfa(deps: ApiDeps, request: FastifyRequest, reply: FastifyReply): UserRow {
+  const { id } = paramsSchema.parse(request.params);
+  const actorUserId = request.auth?.user.id ?? null;
+  const now = deps.now();
+  const { row, changed } = deps.db.transaction((tx) => {
+    if (!findUser(tx, id)) throw notFound();
+    const changed = resetMfa(tx, id, { actorUserId, requestId: request.id, now });
+    const updated = findUser(tx, id);
+    if (!updated) throw notFound();
+    return { row: updated, changed };
+  });
+  if (changed && id === actorUserId) clearSessionCookie(reply, deps);
   return row;
 }
 
@@ -201,6 +247,11 @@ export function registerUserRoutes(app: FastifyInstance, deps: ApiDeps): void {
 
   app.patch('/api/users/:id', { config: { role: 'admin' } }, async (request, reply) => {
     const row = await updateUser(deps, request, reply);
+    return respond(userResponseSchema, { user: toUser(row) });
+  });
+
+  app.post('/api/users/:id/mfa/reset', { config: { role: 'admin' } }, (request, reply) => {
+    const row = resetUserMfa(deps, request, reply);
     return respond(userResponseSchema, { user: toUser(row) });
   });
 }

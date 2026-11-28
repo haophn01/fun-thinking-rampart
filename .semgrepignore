@@ -1,0 +1,12 @@
+# Paths semgrep scan skips (the semgrep CI job). A .semgrepignore replaces semgrep's defaults, so
+# the dependency and build folders are listed here too.
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.claude/
+# Test data: the known-vulnerable fixture and canned audit reports, not shipping code.
+tests/fixtures/
+# The .docx templates and their sources.
+templates/

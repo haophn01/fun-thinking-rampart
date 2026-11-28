@@ -127,7 +127,7 @@ export function registerErrorHandling(app: FastifyInstance): void {
           : 'request failed';
       request.log.error({ err: error }, message);
     } else {
-      request.log.info({ code: response.code }, 'request rejected');
+      request.log.info({ errorCode: response.code }, 'request rejected');
     }
     return reply.code(response.statusCode).send(envelope(response, request.id));
   });

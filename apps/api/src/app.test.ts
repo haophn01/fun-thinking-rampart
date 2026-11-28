@@ -319,12 +319,18 @@ describe('api app', () => {
     });
     for (const url of ['/api/health', '/api/nope', '/api/test/boom']) {
       const response = await app.inject({ url });
-      const csp = String(response.headers['content-security-policy']);
-      expect(csp, url).toContain("default-src 'none'");
-      expect(csp, url).toContain("frame-ancestors 'none'");
+      expect(response.headers['content-security-policy'], url).toBe(
+        "default-src 'none';base-uri 'none';form-action 'none';frame-ancestors 'none'",
+      );
       expect(response.headers['x-content-type-options'], url).toBe('nosniff');
       expect(response.headers['x-frame-options'], url).toBe('DENY');
       expect(response.headers['x-powered-by'], url).toBeUndefined();
+      expect(response.headers['referrer-policy'], url).toBe('no-referrer');
+      expect(response.headers['permissions-policy'], url).toBe(
+        'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
+      );
+      // Local mode is plain http: HSTS would pin the browser to https it can't reach.
+      expect(response.headers['strict-transport-security'], url).toBeUndefined();
     }
   });
 

@@ -1,9 +1,23 @@
+import { randomBytes } from 'node:crypto';
+import { and, eq, isNull, max } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { openDb, runMigrations, type AppDb, type DbHandle } from '../../db/client';
+import { evidenceItem, evidenceVersion, session, user } from '../../db/schema';
 import { createMemoryStore, type MemoryFileStore } from '../../storage';
 import { buildApp } from '../app';
-import { loadConfig, type LogLevel } from '../config';
-import { CSRF_HEADER, SESSION_COOKIE, sessionResponseSchema, type SessionUser } from '../contract';
+import { sessionCookieName } from '../auth/cookie';
+import { base32Decode } from '../auth/mfa/base32';
+import { totpAt } from '../auth/mfa/totp';
+import { tokenDigest } from '../auth/sessions';
+import { loadConfig, type Config, type LogLevel } from '../config';
+import {
+  CSRF_HEADER,
+  SESSION_COOKIE,
+  mfaEnrollmentResponseSchema,
+  sessionResponseSchema,
+  type SessionUser,
+} from '../contract';
+import { decryptSecret, deriveKeys, encryptSecret, type DerivedKeys } from '../security/secrets';
 
 /** The admin `setupAdmin()` creates unless told otherwise. */
 export const ADMIN = {
@@ -11,6 +25,16 @@ export const ADMIN = {
   displayName: 'Ada Admin',
   password: 'correct horse battery',
 } as const;
+
+/** `RAMPART_SECRET_KEY` for every harness app unless `env` overrides it: a test key only. */
+export const HARNESS_SECRET_KEY = '0123456789abcdef'.repeat(4);
+
+/**
+ * The TOTP secret (base32) `setupAdmin()` and `signIn()` enroll an unenrolled user with, so
+ * suites get a full session. Test fixture: RFC 6238's published secret ("12345678901234567890").
+ */
+// nosemgrep: generic.secrets.security.detected-generic-secret.detected-generic-secret
+export const HARNESS_MFA_SECRET = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
 
 /** Where every harness clock starts. */
 export const START = new Date('2026-11-23T09:00:00.000Z');
@@ -66,6 +90,8 @@ export interface Clock {
 
 export interface Harness {
   app: FastifyInstance;
+  /** The config the app was built with, env overrides applied. */
+  config: Config;
   /** The app's file store: a fresh memory store unless one was passed in. */
   store: MemoryFileStore;
   db: AppDb;
@@ -73,18 +99,60 @@ export interface Harness {
   clock: Clock;
   /** Every log line the app wrote, parsed. */
   logs: Record<string, unknown>[];
+  /** The keys the app seals MFA secrets and recovery codes with. */
+  keys: DerivedKeys;
   /** A client with no session. */
   client(): Client;
-  /** Runs first-run setup and returns the signed-in admin's client. */
-  setupAdmin(admin?: { email?: string; displayName?: string; password?: string }): Promise<Client>;
-  /** Signs in and returns the client; throws unless the api answers 200. */
-  signIn(email: string, password: string): Promise<Client>;
+  /**
+   * Runs first-run setup and returns the signed-in admin's client, enrolled in MFA as `signIn`
+   * describes unless `{ mfa: 'as_stored' }`.
+   */
+  setupAdmin(
+    admin?: { email?: string; displayName?: string; password?: string },
+    options?: Pick<SignInOptions, 'mfa'>,
+  ): Promise<Client>;
+  /**
+   * Signs in and returns the client; throws unless the api answers 200. It first clears the
+   * user's `must_change_password` in the DB, so suites get a working session from an
+   * admin-set (temporary) password; `{ temporary: true }` keeps the flag. After the api answers,
+   * an unenrolled user is enrolled in the DB with `HARNESS_MFA_SECRET` and the new session is
+   * made not MFA-pending, so it is a full one; `{ mfa: 'as_stored' }` skips both.
+   */
+  signIn(email: string, password: string, options?: SignInOptions): Promise<Client>;
+  /** The TOTP code for the user's stored secret at `at` (the harness clock by default). */
+  totp(email: string, at?: Date): string;
+  /**
+   * Stores a file version on an evidence item as an upload from before the content guard did:
+   * the bytes go into the store and the row is inserted directly, so no check runs and no audit
+   * event is written. It is the item creator's, at the harness clock. Returns the version number.
+   */
+  seedFileVersion(input: SeedFileVersion): Promise<number>;
   close(): Promise<void>;
 }
 
+export interface SeedFileVersion {
+  evidenceItemId: string;
+  bytes: Uint8Array;
+  fileName: string;
+}
+
+export interface SignInOptions {
+  /** Keep `must_change_password` as the DB has it, so the session is gated. */
+  temporary?: boolean;
+  /** `as_stored`: leave the user's MFA and the session's `mfa_pending` as the api left them. */
+  mfa?: 'as_stored';
+}
+
 export interface HarnessOptions {
-  /** Defaults to `info`, captured in `logs`. */
+  /** Defaults to `info`, captured in `logs`. An `env.LOG_LEVEL` wins over it. */
   logLevel?: LogLevel;
+  /**
+   * Merged over the harness's env (`DATABASE_PATH=:memory:`, `RATE_LIMIT_MULTIPLIER=1000` so
+   * suites don't trip limits, `RAMPART_SECRET_KEY=HARNESS_SECRET_KEY`) before `loadConfig`.
+   * Rate-limit tests pass `{ RATE_LIMIT_MULTIPLIER: '1' }`; hosted tests pass `{ HOSTED: 'true' }`;
+   * `{ RAMPART_SECRET_KEY: '' }` runs the app on a random in-memory key.
+   */
+  env?: Record<string, string>;
   start?: Date;
   store?: MemoryFileStore;
 }
@@ -94,12 +162,16 @@ const FILE_NAME_HEADER = 'x-file-name';
 
 const COOKIE_VALUE = /^[^=]+=([^;]*)/;
 
-function cookieFrom(response: LightMyRequestResponse, current: string | null): string | null {
+function cookieFrom(
+  response: LightMyRequestResponse,
+  name: string,
+  current: string | null,
+): string | null {
   const header = response.headers['set-cookie'];
   const lines = header === undefined ? [] : Array.isArray(header) ? header : [header];
   let cookie = current;
   for (const line of lines) {
-    if (!line.startsWith(`${SESSION_COOKIE}=`)) continue;
+    if (!line.startsWith(`${name}=`)) continue;
     const value = COOKIE_VALUE.exec(line)?.[1] ?? '';
     const cleared =
       value === '' || /Max-Age=0\b/i.test(line) || /Expires=Thu, 01 Jan 1970/i.test(line);
@@ -124,11 +196,24 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     },
   };
   const logs: Record<string, unknown>[] = [];
-  const config = loadConfig({ DATABASE_PATH: ':memory:', LOG_LEVEL: options.logLevel ?? 'info' });
+  const config = loadConfig({
+    DATABASE_PATH: ':memory:',
+    LOG_LEVEL: options.logLevel ?? 'info',
+    RATE_LIMIT_MULTIPLIER: '1000',
+    RAMPART_SECRET_KEY: HARNESS_SECRET_KEY,
+    ...options.env,
+  });
+  // The client keeps whichever session cookie the app's mode uses.
+  const cookieName = sessionCookieName(config);
+  // The harness holds the master key, so it can seal the secrets it enrolls under the app's keys.
+  const masterKey =
+    config.secretKeyHex === null ? randomBytes(32) : Buffer.from(config.secretKeyHex, 'hex');
+  const keys = deriveKeys(masterKey);
   const app = buildApp({
     config,
     db: handle.db,
     now: () => clock.now(),
+    secretKey: masterKey,
     store,
     logStream: {
       write(line: string) {
@@ -144,7 +229,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
       user: null,
       async request(method, url, { body, rawBody, headers = {} } = {}) {
         const sent: Record<string, string> = {};
-        if (self.cookie !== null) sent.cookie = `${SESSION_COOKIE}=${self.cookie}`;
+        if (self.cookie !== null) sent.cookie = `${cookieName}=${self.cookie}`;
         if (self.csrfToken !== null) sent[CSRF_HEADER] = self.csrfToken;
         const payload = payloadOf(body, rawBody);
         if (rawBody === undefined && body !== undefined) sent['content-type'] = 'application/json';
@@ -158,7 +243,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
           headers: sent,
           ...(payload === undefined ? {} : { payload }),
         });
-        self.cookie = cookieFrom(response, self.cookie);
+        self.cookie = cookieFrom(response, cookieName, self.cookie);
         if (self.cookie === null) {
           self.csrfToken = null;
           self.user = null;
@@ -189,36 +274,110 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     return self;
   }
 
+  /** Enrolls the client's user with `HARNESS_MFA_SECRET` if unenrolled; its session is made full. */
+  function completeMfa(c: Client): void {
+    if (c.user === null || c.cookie === null) throw new Error('the api left no session');
+    const userId = c.user.id;
+    handle.db
+      .update(user)
+      .set({
+        mfaSecretEnc: encryptSecret(keys.mfaSecret, HARNESS_MFA_SECRET, `user:${userId}`),
+        mfaLastStep: null,
+        mfaEnrolledAt: clock.now().toISOString(),
+      })
+      .where(and(eq(user.id, userId), isNull(user.mfaEnrolledAt)))
+      .run();
+    handle.db
+      .update(session)
+      .set({ mfaPending: false })
+      .where(eq(session.id, tokenDigest(c.cookie)))
+      .run();
+  }
+
   async function setupAdmin(
     admin: { email?: string; displayName?: string; password?: string } = {},
+    options: Pick<SignInOptions, 'mfa'> = {},
   ) {
     const c = client();
     const response = await c.post('/api/setup', { ...ADMIN, ...admin });
     if (response.statusCode !== 201) {
       throw new Error(`setup answered ${String(response.statusCode)}: ${response.body}`);
     }
+    if (options.mfa !== 'as_stored') completeMfa(c);
     return c;
   }
 
-  async function signIn(email: string, password: string) {
+  function totp(email: string, at: Date = clock.now()): string {
+    const row = handle.db
+      .select({ id: user.id, enc: user.mfaSecretEnc })
+      .from(user)
+      .where(eq(user.email, email.trim().toLowerCase()))
+      .get();
+    if (row === undefined || row.enc === null) throw new Error(`no stored MFA secret for ${email}`);
+    const secret = decryptSecret(keys.mfaSecret, row.enc, `user:${row.id}`);
+    return totpAt(base32Decode(secret), at);
+  }
+
+  async function signIn(email: string, password: string, options: SignInOptions = {}) {
+    if (options.temporary !== true) {
+      // Emails are stored trimmed and lowercased.
+      const stored = email.trim().toLowerCase();
+      handle.db.update(user).set({ mustChangePassword: false }).where(eq(user.email, stored)).run();
+    }
     const c = client();
     const response = await c.post('/api/session', { email, password });
     if (response.statusCode !== 200) {
       throw new Error(`sign-in answered ${String(response.statusCode)}: ${response.body}`);
     }
+    if (options.mfa !== 'as_stored') completeMfa(c);
     return c;
+  }
+
+  async function seedFileVersion({ evidenceItemId, bytes, fileName }: SeedFileVersion) {
+    const item = handle.db
+      .select({ createdBy: evidenceItem.createdBy })
+      .from(evidenceItem)
+      .where(eq(evidenceItem.id, evidenceItemId))
+      .get();
+    if (item === undefined) throw new Error(`no evidence item ${evidenceItemId}`);
+    const stored = await store.put(bytes);
+    const newest = handle.db
+      .select({ version: max(evidenceVersion.version) })
+      .from(evidenceVersion)
+      .where(eq(evidenceVersion.evidenceId, evidenceItemId))
+      .get();
+    const version = (newest?.version ?? 0) + 1;
+    handle.db
+      .insert(evidenceVersion)
+      .values({
+        evidenceId: evidenceItemId,
+        version,
+        containsCui: false,
+        fileName,
+        size: stored.size,
+        sha256: stored.sha256,
+        storageKey: stored.key,
+        createdBy: item.createdBy,
+        createdAt: clock.now().toISOString(),
+      })
+      .run();
+    return version;
   }
 
   return {
     app,
+    config,
     store,
     db: handle.db,
     handle,
     clock,
     logs,
+    keys,
     client,
     setupAdmin,
     signIn,
+    totp,
+    seedFileVersion,
     async close() {
       await app.close();
       if (handle.sqlite.open) handle.sqlite.close();
@@ -241,4 +400,81 @@ function safeJson(text: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/** A session's request headers, for suites that call `app.inject` themselves. */
+export type SessionHeaders = Record<'cookie' | typeof CSRF_HEADER, string>;
+
+/** Each email's TOTP secret, kept across apps (and restarts) by `signInThroughApi`. */
+export type MfaSecrets = Map<string, Buffer>;
+
+const TOTP_STEP_MS = 30_000;
+
+/**
+ * Setup or sign-in for suites that drive `buildApp` without the harness (the restart tests),
+ * finishing the MFA step through the api as a user would. `enroll`: enroll and confirm, keeping
+ * the new secret in `secrets` under the user's email. `challenge`: verify with the kept secret,
+ * using the code of `at`'s step or, if that step was used, the next one's. Build those apps with
+ * `RAMPART_SECRET_KEY: HARNESS_SECRET_KEY`, so a secret stored before a restart opens after it.
+ * Throws when any step isn't a success. The full session's headers.
+ */
+export async function signInThroughApi(
+  app: FastifyInstance,
+  url: string,
+  payload: unknown,
+  options: { at: Date; secrets: MfaSecrets; cookieName?: string },
+): Promise<SessionHeaders> {
+  const name = options.cookieName ?? SESSION_COOKIE;
+  const post = async (path: string, headers: SessionHeaders | null, body?: unknown) => {
+    const response = await app.inject({
+      method: 'POST',
+      url: path,
+      headers: {
+        ...headers,
+        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      },
+      ...(body === undefined ? {} : { payload: JSON.stringify(body) }),
+    });
+    return response;
+  };
+  const ok = (response: LightMyRequestResponse, what: string) => {
+    if (response.statusCode >= 300) {
+      throw new Error(`${what} answered ${String(response.statusCode)}: ${response.body}`);
+    }
+    return response;
+  };
+  const headersOf = (response: LightMyRequestResponse): SessionHeaders => {
+    const cookie = response.cookies.find((item) => item.name === name)?.value ?? '';
+    const { csrfToken } = sessionResponseSchema.parse(response.json());
+    return { cookie: `${name}=${cookie}`, [CSRF_HEADER]: csrfToken ?? '' };
+  };
+
+  const signedIn = ok(await post(url, null, payload), url);
+  const state = sessionResponseSchema.parse(signedIn.json());
+  const email = state.user?.email ?? '';
+  let headers = headersOf(signedIn);
+  if (state.mfa === 'enroll') {
+    const started = ok(await post('/api/session/mfa/enroll', headers), 'enroll');
+    const secret = base32Decode(mfaEnrollmentResponseSchema.parse(started.json()).secret);
+    const code = totpAt(secret, options.at);
+    const confirmed = ok(
+      await post('/api/session/mfa/enroll/confirm', headers, { code }),
+      'enroll confirm',
+    );
+    options.secrets.set(email, secret);
+    headers = headersOf(confirmed);
+  } else if (state.mfa === 'challenge') {
+    const secret = options.secrets.get(email);
+    if (secret === undefined) throw new Error(`no TOTP secret kept for ${email}`);
+    const next = new Date(options.at.getTime() + TOTP_STEP_MS);
+    let verified = await post('/api/session/mfa/verify', headers, {
+      code: totpAt(secret, options.at),
+    });
+    // The step was used already (a sign-in in the same 30 s): the next step's code is in window.
+    if (verified.statusCode === 401) {
+      verified = await post('/api/session/mfa/verify', headers, { code: totpAt(secret, next) });
+    }
+    headers = headersOf(ok(verified, 'verify'));
+  }
+  return headers;
 }

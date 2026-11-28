@@ -5,6 +5,7 @@ import { usePageTitle } from '../usePageTitle';
 import styles from './settings.module.css';
 import { AssessmentSettings } from './AssessmentSettings';
 import { AuditLog } from './AuditLog';
+import { SignInNoticeSettings } from './SignInNoticeSettings';
 import { UsersPanel } from './UsersPanel';
 
 interface SettingsSection {
@@ -34,7 +35,7 @@ function Section({
 }
 
 /**
- * Settings, in the order Assessment, Users (admin only), Audit log. Sections are numbered in the
+ * Settings, in the order Assessment, Users (admin only), Sign-in notice (admin only), Audit log. Sections are numbered in the
  * order they show, so a contributor's numbers have no gaps.
  */
 export function SettingsPage() {
@@ -43,6 +44,9 @@ export function SettingsPage() {
   const sections: SettingsSection[] = [
     { key: 'assessment', title: 'Assessment', body: <AssessmentSettings /> },
     ...(user?.role === 'admin' ? [{ key: 'users', title: 'Users', body: <UsersPanel /> }] : []),
+    ...(user?.role === 'admin'
+      ? [{ key: 'notice', title: 'Sign-in notice', body: <SignInNoticeSettings /> }]
+      : []),
     { key: 'audit', title: 'Audit log', body: <AuditLog /> },
   ];
 

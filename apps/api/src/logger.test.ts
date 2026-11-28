@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { CSRF_HEADER } from './contract';
-import { REDACT_PATHS } from './logger';
+import { REDACT_PATHS, createLogger } from './logger';
 import { createHarness, type Harness } from './testing/harness';
 
 const harnesses: Harness[] = [];
@@ -47,5 +47,95 @@ describe('logger', () => {
       expect(text).not.toContain(forged);
     }
     expect(REDACT_PATHS).toContain('req.headers["x-csrf-token"]');
+  });
+});
+
+describe('redaction paths', () => {
+  /** A logger at `trace` whose lines land, parsed, in the returned list. */
+  function captured() {
+    const lines: Record<string, unknown>[] = [];
+    const log = createLogger('trace', {
+      write(line: string) {
+        lines.push(JSON.parse(line) as Record<string, unknown>);
+      },
+    });
+    return { log, lines };
+  }
+
+  it('redacts secret keys one level deep', () => {
+    const { log, lines } = captured();
+    const secrets = {
+      password: 'top-level-password-1',
+      currentPassword: 'top-level-current-2',
+      newPassword: 'top-level-new-3',
+      csrfToken: 'top-level-csrf-4',
+      token: 'top-level-token-5',
+      code: 'totp-code-918273',
+      recoveryCode: 'top-level-recovery-6',
+      secret: 'top-level-secret-7',
+      otpauthUri: 'otpauth://totp/top-level-uri-8',
+      recoveryCodes: ['top-level-codes-9'],
+    };
+    const nested = {
+      password: 'nested-password-1',
+      currentPassword: 'nested-current-2',
+      newPassword: 'nested-new-3',
+      csrfToken: 'nested-csrf-4',
+      token: 'nested-token-5',
+      code: 'totp-code-372819',
+      recoveryCode: 'nested-recovery-6',
+      secret: 'nested-secret-7',
+      otpauthUri: 'otpauth://totp/nested-uri-8',
+      recoveryCodes: ['nested-codes-9'],
+    };
+
+    log.info(
+      {
+        password: secrets.password,
+        body: { newPassword: nested.newPassword, code: nested.code, secret: nested.secret },
+      },
+      'direct',
+    );
+    log.info(
+      { otpauthUri: secrets.otpauthUri, body: { recoveryCodes: nested.recoveryCodes } },
+      'mfa',
+    );
+    log.trace({ ...secrets, body: nested, user: { ...nested } }, 'every key');
+
+    expect(lines).toHaveLength(3);
+    const [direct, mfa, every] = lines;
+    expect(mfa).toMatchObject({
+      msg: 'mfa',
+      otpauthUri: '[Redacted]',
+      body: { recoveryCodes: '[Redacted]' },
+    });
+    expect(direct).toMatchObject({
+      msg: 'direct',
+      password: '[Redacted]',
+      body: { newPassword: '[Redacted]', code: '[Redacted]', secret: '[Redacted]' },
+    });
+    const censored = Object.fromEntries(Object.keys(secrets).map((key) => [key, '[Redacted]']));
+    expect(every).toMatchObject({ ...censored, body: censored, user: censored });
+
+    const text = JSON.stringify(lines);
+    for (const value of [...Object.values(secrets), ...Object.values(nested)].flat()) {
+      expect(text).not.toContain(value);
+    }
+    for (const key of Object.keys(secrets)) {
+      expect(REDACT_PATHS).toContain(key);
+      expect(REDACT_PATHS).toContain(`*.${key}`);
+    }
+  });
+
+  it('leaves other keys alone and never touches the logged object', () => {
+    const { log, lines } = captured();
+    const body = { email: 'someone@example.com', password: 'a-password-value' };
+    log.info({ body, passwordless: true }, 'kept');
+    expect(lines[0]).toMatchObject({
+      body: { email: 'someone@example.com', password: '[Redacted]' },
+      passwordless: true,
+    });
+    // Redaction works on the serialized copy: the caller's object keeps its value.
+    expect(body.password).toBe('a-password-value');
   });
 });

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { userRefSchema } from './common';
+import { sha256Schema } from './files';
 
 export const AUDIT_ACTIONS = [
   'user.created',
@@ -42,6 +43,14 @@ export const AUDIT_ACTIONS = [
   'ssp_approval.created',
   'ssp_approval.updated',
   'ssp_approval.removed',
+  'auth.password_changed',
+  'auth.session_locked',
+  'auth.session_unlocked',
+  'auth.notice_acknowledged',
+  'settings.updated',
+  'auth.mfa_enrolled',
+  'auth.mfa_verified',
+  'user.mfa_reset',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -67,6 +76,8 @@ export const AUDIT_ENTITY_TYPES = [
   'diagram_link',
   'ssp_revision',
   'ssp_approval',
+  /** The entity ID names the setting: `sign_in_notice`. */
+  'settings',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -99,3 +110,37 @@ export const auditPageSchema = z.object({
   nextBefore: z.number().int().nullable(),
 });
 export type AuditPage = z.infer<typeof auditPageSchema>;
+
+/** Why `GET /api/audit/verify` stops at an event. */
+export const AUDIT_CHAIN_PROBLEMS = ['unchained', 'prev_mismatch', 'hash_mismatch'] as const;
+export type AuditChainProblem = (typeof AUDIT_CHAIN_PROBLEMS)[number];
+
+/**
+ * `GET /api/audit/verify`: the chain walked in id order, stopping at the first broken event.
+ * `headHash` is the newest event's stored hash (null when there are no events, or the newest has
+ * none), for the user to record: removing the newest events can't be detected from the DB alone.
+ * `at` and `action` are plain strings because a tampered row may hold anything.
+ */
+export const auditVerifyResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    checked: z.number().int().min(0),
+    total: z.number().int().min(0),
+    headHash: sha256Schema.nullable(),
+    firstBroken: z
+      .object({
+        id: z.number().int(),
+        at: z.string(),
+        action: z.string(),
+        problem: z.enum(AUDIT_CHAIN_PROBLEMS),
+      })
+      .nullable(),
+    verifiedAt: z.iso.datetime(),
+  })
+  .refine((value) => value.ok === (value.firstBroken === null), {
+    message: 'ok is true exactly when no event is broken',
+  })
+  .refine((value) => !value.ok || value.checked === value.total, {
+    message: 'an intact chain checks every event',
+  });
+export type AuditVerifyResponse = z.infer<typeof auditVerifyResponseSchema>;

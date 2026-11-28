@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Research: Security hardening for a CMMC L2 GRC app</title>
+<style>
+body{font:15px/1.5 system-ui,sans-serif;max-width:1000px;margin:24px auto;padding:0 16px;color:#1c2330;background:#f6f7f9}
+h1{margin-bottom:4px}h2{margin-top:32px;border-bottom:2px solid #d5d9e0;padding-bottom:4px}
+.meta{color:#5a6475;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.card{background:#fff;border:1px solid #d5d9e0;border-radius:8px;padding:12px}
+.card h3{margin:0 0 6px;font-size:16px}
+.bar{height:8px;background:#e3e6ec;border-radius:4px;margin:6px 0}.bar i{display:block;height:8px;border-radius:4px;background:#2f6fdb}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;background:#e3e6ec;margin-right:4px}
+.own{background:#fff1cc}.hi{background:#d6f0dc}.med{background:#e3ecfb}
+table{border-collapse:collapse;width:100%;background:#fff}td,th{border:1px solid #d5d9e0;padding:6px 8px;text-align:left;vertical-align:top;font-size:14px}
+.opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.opts span{flex:1 1 120px;background:#eef2f9;border:1px solid #c9d3e6;border-radius:6px;padding:6px;font-size:13px}
+a{color:#1a56b8}
+</style></head><body>
+<h1>Security hardening: self-hosted CMMC L2 GRC app</h1>
+<p class="meta">Generated 2026-11-26 · standard depth · 10 searches · 13 pages read. Assumes single tenant, local now and hosted later with a reverse proxy and TLS, and no CUI in V1. Rankings are my judgment (yellow tag = own idea).</p>
+
+<h2>Ranking: value against effort</h2>
+<svg width="100%" viewBox="0 0 760 330" role="img" aria-label="Ranked areas">
+<style>text{font:12px system-ui,sans-serif;fill:#1c2330}</style>
+<g>
+<text x="0" y="16">1 Authz/IDOR/CSRF route tests</text><rect x="250" y="6" width="100" height="12" fill="#2f9e5b"/><rect x="360" y="6" width="20" height="12" fill="#999"/>
+<text x="0" y="42">2 Supply-chain CI (pnpm, pin Actions)</text><rect x="250" y="32" width="95" height="12" fill="#2f9e5b"/><rect x="360" y="32" width="25" height="12" fill="#999"/>
+<text x="0" y="68">3 CSP and headers on served HTML</text><rect x="250" y="58" width="90" height="12" fill="#2f9e5b"/><rect x="360" y="58" width="40" height="12" fill="#999"/>
+<text x="0" y="94">4 Session timeouts and rotation</text><rect x="250" y="84" width="88" height="12" fill="#2f9e5b"/><rect x="360" y="84" width="25" height="12" fill="#999"/>
+<text x="0" y="120">5 Rate limit all routes</text><rect x="250" y="110" width="80" height="12" fill="#2f9e5b"/><rect x="360" y="110" width="25" height="12" fill="#999"/>
+<text x="0" y="146">6 Upload hardening</text><rect x="250" y="136" width="85" height="12" fill="#2f9e5b"/><rect x="360" y="136" width="55" height="12" fill="#999"/>
+<text x="0" y="172">7 Password blocklist and policy</text><rect x="250" y="162" width="60" height="12" fill="#2f9e5b"/><rect x="360" y="162" width="25" height="12" fill="#999"/>
+<text x="0" y="198">8 Log redaction, error handling</text><rect x="250" y="188" width="55" height="12" fill="#2f9e5b"/><rect x="360" y="188" width="25" height="12" fill="#999"/>
+<text x="0" y="224">9 Hash-chained audit log</text><rect x="250" y="214" width="55" height="12" fill="#2f9e5b"/><rect x="360" y="214" width="60" height="12" fill="#999"/>
+<text x="0" y="250">10 SECURITY.md and STRIDE</text><rect x="250" y="240" width="50" height="12" fill="#2f9e5b"/><rect x="360" y="240" width="25" height="12" fill="#999"/>
+<text x="0" y="276">11 Backups and encryption at rest</text><rect x="250" y="266" width="70" height="12" fill="#2f9e5b"/><rect x="360" y="266" width="70" height="12" fill="#999"/>
+<text x="0" y="302">12 Optional TOTP MFA</text><rect x="250" y="292" width="50" height="12" fill="#2f9e5b"/><rect x="360" y="292" width="100" height="12" fill="#999"/>
+<text x="250" y="326" style="fill:#2f9e5b">green = value</text><text x="360" y="326" style="fill:#777">grey = effort (relative, own estimate)</text>
+</g></svg>
+
+<h2>What exists</h2>
+<div class="grid">
+<div class="card"><h3><a href="https://github.com/intuitem/ciso-assistant-community/blob/main/SECURITY.md">CISO Assistant</a></h3><span class="tag hi">closest peer</span><div class="bar"><i style="width:70%"></i></div>Open-source GRC. Policy: email reports, semver, latest-minor fixes, GitHub advisories, CERT-FR at CVSS 9+, no bounty. Alive: no evidence found. A disclosure policy, not a control mapping.</div>
+<div class="card"><h3><a href="https://www.vanta.com/company/security">Vanta</a></h3><span class="tag med">SaaS benchmark</span><div class="bar"><i style="width:45%"></i></div>SOC 2 Type II and ISO 27001, yearly pen test, field-level encryption and KMS, TLS 1.2+ and HSTS, WebAuthn MFA, SAST/SCA/DAST. Self-reported.</div>
+<div class="card"><h3><a href="https://github.com/fastify/fastify-helmet">@fastify/helmet</a></h3><span class="tag">in use</span><div class="bar"><i style="width:90%"></i></div>Headers and CSP, nonces via enableCSPNonces, per-route override. Plugin &gt;=12.x for Fastify 5.</div>
+<div class="card"><h3><a href="https://raw.githubusercontent.com/fastify/fastify-rate-limit/main/README.md">@fastify/rate-limit</a></h3><span class="tag">candidate</span><div class="bar"><i style="width:80%"></i></div>Per-route or global limits. Pitfalls: trustProxy, in-memory per-process store, onRequest vs preHandler key.</div>
+<div class="card"><h3><a href="https://github.com/sindresorhus/file-type">file-type</a></h3><span class="tag">candidate</span><div class="bar"><i style="width:60%"></i></div>Magic bytes, binary only. No SVG/CSV/TXT, no validity guarantee, not concurrency-safe, ESM only. MIT.</div>
+<div class="card"><h3><a href="https://github.com/yeojz/otplib">otplib</a></h3><span class="tag">candidate</span><div class="bar"><i style="width:50%"></i></div>TOTP/HOTP, v13 rewrite, MIT. Alive: no evidence found. Replay protection is on you.</div>
+</div>
+
+<h2>Gaps</h2>
+<ul>
+<li>No peer publishes a mapping of its own controls to NIST 800-171. Drata and Eramba: no evidence found.</li>
+<li>file-type does not detect zip/docx bombs. Use a size cap and a worker with a timeout (<a href="https://github.com/sindresorhus/file-type">source</a>).</li>
+<li>Helmet is on /api only, so the served HTML has no CSP (<a href="https://github.com/fastify/fastify-helmet">source</a>).</li>
+<li>NIST gives no numeric password minimum on the page fetched. Secondary sources say 8 or 15 (<a href="https://pages.nist.gov/800-63-4/sp800-63b/passwords">source</a>).</li>
+</ul>
+
+<h2>Best practices</h2>
+<ul>
+<li>OWASP Top 10 2025 order: Broken Access Control, Misconfiguration, Supply Chain, Crypto, Injection, Insecure Design, Auth Failures, Integrity, Logging, Exceptional Conditions (<a href="https://top10.owasp.org/2025">source</a>).</li>
+<li>Passwords: no composition rules, blocklist, long passwords allowed, rate limiting first (<a href="https://pages.nist.gov/800-63-4/sp800-63b/passwords">NIST</a>).</li>
+<li>Sessions: explicit Secure/HttpOnly/SameSite, __Host- prefix, rotate on login, server-side idle (15-30 min) and absolute (4-8 h) timeouts (<a href="https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html">OWASP</a>).</li>
+<li>pnpm: committed lockfile, allowBuilds, minimumReleaseAge (default 1 day), trustPolicy no-downgrade (<a href="https://pnpm.io/supply-chain-security">pnpm</a>).</li>
+<li>Node: request timeouts, reverse proxy, guard prototype pollution, no --inspect (<a href="https://nodejs.org/en/learn/getting-started/security-best-practices">Node</a>).</li>
+<li>ASVS 5.0.0 (May 2025) as the checklist (<a href="https://github.com/OWASP/ASVS">source</a>).</li>
+</ul>
+
+<h2>Ideas</h2>
+<p><span class="tag own">own idea</span> Route-table test that fails if a route lacks an authz decision. <span class="tag own">own idea</span> Export the audit-log head hash so a chain survives a table rewrite. <span class="tag own">own idea</span> Force attachment and nosniff on evidence downloads. <span class="tag own">own idea</span> Consider WebAuthn rather than TOTP later. The ranked list above is also my judgment. Full reasoning is in the markdown report.</p>
+
+<h2>Questions for the plan</h2>
+<div class="grid">
+<div class="card"><h3>Where is it hosted and who terminates TLS?</h3>Drives __Host- cookies, HSTS, trustProxy.<div class="opts"><span>Reverse proxy</span><span>Node direct</span><span>Platform managed</span></div></div>
+<div class="card"><h3>Is the tool itself in CMMC scope?</h3>No evidence found. Decides whether MFA and 800-171 self-mapping are required.<div class="opts"><span>Out of scope, voluntary mapping</span><span>Security Protection Asset</span><span>Ask the assessor</span></div></div>
+<div class="card"><h3>Password minimum length?</h3>Sources conflict, 8 vs 15.<div class="opts"><span>15</span><span>8 with MFA</span><span>Read the standard first</span></div></div>
+<div class="card"><h3>Session timeouts?</h3><div class="opts"><span>15-30 min idle, 8 h absolute</span><span>5 min for admins</span><span>Longer for demos</span></div></div>
+<div class="card"><h3>Which upload types are allowed?</h3>file-type cannot judge text formats.<div class="opts"><span>Strict allowlist</span><span>Allowlist and archive checks</span><span>Quarantine and scan</span></div></div>
+<div class="card"><h3>Audit-log integrity</h3>An in-DB chain cannot stop a full rewrite.<div class="opts"><span>In-DB chain</span><span>Signed periodic export</span><span>Defer</span></div></div>
+<div class="card"><h3>MFA now or at hosting?</h3>Highest effort. Replay handling is yours.<div class="opts"><span>TOTP (otplib)</span><span>WebAuthn</span><span>Defer</span></div></div>
+<div class="card"><h3>Encryption at rest?</h3>SQLite options not researched.<div class="opts"><span>Disk encryption and encrypted backups</span><span>SQLite encryption</span><span>Defer</span></div></div>
+</div>
+
+<h2>Suspect pages</h2><p>none</p>
+</body></html>

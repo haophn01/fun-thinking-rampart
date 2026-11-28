@@ -4,12 +4,21 @@
 // background and drawn border colours; every text pair at 4.5:1, or 3:1 for large text; and no
 // horizontal scroll at 375 px.
 //
+// Every page also loads under the production CSP with zero `securitypolicyviolation` events.
+// The auth screens get the same checks: the sign-in notice and the form after it, the forced
+// password change (and its refusal), the lock screen (and a wrong password), Change password,
+// Settings with a notice on, Settings › Audit log's Verify result (intact from the look api,
+// broken from a fulfilled answer; it fits its box and the hash is in Space Mono), the app
+// shell's 429, and two-step sign-in's three screens
+// (enrollment, its recovery codes and the challenge), with the manual key in Space Mono.
+//
 // Playwright runs spec files in name order against one api and database, so this file runs before
 // shell.spec.ts and smoke.spec.ts, which both need a fresh install. It therefore starts an api of
-// its own (the config's entry point, without pnpm) on a database of its own in the run folder,
-// seeds it through that api, and routes the browser's `/api` calls to it. The pages come from the
-// config's web app, so only one Vite serves the repo.
+// its own (tsx, without pnpm) on a database of its own in the run folder, seeds it through that
+// api, and routes the browser's `/api` calls to it. The pages, with their CSP, come from the
+// config's server: the production build served by the api.
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +36,7 @@ import {
   approvalResponseSchema,
   assessmentViewSchema,
   assetResponseSchema,
+  auditVerifyResponseSchema,
   diagramResponseSchema,
   evidenceItemResponseSchema,
   poamItemResponseSchema,
@@ -43,7 +53,7 @@ import {
 import { BODY_TEXT_MIN, LARGE_TEXT_MIN, contrastRatio } from '../apps/web/src/look/contrast.ts';
 import { COLORS, TEXT_SIZES_PX } from '../apps/web/src/look/tokens.ts';
 import { SSP_TABS } from '../apps/web/src/pages/ssp/tabs.ts';
-import { api, ensureOk, type Api } from './helpers/api';
+import { api, ensureOk, manualKey, nextTotpCode, setUp, signIn, type Api } from './helpers/api';
 import {
   firstObjectiveId,
   planHold,
@@ -56,8 +66,7 @@ type StorageState = Awaited<ReturnType<APIRequestContext['storageState']>>;
 
 const API_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../apps/api');
 const HOST = '127.0.0.1';
-const API_PORT =
-  process.env.E2E_LOOK_API_PORT ?? String(Number(process.env.E2E_API_PORT ?? '3291') + 2);
+const API_PORT = process.env.E2E_LOOK_API_PORT ?? '3293';
 const API_ORIGIN = `http://${HOST}:${API_PORT}`;
 
 const WIDTHS = [1280, 375] as const;
@@ -75,7 +84,7 @@ const TOKEN_HEX = new Set(Object.values(COLORS).map((hex) => hex.toUpperCase()))
 let server: ChildProcess | null = null;
 const serverOutput: string[] = [];
 
-/** Starts the api the way the config does (tsx, no watch), on a database in the run folder. */
+/** Starts an api (tsx, no watch, no web app), on a database in the run folder. */
 async function startApi() {
   const runDir = join(process.env.E2E_RUN_DIR ?? '', 'look');
   mkdirSync(runDir, { recursive: true });
@@ -87,6 +96,8 @@ async function startApi() {
       DATABASE_PATH: join(runDir, 'look.sqlite'),
       STORAGE_PATH: join(runDir, 'files'),
       LOG_LEVEL: 'warn',
+      // As the config's api: real limits, raised so the suite never trips them.
+      RATE_LIMIT_MULTIPLIER: '100',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -139,6 +150,72 @@ const NA_RATIONALE = 'No objective of this requirement is N/A.';
 const FUTURE_REQUIREMENT_ID = catalog.requirements[5]?.id ?? '';
 const FUTURE_STATEMENT = `${FUTURE_REQUIREMENT_ID} will be enforced by the MDM policy; the date is TBD.`;
 
+/** The sign-in notice the auth screens show: several sentences and a line break, as a real one. */
+const NOTICE =
+  'You are accessing an information system that processes Controlled Unclassified Information.\n' +
+  'Use of this system is monitored, recorded and subject to audit. Unauthorised use is ' +
+  'prohibited and may result in criminal and civil penalties. By continuing you consent to ' +
+  'these terms.';
+/** The seeded admin, and the seeded contributor, whose admin-set password is temporary. */
+const LENA = { email: 'lena@example.test', password: 'look-check-pass-1' };
+const COLE = { email: 'cole@example.test', password: 'contributor-pass-1' };
+/** On the bundled blocklist, so the forced change refuses it. */
+const TOO_COMMON = 'QwertyUiop12';
+const SIGNED_OUT: StorageState = { cookies: [], origins: [] };
+
+/**
+ * A broken Verify answer for the look check, as a tampered log gives it: the stored action is any
+ * string, so a long one with no spaces checks that the sentence wraps at 375 px.
+ */
+const BROKEN_VERIFY = auditVerifyResponseSchema.parse({
+  ok: false,
+  checked: 1233,
+  total: 1234,
+  headHash: createHash('sha256').update('look check head').digest('hex'),
+  firstBroken: {
+    id: 1234,
+    at: '2026-11-27T09:30:00.000Z',
+    action: `tampered.${'x'.repeat(80)}`,
+    problem: 'hash_mismatch',
+  },
+  verifiedAt: '2026-11-27T09:31:00.000Z',
+});
+
+/** Opens Settings › Audit log's Verify and waits for the result to show. */
+async function verifyAuditLog(page: Page, title: 'Audit log intact' | 'Audit log broken') {
+  await expect(page.getByText(/^Loading/)).toHaveCount(0);
+  const section = page.getByRole('region', { name: 'Audit log' });
+  const answered = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/audit/verify');
+  await section.getByRole('button', { name: 'Verify audit log' }).click();
+  expect((await answered).status()).toBe(200);
+  const role = title === 'Audit log intact' ? 'status' : 'alert';
+  await expect(section.getByRole(role).filter({ hasText: title })).toBeVisible();
+}
+
+/**
+ * The Verify result's own measures: it fits its box (scrollWidth ≤ clientWidth) and the newest
+ * hash is in Space Mono. Each problem is one line, named by width and screen.
+ */
+async function verifyResultFacts(page: Page, width: number, name: string, hash: string) {
+  const section = page.getByRole('region', { name: 'Audit log' });
+  const found: string[] = [];
+  const result = section.getByRole('status').or(section.getByRole('alert')).first();
+  const box = await result.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
+  if (box.scroll > box.client) {
+    found.push(`overflow: the result is ${String(box.scroll)}px in ${String(box.client)}px`);
+  }
+  const hashText = section.getByText(hash, { exact: true });
+  if ((await hashText.count()) === 1) {
+    const font = await hashText.evaluate((el) => getComputedStyle(el).fontFamily);
+    if (!font.includes('Space Mono')) found.push(`the hash is in ${font}`);
+  } else if (name.includes('intact')) {
+    found.push('the newest hash is not shown');
+  }
+  return found.map((line) => `${String(width)}px ${name} ${line}`);
+}
+/** Lena's TOTP secret (base32), from enrollment at setup. */
+let lenaSecret = '';
+
 /** A value for every SSP profile field, so every group's form is filled. */
 const SSP_PROFILE = {
   categorization: 'Moderate impact for confidentiality, low for integrity',
@@ -162,12 +239,9 @@ const SSP_PROFILE = {
  * the SSP workspace's profile, roles, assets, provider, matrix row, diagrams and document control.
  */
 async function seed(request: APIRequestContext): Promise<Seeded> {
-  await ensureOk(
-    await request.post('/api/setup', {
-      data: { email: 'lena@example.test', displayName: 'Lena Look', password: 'look-check-pass-1' },
-    }),
-    'POST /api/setup',
-  );
+  // Setup, then enrollment through the api, so the seeded session is a full one.
+  const lena = await setUp(request, { ...LENA, displayName: 'Lena Look' });
+  lenaSecret = lena.totpSecret ?? '';
   const client = await api(request);
 
   const barred = requirementByNist(catalog, '3.1.20');
@@ -265,7 +339,7 @@ async function seed(request: APIRequestContext): Promise<Seeded> {
   await ensureOk(
     await client.upload(
       `/api/policies/${policy.item.id}/versions`,
-      'access-control-policy.md',
+      'access-control-policy.txt',
       Buffer.from('# Access\n'),
     ),
     'upload policy',
@@ -286,10 +360,9 @@ async function seed(request: APIRequestContext): Promise<Seeded> {
     'POST',
     '/api/users',
     {
-      email: 'cole@example.test',
+      ...COLE,
       displayName: 'Cole Contributor',
       role: 'contributor',
-      password: 'contributor-pass-1',
     },
     userResponseSchema,
   );
@@ -438,6 +511,32 @@ async function seedSspWorkspace(
 
 // ---------- checks ----------
 
+declare global {
+  interface Window {
+    __cspViolations?: string[];
+  }
+}
+
+/**
+ * Records every `securitypolicyviolation` in each page, from before the app's first script runs.
+ * Playwright injects init scripts outside the page's CSP, so the collector never trips it.
+ */
+async function collectCspViolations(context: BrowserContext) {
+  await context.addInitScript(() => {
+    window.__cspViolations = [];
+    document.addEventListener('securitypolicyviolation', (event) => {
+      window.__cspViolations?.push(
+        `csp: ${event.effectiveDirective} blocked ${event.blockedURI || '(inline)'} at ${event.sourceFile || document.location.pathname}:${String(event.lineNumber)}`,
+      );
+    });
+  });
+}
+
+/** The CSP violations the current page has recorded since it loaded. */
+async function cspViolations(page: Page): Promise<string[]> {
+  return page.evaluate(() => [...(window.__cspViolations ?? [])]);
+}
+
 interface Facts {
   scrollWidth: number;
   viewportWidth: number;
@@ -570,6 +669,15 @@ async function open(page: Page, path: string) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
+/** Every Look rule and CSP violation the current page shows, each line named by width and view. */
+async function measure(page: Page, width: number, name: string): Promise<string[]> {
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const facts = await page.evaluate(collectFacts);
+  const lines = [...violations(facts, width), ...(await cspViolations(page))];
+  return lines.map((line) => `${String(width)}px ${name} ${line}`);
+}
+
 // ---------- the test ----------
 
 /** A browser context signed in as the seeded admin, its `/api` calls routed to the look api. */
@@ -582,7 +690,8 @@ async function lookContext(
     ...(baseURL === undefined ? {} : { baseURL }),
     storageState,
   });
-  // Pages come from the config's web app; their api calls go to the look api.
+  await collectCspViolations(context);
+  // Pages come from the config's server; their api calls go to the look api.
   // Only the api's own paths: module URLs such as /@fs/…/apps/api/src/contract also hold "/api/".
   await context.route(
     (url) => url.pathname.startsWith('/api/'),
@@ -648,6 +757,7 @@ test.describe('look', () => {
 
     const found: string[] = [];
     let checked = 0;
+    let cspChecked = 0;
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 900 });
       for (const view of views) {
@@ -661,8 +771,9 @@ test.describe('look', () => {
         }
         const facts = await page.evaluate(collectFacts);
         checked += facts.texts.length;
-        for (const line of violations(facts, width))
-          found.push(`${String(width)}px ${view.name} ${line}`);
+        cspChecked += 1;
+        const lines = [...violations(facts, width), ...(await cspViolations(page))];
+        for (const line of lines) found.push(`${String(width)}px ${view.name} ${line}`);
       }
       if (width === PHONE) {
         // The phone nav is behind Menu.
@@ -670,13 +781,17 @@ test.describe('look', () => {
         await page.getByRole('button', { name: 'Menu' }).click();
         await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
         const facts = await page.evaluate(collectFacts);
-        for (const line of violations(facts, width))
-          found.push(`${String(width)}px / (menu open) ${line}`);
+        const lines = [...violations(facts, width), ...(await cspViolations(page))];
+        for (const line of lines) found.push(`${String(width)}px / (menu open) ${line}`);
       }
     }
+    // The pages were served under the strict CSP, so zero violations means something.
+    const served = await context.request.get('/');
     await context.close();
 
+    expect(served.headers()['content-security-policy']).toMatch(/^default-src 'self'; /);
     expect(checked, 'text elements checked').toBeGreaterThan(100);
+    expect(cspChecked, 'pages checked for CSP violations').toBe(views.length * WIDTHS.length);
     expect([...new Set(found)], [...new Set(found)].join('\n')).toEqual([]);
   });
 
@@ -762,5 +877,263 @@ test.describe('look', () => {
     await expect(page.getByLabel('Planned implementation')).toHaveValue(PLANNED);
     await expect(page.getByLabel('N/A rationale')).toHaveValue(NA_RATIONALE);
     await context.close();
+  });
+
+  test('auth screens hold the look', async ({ browser, playwright }, testInfo) => {
+    test.setTimeout(180_000);
+    const baseURL = testInfo.project.use.baseURL;
+    const requests: APIRequestContext[] = [];
+    const lookApi = async (state?: StorageState) => {
+      const request = await playwright.request.newContext({
+        baseURL: API_ORIGIN,
+        ...(state === undefined ? {} : { storageState: state }),
+      });
+      requests.push(request);
+      return request;
+    };
+
+    // The admin turns the notice on, through the look api.
+    const admin = await api(await lookApi(storageState));
+    await ensureOk(
+      await admin.send('PUT', '/api/settings/sign-in-notice', { text: NOTICE }),
+      'PUT notice',
+    );
+    // Cole's password is temporary, so his session lands on the forced change.
+    const cole = await lookApi();
+    expect((await signIn(cole, COLE.email, COLE.password)).mustChangePassword).toBe(true);
+    // A second session for Lena, locked, so the seeded one stays open.
+    const locked = await lookApi();
+    await signIn(locked, LENA.email, LENA.password, { totpSecret: lenaSecret });
+    expect((await (await api(locked)).send('POST', '/api/session/lock')).status()).toBe(204);
+
+    const contexts = {
+      signedOut: await lookContext(browser, baseURL, SIGNED_OUT),
+      cole: await lookContext(browser, baseURL, await cole.storageState()),
+      locked: await lookContext(browser, baseURL, await locked.storageState()),
+      admin: await lookContext(browser, baseURL, storageState),
+      tooMany: await lookContext(browser, baseURL, SIGNED_OUT),
+      broken: await lookContext(browser, baseURL, storageState),
+    };
+    // A broken chain, answered here: the look api's own log is intact. A later route wins.
+    await contexts.broken.route(
+      (url) => url.pathname === '/api/audit/verify',
+      (route) => route.fulfill({ status: 200, json: BROKEN_VERIFY }),
+    );
+    // The look api's own answer, so the intact screen's hash is known.
+    const intact = await admin.read('/api/audit/verify', auditVerifyResponseSchema);
+    expect(intact.ok, 'the look api log verifies').toBe(true);
+    expect(intact.headHash).not.toBeNull();
+    // The shell's 429: the session read is refused with a wait. A later route wins.
+    await contexts.tooMany.route(
+      (url) => url.pathname === '/api/session',
+      (route) =>
+        route.fulfill({
+          status: 429,
+          json: {
+            error: {
+              code: 'too_many_attempts',
+              message: 'Too many requests. Try again later.',
+              requestId: 'look-check',
+              details: { retryAfterSeconds: 42 },
+            },
+          },
+        }),
+    );
+
+    const lockHeading = (page: Page) =>
+      page.getByRole('heading', { level: 1, name: 'Session locked' });
+    const screens: {
+      name: string;
+      context: BrowserContext;
+      path: string;
+      ready: (page: Page) => Promise<void>;
+      /** Extra measures for this screen, after the shared ones. */
+      facts?: (page: Page, width: number) => Promise<string[]>;
+    }[] = [
+      {
+        name: 'sign-in notice',
+        context: contexts.signedOut,
+        path: '/',
+        ready: async (page) => {
+          await expect(page.getByRole('region', { name: 'System use notice' })).toBeVisible();
+        },
+      },
+      {
+        name: 'sign-in form after the notice',
+        context: contexts.signedOut,
+        path: '/',
+        ready: async (page) => {
+          await page.getByRole('button', { name: 'Acknowledge and continue' }).click();
+          await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+        },
+      },
+      {
+        name: 'forced change password',
+        context: contexts.cole,
+        path: '/',
+        ready: async (page) => {
+          await expect(page.getByTestId('change-password-forced')).toBeVisible();
+        },
+      },
+      {
+        name: 'forced change password (refused)',
+        context: contexts.cole,
+        path: '/',
+        ready: async (page) => {
+          await page.getByLabel('Current password').fill(COLE.password);
+          await page.getByLabel('New password', { exact: true }).fill(TOO_COMMON);
+          await page.getByLabel('Confirm new password').fill(TOO_COMMON);
+          await page.getByRole('button', { name: 'Change password' }).click();
+          await expect(
+            page.getByText('This password is too common. Choose another.', { exact: true }),
+          ).toBeVisible();
+        },
+      },
+      {
+        name: 'lock screen',
+        context: contexts.locked,
+        path: '/',
+        ready: async (page) => {
+          await expect(lockHeading(page)).toBeVisible();
+        },
+      },
+      {
+        name: 'lock screen (wrong password)',
+        context: contexts.locked,
+        path: '/',
+        ready: async (page) => {
+          await expect(lockHeading(page)).toBeVisible();
+          await page.getByLabel('Password', { exact: true }).fill('not-the-password-at-all');
+          await page.getByRole('button', { name: 'Unlock' }).click();
+          await expect(page.getByText('Password is incorrect.', { exact: true })).toBeVisible();
+        },
+      },
+      {
+        name: '/account/password',
+        context: contexts.admin,
+        path: '/account/password',
+        ready: async (page) => {
+          await expect(
+            page.getByRole('heading', { level: 1, name: 'Change password' }),
+          ).toBeVisible();
+        },
+      },
+      {
+        name: '/settings (notice on)',
+        context: contexts.admin,
+        path: '/settings',
+        ready: async (page) => {
+          await expect(page.getByLabel('Notice text')).toHaveValue(NOTICE);
+          await expect(page.getByText(/^Loading/)).toHaveCount(0);
+        },
+      },
+      {
+        name: 'too many requests',
+        context: contexts.tooMany,
+        path: '/',
+        ready: async (page) => {
+          await expect(
+            page.getByText('Too many requests. Try again in 42 seconds.', { exact: true }),
+          ).toBeVisible();
+          await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+        },
+      },
+      {
+        name: '/settings (audit log intact)',
+        context: contexts.admin,
+        path: '/settings',
+        ready: (page) => verifyAuditLog(page, 'Audit log intact'),
+        facts: (page, width) =>
+          verifyResultFacts(page, width, 'audit log intact', intact.headHash ?? ''),
+      },
+      {
+        name: '/settings (audit log broken)',
+        context: contexts.broken,
+        path: '/settings',
+        ready: (page) => verifyAuditLog(page, 'Audit log broken'),
+        facts: (page, width) =>
+          verifyResultFacts(page, width, 'audit log broken', BROKEN_VERIFY.headHash ?? ''),
+      },
+    ];
+
+    const found: string[] = [];
+    let cspChecked = 0;
+    for (const width of WIDTHS) {
+      for (const screen of screens) {
+        const page = await screen.context.newPage();
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(screen.path);
+        await screen.ready(page);
+        found.push(...(await measure(page, width, screen.name)));
+        if (screen.facts !== undefined) found.push(...(await screen.facts(page, width)));
+        cspChecked += 1;
+        await page.close();
+      }
+    }
+    for (const context of Object.values(contexts)) await context.close();
+
+    // Two-step sign-in's screens, for a new user per width (each width enrolls once): enrollment,
+    // the recovery codes it shows, then the challenge at the user's next sign-in.
+    let mfaChecked = 0;
+    for (const width of WIDTHS) {
+      const mia = { email: `mia-${String(width)}@example.test`, password: 'mia-look-pass-1' };
+      await admin.write(
+        'POST',
+        '/api/users',
+        { ...mia, displayName: `Mia ${String(width)}`, role: 'contributor' },
+        userResponseSchema,
+      );
+      const opened = async (name: string) => {
+        const request = await lookApi();
+        await signIn(request, mia.email, mia.password, { mfa: 'password_only' });
+        const context = await lookContext(browser, baseURL, await request.storageState());
+        const page = await context.newPage();
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto('/');
+        await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+        return { context, page };
+      };
+
+      const enroll = await opened('Set up two-step sign-in');
+      await expect(
+        enroll.page.getByRole('img', { name: 'QR code for your authenticator app' }),
+      ).toBeVisible();
+      const key = enroll.page.getByTestId('mfa-manual-key');
+      found.push(...(await measure(enroll.page, width, 'two-step enrollment')));
+      const keyFont = await key.evaluate((el) => getComputedStyle(el).fontFamily);
+      if (!keyFont.includes('Space Mono')) {
+        found.push(`${String(width)}px two-step enrollment: the key is in ${keyFont}`);
+      }
+      mfaChecked += 1;
+
+      await enroll.page
+        .getByLabel('6-digit code')
+        .fill(await nextTotpCode(manualKey(await key.innerText())));
+      await enroll.page.getByRole('button', { name: 'Confirm' }).click();
+      await expect(
+        enroll.page.getByRole('heading', { level: 1, name: 'Save your recovery codes' }),
+      ).toBeVisible();
+      await expect(enroll.page.getByTestId('recovery-codes').getByRole('listitem')).toHaveCount(10);
+      found.push(...(await measure(enroll.page, width, 'recovery codes')));
+      mfaChecked += 1;
+      await enroll.context.close();
+
+      const challenge = await opened('Enter your code');
+      await expect(challenge.page.getByLabel('6-digit code')).toBeVisible();
+      found.push(...(await measure(challenge.page, width, 'two-step challenge')));
+      mfaChecked += 1;
+      await challenge.context.close();
+    }
+
+    // Turn the notice off again.
+    await ensureOk(
+      await admin.send('PUT', '/api/settings/sign-in-notice', { text: null }),
+      'clear notice',
+    );
+    for (const request of requests) await request.dispose();
+
+    expect(cspChecked, 'screens checked for CSP violations').toBe(screens.length * WIDTHS.length);
+    expect(mfaChecked, 'two-step screens checked').toBe(3 * WIDTHS.length);
+    expect([...new Set(found)], [...new Set(found)].join('\n')).toEqual([]);
   });
 });

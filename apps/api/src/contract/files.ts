@@ -9,26 +9,19 @@ export const FILE_NAME_HEADER = 'x-file-name';
 /** 25 MiB. A body of exactly this size is accepted; one byte more is 413 `payload_too_large`. */
 export const UPLOAD_MAX_BYTES = 26_214_400;
 
-/** The only file types an upload may have, matched case-insensitively on the last extension. */
+/**
+ * The only file types an upload may have, matched case-insensitively on the last extension. Each
+ * has a content rule on the server (`uploads/file-check.ts`): the bytes must be that type too.
+ */
 export const UPLOAD_EXTENSIONS = [
   '.csv',
-  '.doc',
   '.docx',
-  '.gif',
   '.jpeg',
   '.jpg',
-  '.json',
-  '.log',
-  '.md',
   '.pdf',
   '.png',
-  '.ppt',
-  '.pptx',
   '.txt',
-  '.xls',
   '.xlsx',
-  '.xml',
-  '.zip',
 ] as const;
 export type UploadExtension = (typeof UPLOAD_EXTENSIONS)[number];
 
@@ -72,7 +65,7 @@ export type FileVersion = z.infer<typeof fileVersionSchema>;
  * The name's last extension, lowercased, or null when it has none. A name that only starts with a
  * dot (`.pdf`) has no extension, as with `path.extname`.
  */
-function lastExtension(fileName: string): string | null {
+export function lastExtension(fileName: string): string | null {
   const dot = fileName.lastIndexOf('.');
   if (dot <= 0) return null;
   return fileName.slice(dot).toLowerCase();

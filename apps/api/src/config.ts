@@ -11,6 +11,9 @@ const API_ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+export const FIPS_MODES = ['off', 'required'] as const;
+export type FipsMode = (typeof FIPS_MODES)[number];
+
 export interface Config {
   /** Fixed: the api never listens beyond this machine. */
   host: '127.0.0.1';
@@ -20,6 +23,26 @@ export interface Config {
   /** Absolute: the evidence store's folder, created on its first write. */
   storagePath: string;
   logLevel: LogLevel;
+  /** `HOSTED`: the api sits behind one local reverse proxy that terminates HTTPS. */
+  hosted: boolean;
+  /** `SERVE_WEB`: the api serves the built web app as well as `/api`. */
+  serveWeb: boolean;
+  /** Absolute: the built web app `SERVE_WEB` serves. */
+  webDistPath: string;
+  /** Scales every rate limit's `max`; 1 is the real limits, and hosted mode needs it. */
+  rateLimitMultiplier: number;
+  /**
+   * `RAMPART_SECRET_KEY`: the 32-byte master key as 64 lowercase hex characters, or null when
+   * unset (locally, `loadSecretKey` then uses the key file). Never log it.
+   */
+  secretKeyHex: string | null;
+  /** Absolute: the local key file `loadSecretKey` reads, or creates when it is missing. */
+  secretKeyPath: string;
+  /**
+   * `FIPS_MODE`: `required` refuses to start unless Node's crypto is in FIPS mode, and new
+   * passwords are hashed with PBKDF2-SHA-256 instead of Argon2id.
+   */
+  fipsMode: FipsMode;
 }
 
 /** Thrown when the environment is invalid. `keys` names every bad variable, sorted. */
@@ -46,6 +69,32 @@ const pathSetting = (fallback: string) =>
       .default(fallback),
   );
 
+/** Exactly `true` or `false`: `TRUE`, `1`, `yes` and padded values are refused. */
+const booleanSetting = z.preprocess(
+  unsetIfEmpty,
+  z
+    .enum(['true', 'false'], { error: 'must be true or false' })
+    .default('false')
+    .transform((value) => value === 'true'),
+);
+
+/** True when every byte of a hex key is the same one, such as 64 zeros: never a real key. */
+const oneByteRepeated = (hex: string) => hex === hex.slice(0, 2).repeat(hex.length / 2);
+
+/**
+ * 64 hex characters in either case, stored lowercase. The messages never echo the value, so a
+ * near-miss key never reaches a log line.
+ */
+const secretKeySetting = z.preprocess(
+  unsetIfEmpty,
+  z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'must be exactly 64 hex characters (32 bytes)')
+    .transform((value) => value.toLowerCase())
+    .refine((value) => !oneByteRepeated(value), 'must not be one byte repeated 32 times')
+    .optional(),
+);
+
 const envSchema = z.object({
   API_PORT: z.preprocess(
     unsetIfEmpty,
@@ -60,8 +109,27 @@ const envSchema = z.object({
       .default(3001),
   ),
   DATABASE_PATH: pathSetting('data/rampart.sqlite'),
+  // Exactly `off` or `required`: `on`, `REQUIRED`, `true` and padded values are refused.
+  FIPS_MODE: z.preprocess(
+    unsetIfEmpty,
+    z.enum(FIPS_MODES, { error: 'must be off or required' }).default('off'),
+  ),
+  HOSTED: booleanSetting,
   LOG_LEVEL: z.preprocess(unsetIfEmpty, z.enum(LOG_LEVELS).default('info')),
+  RAMPART_SECRET_KEY: secretKeySetting,
+  RATE_LIMIT_MULTIPLIER: z.preprocess(
+    unsetIfEmpty,
+    z
+      .string()
+      .regex(/^\d+$/, 'must be an integer from 1 to 1000')
+      .transform(Number)
+      .pipe(z.number().int().min(1, 'must be from 1 to 1000').max(1000, 'must be from 1 to 1000'))
+      .default(1),
+  ),
+  SECRET_KEY_PATH: pathSetting('data/rampart-secret.key'),
+  SERVE_WEB: booleanSetting,
   STORAGE_PATH: pathSetting('data/files'),
+  WEB_DIST_PATH: pathSetting('../web/dist'),
 });
 
 function resolveDatabasePath(value: string): string {
@@ -70,7 +138,7 @@ function resolveDatabasePath(value: string): string {
 }
 
 /** Relative paths resolve against `apps/api`, never the working directory. */
-function resolveStoragePath(value: string): string {
+function resolveApiPath(value: string): string {
   return resolve(API_ROOT, value);
 }
 
@@ -91,7 +159,14 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     host: '127.0.0.1',
     port: result.data.API_PORT,
     databasePath: resolveDatabasePath(result.data.DATABASE_PATH),
-    storagePath: resolveStoragePath(result.data.STORAGE_PATH),
+    storagePath: resolveApiPath(result.data.STORAGE_PATH),
     logLevel: result.data.LOG_LEVEL,
+    hosted: result.data.HOSTED,
+    serveWeb: result.data.SERVE_WEB,
+    webDistPath: resolveApiPath(result.data.WEB_DIST_PATH),
+    rateLimitMultiplier: result.data.RATE_LIMIT_MULTIPLIER,
+    secretKeyHex: result.data.RAMPART_SECRET_KEY ?? null,
+    secretKeyPath: resolveApiPath(result.data.SECRET_KEY_PATH),
+    fipsMode: result.data.FIPS_MODE,
   };
 }

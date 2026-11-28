@@ -24,8 +24,8 @@ process.env.E2E_RUN_DIR ??= mkdtempSync(join(tmpdir(), 'rampart-e2e-'));
 const runDir = process.env.E2E_RUN_DIR;
 
 const HOST = '127.0.0.1';
+// One server, the production serving path: the api serves the built web app and `/api` together.
 const webPort = process.env.E2E_WEB_PORT ?? '3290';
-const apiPort = process.env.E2E_API_PORT ?? '3291';
 
 export default defineConfig({
   testDir: 'e2e',
@@ -43,30 +43,24 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: [
-    {
-      // The api without watch, on a database and file store that live only for this run.
-      command: 'pnpm --filter @rampart/api exec tsx src/server.ts',
-      url: `http://${HOST}:${apiPort}/api/health`,
-      env: {
-        API_PORT: apiPort,
-        DATABASE_PATH: join(runDir, 'e2e.sqlite'),
-        STORAGE_PATH: join(runDir, 'files'),
-        LOG_LEVEL: 'warn',
-      },
-      reuseExistingServer: false,
-      timeout: 120_000,
-      stdout: 'pipe',
-      stderr: 'pipe',
+  webServer: {
+    // Build first (SERVE_WEB needs apps/web/dist/index.html), then the built api, as `pnpm start`
+    // serves it, on a database and file store that live only for this run. The server migrates.
+    command: 'pnpm build && pnpm --filter @rampart/api start',
+    url: `http://${HOST}:${webPort}/api/health`,
+    env: {
+      API_PORT: webPort,
+      SERVE_WEB: 'true',
+      DATABASE_PATH: join(runDir, 'e2e.sqlite'),
+      STORAGE_PATH: join(runDir, 'files'),
+      LOG_LEVEL: 'warn',
+      // The real limits stay on, raised so the suite's own traffic never trips them.
+      RATE_LIMIT_MULTIPLIER: '100',
     },
-    {
-      command: 'pnpm --filter @rampart/web exec vite',
-      url: `http://${HOST}:${webPort}/`,
-      env: { WEB_PORT: webPort, API_PORT: apiPort },
-      reuseExistingServer: false,
-      timeout: 120_000,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    },
-  ],
+    reuseExistingServer: false,
+    // A clean build of every package comes first.
+    timeout: 300_000,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  },
 });

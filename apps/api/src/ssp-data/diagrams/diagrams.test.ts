@@ -12,18 +12,26 @@ import { buildApp } from '../../app';
 import { loadConfig } from '../../config';
 import {
   CSRF_HEADER,
-  SESSION_COOKIE,
   auditPageSchema,
   diagramResponseSchema,
   diagramsResponseSchema,
   errorEnvelopeSchema,
   evidenceItemResponseSchema,
-  sessionResponseSchema,
   type AuditPage,
   type DiagramLink,
   type EvidenceItem,
 } from '../../contract';
-import { ADMIN, START, createHarness, type Client, type Harness } from '../../testing/harness';
+import {
+  ADMIN,
+  HARNESS_SECRET_KEY,
+  START,
+  createHarness,
+  signInThroughApi,
+  type Client,
+  type Harness,
+  type MfaSecrets,
+} from '../../testing/harness';
+import { samplePdf } from '../../uploads/testing/samples';
 import { loadDiagramLinks } from './repository';
 
 const URL = '/api/ssp/diagrams';
@@ -42,7 +50,6 @@ async function world(): Promise<{ h: Harness; admin: Client }> {
   return { h, admin: await h.setupAdmin() };
 }
 
-const bytesOf = (text: string) => new TextEncoder().encode(text);
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
 function diagramOf(response: LightMyRequestResponse, status = 200): DiagramLink {
@@ -72,24 +79,23 @@ async function evidence(client: Client, title: string, containsCui: boolean) {
   return evidenceItemResponseSchema.parse(response.json()).item;
 }
 
-async function uploadFile(client: Client, item: EvidenceItem, text: string, fileName: string) {
-  const response = await client.upload(
-    `/api/evidence/${item.id}/versions`,
-    bytesOf(text),
-    fileName,
-  );
-  expect(response.statusCode, response.body).toBe(201);
-}
-
 async function uploadBytes(client: Client, item: EvidenceItem, bytes: Uint8Array, name: string) {
   const response = await client.upload(`/api/evidence/${item.id}/versions`, bytes, name);
   expect(response.statusCode, response.body).toBe(201);
 }
 
+/**
+ * A file stored before the upload guard, which refuses these bytes now: seeded straight into the
+ * store and the DB.
+ */
+async function seedLegacy(h: Harness, item: EvidenceItem, bytes: Uint8Array, fileName: string) {
+  await h.seedFileVersion({ evidenceItemId: item.id, bytes, fileName });
+}
+
 /** A real PNG: the export can embed it. */
 const PNG = pngOf(4, 4);
 
-/** A GIF header: a picture, but not one the export can embed. */
+/** A GIF: a picture, but not one the export can embed, and no longer one that can be uploaded. */
 const GIF_BYTES = new Uint8Array([
   0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x3b,
 ]);
@@ -135,7 +141,7 @@ describe('diagram links', () => {
     const png = await evidence(admin, 'Network map', false);
     await uploadBytes(admin, png, PNG, 'network.PNG');
     const pdf = await evidence(admin, 'Data flow', false);
-    await uploadFile(admin, pdf, 'pdf bytes', 'flow.pdf');
+    await uploadBytes(admin, pdf, samplePdf(), 'flow.pdf');
     const cui = await evidence(admin, 'Enclave drawing', true);
     await addReference(admin, cui, 'SharePoint CUI site / drawings / enclave.png');
 
@@ -191,11 +197,12 @@ describe('diagram links', () => {
   });
 
   it('embeddable follows the bytes, not the name', async () => {
-    const { admin } = await world();
+    const { h, admin } = await world();
+    // Stored before the upload guard: the guard refuses both now.
     const gif = await evidence(admin, 'Old map', false);
-    await uploadBytes(admin, gif, GIF_BYTES, 'fake.png');
+    await seedLegacy(h, gif, GIF_BYTES, 'fake.png');
     const webp = await evidence(admin, 'Flow', false);
-    await uploadBytes(admin, webp, WEBP_BYTES, 'flow.jpg');
+    await seedLegacy(h, webp, WEBP_BYTES, 'flow.jpg');
     const real = await evidence(admin, 'Real map', false);
     await uploadBytes(admin, real, pngOf(4, 3), 'real.png');
 
@@ -224,7 +231,7 @@ describe('diagram links', () => {
   it('a file that cannot be read keeps the name verdict until it reads', async () => {
     const { h, admin } = await world();
     const item = await evidence(admin, 'Map', false);
-    await uploadBytes(admin, item, GIF_BYTES, 'map.png');
+    await seedLegacy(h, item, GIF_BYTES, 'map.png');
     const [key] = h.store.keys();
     h.store.corrupt(key ?? '');
     // Unreadable: the export will say it couldn't be read, so the list doesn't guess.
@@ -251,13 +258,13 @@ describe('diagram links', () => {
 
     // A later upload: the null link follows it, the pinned one doesn't.
     h.clock.advance(60_000);
-    await uploadFile(admin, item, 'second', 'map-v2.pdf');
+    await uploadBytes(admin, item, samplePdf(), 'map-v2.pdf');
     const after = await list(admin);
     const floating = after.find((d) => d.id === early.id);
     expect(floating?.resolved).toMatchObject({
       version: 2,
       fileName: 'map-v2.pdf',
-      sha256: sha256(bytesOf('second')),
+      sha256: sha256(samplePdf()),
       createdAt: h.clock.now().toISOString(),
     });
     expect(floating?.embeddable).toBe(false);
@@ -444,7 +451,11 @@ describe('diagram links', () => {
     function start(): { app: FastifyInstance; handle: DbHandle } {
       const handle = openDb(path);
       runMigrations(handle.db);
-      const config = loadConfig({ DATABASE_PATH: path, LOG_LEVEL: 'silent' });
+      const config = loadConfig({
+        DATABASE_PATH: path,
+        LOG_LEVEL: 'silent',
+        RAMPART_SECRET_KEY: HARNESS_SECRET_KEY,
+      });
       const app = buildApp({ config, db: handle.db, now, store });
       cleanups.push(async () => {
         await app.close();
@@ -453,12 +464,10 @@ describe('diagram links', () => {
       return { app, handle };
     }
 
+    // Setup or sign-in, then the MFA step as a user would, the secret kept across the restart.
+    const secrets: MfaSecrets = new Map();
     async function session(app: FastifyInstance, url: string, payload: unknown) {
-      const response = await app.inject({ method: 'POST', url, payload: payload as object });
-      expect(response.statusCode, response.body).toBeLessThan(300);
-      const cookie = response.cookies.find((c) => c.name === SESSION_COOKIE)?.value ?? '';
-      const { csrfToken } = sessionResponseSchema.parse(response.json());
-      return { cookie: `${SESSION_COOKIE}=${cookie}`, [CSRF_HEADER]: csrfToken ?? '' };
+      return signInThroughApi(app, url, payload, { at: now(), secrets });
     }
 
     const first = start();
@@ -475,7 +484,7 @@ describe('diagram links', () => {
       method: 'POST',
       url: `/api/evidence/${item.id}/versions`,
       headers: { ...headers, 'content-type': 'application/octet-stream', 'x-file-name': 'a.png' },
-      payload: Buffer.from('png'),
+      payload: Buffer.from(PNG),
     });
     expect(uploaded.statusCode, uploaded.body).toBe(201);
     const post = (payload: unknown) =>

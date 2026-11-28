@@ -72,3 +72,22 @@ Consequences: near the end of the US day, countdowns and "due today" can be off 
 - **What:** SSP workspace panels still mount once and stay mounted, so drafts survive. They now **re-read their data each time their tab is shown again** (re-select, Back, or the browser tab regaining focus). There's no separate reload on the export click, because a plain download link would race the write; Document control reloads when you return to it.
 - **Embeddable:** a diagram is embeddable only if its stored bytes read as PNG or JPEG, not just its file name.
 - **Why:** these came from the round-1 plan review of #23 (FIX 1 and FIX 2), fixed by F2.
+
+## 2026-11-26 — zod runs jitless in the browser (orchestrator)
+
+- **What:** `apps/api/src/contract/browser.ts` is the contract's first module. When it loads where a DOM exists (`window` and `document`), it calls `configureZodForBrowser()` (`z.config({ jitless: true })`), before any schema is built. The api (Node) keeps zod's JIT. A call in `main.tsx` would come too late, because zod decides per schema when the schema is built.
+- **Why:** zod v4 probes `Function('')` on its first parse to decide whether to JIT. The strict web CSP (`script-src 'self'`, no `unsafe-eval`) blocks the probe and logs a `securitypolicyviolation` on every page. The app still worked, but the CSP would never be clean. Running jitless in the browser removes the probe without weakening the CSP or changing the lockfile. Found by E1 (plan `security-hardening`, sprint `sec-baseline`).
+
+## 2026-11-26 — MFA design choices (sprint sec-mfa, agent defaults)
+
+- **TOTP on `node:crypto`** (HMAC-SHA1, RFC 6238/4226, tested against the RFC vectors), not otplib. Replay state is ours either way, there's no dependency, and the e2e helpers share the module. This overrides the plan's "using otplib".
+- **QR code:** `uqr` (runtime encoder) and `jsqr` (decoder, used only in tests) at exact versions. The api sends only an SVG path, checked by a strict regex. The web draws it as an inline `<svg>`, with no `data:` URL and no innerHTML.
+- **Recovery codes:** 10 codes, stored as HMAC-SHA-256 under a key derived from `RAMPART_SECRET_KEY`. Saving them is confirmed in the browser only.
+- **Lockout:** a wrong code at enrollment doesn't count toward the 5-failure lockout; a wrong code at the sign-in challenge does. The replay guard is monotonic.
+- **Order and reset:** a user with a temporary password enrolls in MFA first, then changes the password. The admin MFA reset has no confirm step.
+- **One-way door:** A2, turning the MFA gate on for every account. There's no migration. Back up `apps/api/data/rampart-secret.key` together with the database.
+
+## 2026-11-27 — MFA enrollment keeps its pending secret; reset of an unfinished setup is audited (sec-mfa)
+
+- **Pending secret:** showing enrollment again (a reload) returns the stored pending secret while it still decrypts, so a QR already scanned keeps working. A new secret is made only when none is stored or it can't be read. This came from G1's PENDING and was fixed in wave 2.
+- **Unfinished setup:** an admin reset of a user who started but never confirmed setup clears the secret, ends their sessions and writes `user.mfa_reset` with `pendingSetup: true → false` (R1's choice, accepted).

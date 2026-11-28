@@ -4,6 +4,8 @@ coverage
 playwright-report
 test-results
 pnpm-lock.yaml
+# The known-vulnerable fixture is kept exactly as pnpm wrote it
+tests/fixtures/supply-chain/vulnerable/pnpm-lock.yaml
 .claude
 pod-docs
 apps/api/data
@@ -15,3 +17,6 @@ packages/catalog/data
 packages/catalog/src/types.ts
 packages/rules/src/types.ts
 packages/rules/src/errors.ts
+
+# Generated password blocklist: one entry per line, written by scripts/build-blocklist.ts
+apps/api/src/auth/blocklist/common-passwords.json

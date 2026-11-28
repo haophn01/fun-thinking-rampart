@@ -6,12 +6,17 @@ import {
   UPLOAD_EXTENSIONS,
   UPLOAD_MAX_BYTES,
   fileNameSchema,
+  fileRefusedMessage,
   isAllowedFileType,
+  lastExtension,
+  type FileRefusedDetails,
 } from '../contract';
 import { AppError } from '../errors';
+import { checkFileContent } from './file-check';
+import { sanitizeFileName } from './file-name';
 
 export interface Upload {
-  /** The decoded, trimmed file name. */
+  /** The decoded name as `sanitizeFileName` leaves it: what is stored, returned and audited. */
   fileName: string;
   bytes: Buffer;
 }
@@ -48,10 +53,41 @@ function decodeHeader(value: string | string[] | undefined): string {
   }
 }
 
+/** The sanitized name, or 400 naming why the name (as sent, or once sanitized) isn't one. */
+function safeName(sent: string): string {
+  const fileName = sanitizeFileName(sent);
+  if (fileName !== null) return fileName;
+  const asSent = fileNameSchema.safeParse(sent);
+  throw badName(
+    asSent.success
+      ? 'The file name is empty once invisible characters are removed'
+      : (asSent.error.issues[0]?.message ?? 'Not a valid file name'),
+  );
+}
+
+/** 415 `file_refused` when the bytes aren't a real file of the name's extension. */
+function assertContent(fileName: string, bytes: Uint8Array): void {
+  // The extension check has passed, so there is one.
+  const extension = lastExtension(fileName) ?? '';
+  const refusal = checkFileContent(extension, bytes);
+  if (refusal === null) return;
+  const details: FileRefusedDetails = {
+    reason: refusal.reason,
+    extension,
+    ...(refusal.detected === undefined ? {} : { detected: refusal.detected }),
+  };
+  throw new AppError(
+    'file_refused',
+    fileRefusedMessage(refusal.reason, extension, refusal.detected),
+    { details },
+  );
+}
+
 /**
  * Reads an upload's name and bytes, checking them in the contract's order: an octet-stream body
- * (415 `unsupported_media_type`), the name header (400), the file type (415
- * `unsupported_file_type` with `details.allowed`), then an empty file (400).
+ * (415 `unsupported_media_type`), the name header (400), the sanitized name (400), the file type
+ * (415 `unsupported_file_type` with `details.allowed`), an empty file (400), the size (413), then
+ * the content (415 `file_refused`). Nothing is stored before it returns.
  */
 export function readUpload(request: FastifyRequest): Upload {
   const { body } = request;
@@ -62,9 +98,7 @@ export function readUpload(request: FastifyRequest): Upload {
     );
   }
 
-  const name = fileNameSchema.safeParse(decodeHeader(request.headers[FILE_NAME_HEADER]));
-  if (!name.success) throw badName(name.error.issues[0]?.message ?? 'Not a valid file name');
-  const fileName = name.data;
+  const fileName = safeName(decodeHeader(request.headers[FILE_NAME_HEADER]));
 
   if (!isAllowedFileType(fileName)) {
     throw new AppError('unsupported_file_type', "This file type can't be uploaded", {
@@ -80,6 +114,7 @@ export function readUpload(request: FastifyRequest): Upload {
   if (body.length > UPLOAD_MAX_BYTES) {
     throw new AppError('payload_too_large', 'The file is larger than 25 MiB');
   }
+  assertContent(fileName, body);
   return { fileName, bytes: body };
 }
 

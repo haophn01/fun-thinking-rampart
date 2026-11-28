@@ -79,6 +79,15 @@ describe('recordAudit', () => {
           before: null,
           after: '{"email":"admin@example.com","role":"admin","active":true}',
           requestId: 'req-1',
+          // The first event links to nothing. Its hash, computed independently:
+          // node -e "const c=require('crypto');console.log(c.createHash('sha256').update(
+          //   JSON.stringify(['rampart-audit-v1',null,'2026-11-23T22:30:00.000Z','u1',null,
+          //   'user.created','user','u1',null,
+          //   '{\"email\":\"admin@example.com\",\"role\":\"admin\",\"active\":true}',
+          //   'req-1'])).digest('hex'))"
+          prevHash: null,
+          // nosemgrep: generic.secrets.security.detected-generic-secret — a pinned SHA-256 test vector, not a secret
+          hash: '026bffef5807e80e6b583c99d83cff90155b7f2f419eeb9b68c0ac39bb63cff7',
         },
       ]);
 

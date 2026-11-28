@@ -10,6 +10,7 @@ import {
   type Policy,
 } from '../contract';
 import { createHarness, type Client, type Harness } from '../testing/harness';
+import { sampleDocx } from '../uploads/testing/samples';
 
 const harnesses: Harness[] = [];
 afterEach(async () => {
@@ -248,7 +249,7 @@ describe('policies', () => {
       requirementIds: ['IR.L2-3.6.1', 'IR.L2-3.6.2'],
     });
     expect(linked.statusCode, linked.body).toBe(200);
-    const bytes = new TextEncoder().encode('IR policy v1');
+    const bytes = sampleDocx();
     const uploaded = await carl.upload(`/api/policies/${item.id}/versions`, bytes, 'ir.docx');
     expect(uploaded.statusCode, uploaded.body).toBe(201);
 

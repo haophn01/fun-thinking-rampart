@@ -26,6 +26,10 @@ describe('first run setup', () => {
       setupRequired: true,
       user: null,
       csrfToken: null,
+      locked: false,
+      mustChangePassword: false,
+      signInNotice: null,
+      mfa: 'none',
     });
 
     const c = h.client();
@@ -46,7 +50,7 @@ describe('first run setup', () => {
     expect(body.csrfToken).toEqual(expect.any(String));
 
     const cookie = response.cookies.find((item) => item.name === 'rampart_session');
-    expect(cookie).toMatchObject({ httpOnly: true, sameSite: 'Strict', path: '/', maxAge: 43200 });
+    expect(cookie).toMatchObject({ httpOnly: true, sameSite: 'Strict', path: '/', maxAge: 28800 });
     expect(String(response.headers['set-cookie'])).not.toMatch(/secure/i);
 
     const users = h.db.select().from(user).all();
@@ -84,7 +88,15 @@ describe('first run setup', () => {
     expect(mine.user?.email).toBe('ada@example.com');
     expect(mine.csrfToken).toBe(body.csrfToken);
     const theirs = sessionResponseSchema.parse((await anon.get('/api/session')).json());
-    expect(theirs).toEqual({ setupRequired: false, user: null, csrfToken: null });
+    expect(theirs).toEqual({
+      setupRequired: false,
+      user: null,
+      csrfToken: null,
+      locked: false,
+      mustChangePassword: false,
+      signInNotice: null,
+      mfa: 'none',
+    });
 
     // A second call is refused and changes nothing.
     const again = await h.client().post('/api/setup', {
@@ -126,6 +138,33 @@ describe('first run setup', () => {
     }
     expect(h.db.select().from(user).all()).toHaveLength(0);
     expect(h.db.select().from(assessment).all()).toHaveLength(0);
+  });
+});
+
+describe('setup refuses a common password', () => {
+  it('gives 400 password_too_common and creates nothing', async () => {
+    const h = harness();
+    for (const password of ['password1234', 'PassWord1234']) {
+      const response = await h.client().post('/api/setup', { ...ADMIN, password });
+      expect(response.statusCode, password).toBe(400);
+      const envelope = errorEnvelopeSchema.parse(response.json());
+      expect(envelope.error.code).toBe('password_too_common');
+      expect(envelope.error.message).toBe('This password is too common. Choose another.');
+      expect(response.headers['set-cookie']).toBeUndefined();
+    }
+    expect(h.db.select().from(user).all()).toHaveLength(0);
+    expect(h.db.select().from(assessment).all()).toHaveLength(0);
+    expect(h.db.select().from(session).all()).toHaveLength(0);
+    expect(h.db.select().from(auditEvent).all()).toHaveLength(0);
+  });
+
+  it('records when the first password was set', async () => {
+    const h = harness();
+    await h.setupAdmin();
+    expect(h.db.select().from(user).get()).toMatchObject({
+      passwordChangedAt: START.toISOString(),
+      mustChangePassword: false,
+    });
   });
 });
 

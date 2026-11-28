@@ -25,6 +25,15 @@ export const ERROR_CODES = [
   'unsupported_file_type',
   'file_integrity_failed',
   'provider_in_use',
+  'password_too_common',
+  'password_reused',
+  'password_change_required',
+  'session_locked',
+  'notice_not_acknowledged',
+  'mfa_required',
+  'invalid_mfa_code',
+  'mfa_wrong_step',
+  'file_refused',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -74,7 +83,40 @@ export const ERROR_STATUS = {
    * lists those requirements in catalog order.
    */
   provider_in_use: 409,
+  /** A new password is on the bundled common-password list. */
+  password_too_common: 400,
+  /** A new password matches the current one or a recent one (`PASSWORD_HISTORY_DEPTH`). */
+  password_reused: 400,
+  /** The password is temporary; only the session routes answer until it is changed. */
+  password_change_required: 403,
+  /** The session is locked; only lock and unlock answer until it is unlocked. */
+  session_locked: 423,
+  /** A sign-in while a notice is set, without the current notice's digest. */
+  notice_not_acknowledged: 400,
+  /** The session still needs two-step sign-in (`mfa` is `enroll` or `challenge`). */
+  mfa_required: 403,
+  /** The TOTP or recovery code is wrong, already used, or a step at or before the last one. */
+  invalid_mfa_code: 401,
+  /** The MFA route doesn't fit the user's or session's state (already enrolled, not pending). */
+  mfa_wrong_step: 409,
+  /**
+   * The upload's bytes aren't what its extension says, or it is an unsafe office file. The message
+   * is `fileRefusedMessage(...)`; `details` follows `fileRefusedDetailsSchema`.
+   */
+  file_refused: 415,
 } as const satisfies Record<ErrorCode, number>;
+
+/** The fixed message the api sends, and the web may show as is, for these codes. */
+export const ERROR_MESSAGES = {
+  password_too_common: 'This password is too common. Choose another.',
+  password_reused: 'You used this password recently. Choose another.',
+  password_change_required: 'Change your password to continue.',
+  session_locked: 'Your session is locked. Enter your password to unlock it.',
+  notice_not_acknowledged: 'Acknowledge the sign-in notice to continue.',
+  mfa_required: 'Finish two-step sign-in to continue.',
+  invalid_mfa_code: "That code didn't work. Enter the newest code from your app.",
+  mfa_wrong_step: "This two-step sign-in step doesn't apply now. Reload the page.",
+} as const satisfies Partial<Record<ErrorCode, string>>;
 
 /**
  * The body of every non-2xx response. `code` is a plain string so a client keeps working when a

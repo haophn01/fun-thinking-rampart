@@ -1,0 +1,38 @@
+.verify {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  justify-items: start;
+}
+
+.result {
+  width: 100%;
+  min-width: 0;
+}
+
+.retryGap {
+  margin-top: 12px;
+}
+
+.stack {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.line {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.label {
+  margin: 0;
+  color: var(--rp-graphite);
+}
+
+.hash {
+  margin: 0;
+  font-family: var(--rp-font-mono);
+  overflow-wrap: anywhere;
+}

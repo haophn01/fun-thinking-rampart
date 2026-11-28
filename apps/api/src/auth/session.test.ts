@@ -1,11 +1,17 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { auditEvent, session } from '../../db/schema';
-import { errorEnvelopeSchema, sessionResponseSchema } from '../contract';
-import { START, createHarness, type Harness } from '../testing/harness';
+import {
+  SESSION_ABSOLUTE_LIMIT_MS,
+  SESSION_IDLE_LIMIT_MS,
+  errorEnvelopeSchema,
+  sessionResponseSchema,
+} from '../contract';
+import { ADMIN, START, createHarness, type Harness } from '../testing/harness';
+import { ABSOLUTE_LIMIT_MS, IDLE_LIMIT_MS, SESSION_MAX_AGE_SECONDS } from './sessions';
 
-const SECOND = 1000;
-const HOUR = 3600 * SECOND;
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
 
 const harnesses: Harness[] = [];
 afterEach(async () => {
@@ -21,20 +27,20 @@ function sessionRows(h: Harness) {
   return h.db.select().from(session).all();
 }
 
-describe('expiry edges', () => {
-  it('passes at 1:59:59 idle and fails at 2:00:00, deleting the row', async () => {
+describe('30 min idle and 8 h absolute', () => {
+  it('passes at 29:59.999 idle and fails at 30:00.000, deleting the row', async () => {
     const h = harness();
     const c = await h.setupAdmin();
-    h.clock.advance(2 * HOUR - SECOND);
+    h.clock.advance(30 * MINUTE - 1);
     const alive = await c.get('/api/users');
     expect(alive.statusCode).toBe(200);
     // That request moved last_seen_at forward, so the idle limit restarts from here.
     expect(sessionRows(h)[0]?.lastSeenAt).toBe(h.clock.now().toISOString());
 
-    h.clock.advance(2 * HOUR - SECOND);
+    h.clock.advance(30 * MINUTE - 1);
     expect((await c.get('/api/users')).statusCode).toBe(200);
 
-    h.clock.advance(2 * HOUR);
+    h.clock.advance(30 * MINUTE);
     const dead = await c.get('/api/users');
     expect(dead.statusCode).toBe(401);
     expect(errorEnvelopeSchema.parse(dead.json()).error.code).toBe('unauthenticated');
@@ -44,24 +50,47 @@ describe('expiry edges', () => {
   it('treats a public session check the same way', async () => {
     const h = harness();
     const c = await h.setupAdmin();
-    h.clock.advance(2 * HOUR);
+    h.clock.advance(30 * MINUTE);
     const status = sessionResponseSchema.parse((await c.get('/api/session')).json());
-    expect(status).toEqual({ setupRequired: false, user: null, csrfToken: null });
+    expect(status).toEqual({
+      setupRequired: false,
+      user: null,
+      csrfToken: null,
+      locked: false,
+      mustChangePassword: false,
+      signInNotice: null,
+      mfa: 'none',
+    });
     expect(sessionRows(h)).toHaveLength(0);
   });
 
-  it('ends an active session at 12 h', async () => {
+  it('ends a busy session at exactly 8 h after sign-in', async () => {
     const h = harness();
     const c = await h.setupAdmin();
-    for (let hour = 1; hour < 12; hour += 1) {
-      h.clock.set(new Date(START.getTime() + hour * HOUR));
-      expect((await c.get('/api/users')).statusCode, `hour ${String(hour)}`).toBe(200);
+    // A request every 20 minutes keeps it from idling out.
+    for (let at = 20 * MINUTE; at < 8 * HOUR; at += 20 * MINUTE) {
+      h.clock.set(new Date(START.getTime() + at));
+      expect((await c.get('/api/users')).statusCode, `at ${String(at / MINUTE)} min`).toBe(200);
     }
-    h.clock.set(new Date(START.getTime() + 12 * HOUR - 1));
+    h.clock.set(new Date(START.getTime() + 8 * HOUR - 1));
     expect((await c.get('/api/users')).statusCode).toBe(200);
-    h.clock.set(new Date(START.getTime() + 12 * HOUR));
+    h.clock.set(new Date(START.getTime() + 8 * HOUR));
     expect((await c.get('/api/users')).statusCode).toBe(401);
     expect(sessionRows(h)).toHaveLength(0);
+  });
+
+  it('sets Max-Age 28800 on the cookie and keeps the old constant names', async () => {
+    expect(IDLE_LIMIT_MS).toBe(SESSION_IDLE_LIMIT_MS);
+    expect(ABSOLUTE_LIMIT_MS).toBe(SESSION_ABSOLUTE_LIMIT_MS);
+    expect(SESSION_MAX_AGE_SECONDS).toBe(28800);
+    const h = harness();
+    await h.setupAdmin();
+    const signedIn = await h.client().post('/api/session', {
+      email: ADMIN.email,
+      password: ADMIN.password,
+    });
+    const cookie = signedIn.cookies.find((item) => item.name === 'rampart_session');
+    expect(cookie?.maxAge).toBe(28800);
   });
 
   it('answers 401 for a missing, unknown or malformed cookie', async () => {
@@ -76,6 +105,70 @@ describe('expiry edges', () => {
       });
       expect(response.statusCode, value).toBe(401);
     }
+  });
+});
+
+describe('rotation at sign-in', () => {
+  it('issues a new token and deletes the cookie’s old session', async () => {
+    const h = harness();
+    const c = await h.setupAdmin();
+    const oldToken = c.cookie;
+    const oldCsrf = c.csrfToken;
+    const oldId = sessionRows(h)[0]?.id;
+    h.clock.advance(MINUTE);
+
+    const again = await c.post('/api/session', { email: ADMIN.email, password: ADMIN.password });
+    expect(again.statusCode).toBe(200);
+    expect(c.cookie).not.toBeNull();
+    expect(c.cookie).not.toBe(oldToken);
+    expect(c.csrfToken).not.toBe(oldCsrf);
+    const rows = sessionRows(h);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).not.toBe(oldId);
+    // A fresh sign-in starts a fresh 8 h.
+    expect(rows[0]?.createdAt).toBe(h.clock.now().toISOString());
+
+    const stale = h.client();
+    stale.cookie = oldToken;
+    expect((await stale.get('/api/users')).statusCode).toBe(401);
+    // The new session waits for the code, then works.
+    expect((await c.get('/api/users')).statusCode).toBe(403);
+    const verified = await c.post('/api/session/mfa/verify', { code: h.totp(ADMIN.email) });
+    expect(verified.statusCode, verified.body).toBe(200);
+    expect((await c.get('/api/users')).statusCode).toBe(200);
+  });
+});
+
+describe('session status', () => {
+  const SIGNED_OUT = {
+    user: null,
+    csrfToken: null,
+    locked: false,
+    mustChangePassword: false,
+    signInNotice: null,
+  };
+
+  it('setup-required and signed-out answers are the old pins plus mfa none', async () => {
+    const h = harness();
+    const fresh = await h.client().get('/api/session');
+    expect(fresh.statusCode).toBe(200);
+    expect(fresh.json()).toEqual({ setupRequired: true, ...SIGNED_OUT, mfa: 'none' });
+
+    await h.setupAdmin();
+    const out = await h.client().get('/api/session');
+    expect(out.json()).toEqual({ setupRequired: false, ...SIGNED_OUT, mfa: 'none' });
+  });
+
+  it('a full session reports none, a pending one challenge, with its user and token', async () => {
+    const h = harness();
+    const admin = await h.setupAdmin();
+    const full = (await admin.get('/api/session')).json<Record<string, unknown>>();
+    expect(full.mfa).toBe('none');
+    const pending = h.client();
+    await pending.post('/api/session', { email: ADMIN.email, password: ADMIN.password });
+    const answer = (await pending.get('/api/session')).json<Record<string, unknown>>();
+    expect(answer).toMatchObject({ mfa: 'challenge', csrfToken: pending.csrfToken });
+    expect(answer.user).toMatchObject({ email: ADMIN.email });
   });
 });
 

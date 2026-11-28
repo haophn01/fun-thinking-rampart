@@ -11,6 +11,7 @@ import {
   type EvidenceItem,
 } from '../contract';
 import { createHarness, type Client, type Harness } from '../testing/harness';
+import { samplePdf } from '../uploads/testing/samples';
 
 const harnesses: Harness[] = [];
 afterEach(async () => {
@@ -127,7 +128,7 @@ describe('CUI refuses a file', () => {
   it('gives 409 cui_file_refused, the store stays empty and no version row exists', async () => {
     const { h, admin } = await world();
     const item = await create(admin, true);
-    const response = await upload(admin, item.id, bytesOf('controlled drawing'), 'drawing.pdf');
+    const response = await upload(admin, item.id, samplePdf(), 'drawing.pdf');
     expect(response.statusCode).toBe(409);
     expect(errorOf(response.body).code).toBe('cui_file_refused');
     expect(h.store.keys()).toEqual([]);
@@ -228,11 +229,12 @@ describe('upload limits', () => {
   it('exactly 25 MiB gives 201 and 25 MiB + 1 gives 413', async () => {
     const { h, admin } = await world();
     const item = await create(admin, false);
-    const max = new Uint8Array(UPLOAD_MAX_BYTES).fill(7);
-    const ok = await upload(admin, item.id, max, 'big.zip');
+    // Plain text, so the content check passes at the limit.
+    const max = new Uint8Array(UPLOAD_MAX_BYTES).fill(0x61);
+    const ok = await upload(admin, item.id, max, 'big.txt');
     expect(ok.statusCode, ok.body.slice(0, 200)).toBe(201);
     const over = new Uint8Array(UPLOAD_MAX_BYTES + 1).fill(8);
-    const tooBig = await upload(admin, item.id, over, 'bigger.zip');
+    const tooBig = await upload(admin, item.id, over, 'bigger.txt');
     expect(tooBig.statusCode).toBe(413);
     expect(errorOf(tooBig.body).code).toBe('payload_too_large');
     expect(h.store.keys()).toEqual([sha256(max)]);
@@ -293,8 +295,8 @@ describe('audit', () => {
     const { h, admin } = await world();
     const item = await create(admin, false);
     const secret = 'TOP-SECRET-FILE-CONTENT-7f3a';
-    const bytes = bytesOf(secret);
-    await upload(admin, item.id, bytes, 'Política 1.pdf');
+    const bytes = bytesOf(`%PDF-1.7\n${secret}\n%%EOF\n`);
+    expect((await upload(admin, item.id, bytes, 'Política 1.pdf')).statusCode).toBe(201);
 
     const [added] = (await events(admin, item.id)).filter(
       (e) => e.action === 'evidence.version_added',

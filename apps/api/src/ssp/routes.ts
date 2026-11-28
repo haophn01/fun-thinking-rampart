@@ -129,7 +129,7 @@ async function readImages(
     } catch (error) {
       if (!(error instanceof AppError)) throw error;
       log.warn(
-        { linkId: link.id, code: error.code },
+        { linkId: link.id, errorCode: error.code },
         'SSP export: a diagram image could not be read',
       );
     }

@@ -1,8 +1,13 @@
 import {
+  mfaEnrolledResponseSchema,
+  mfaEnrollmentResponseSchema,
   sessionResponseSchema,
+  type MfaEnrollmentResponse,
+  type MfaVerifyRequest,
   type Role,
   type SessionResponse,
   type SessionUser,
+  type SignInNotice,
 } from '@rampart/api/contract';
 import {
   createContext,
@@ -14,9 +19,27 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { apiGet, apiSend, setApiSessionHooks } from '../api/client';
+import { ApiError, apiGet, apiSend, setApiSessionHooks } from '../api/client';
+import { retryAfterSecondsOf } from '../api/too-many';
 
-export type SessionStatus = 'loading' | 'setup' | 'signed_out' | 'signed_in' | 'error';
+/**
+ * `locked`: the session needs the password again (it wins over everything below).
+ * `mfa_enroll`: the user must set up two-step sign-in before anything else.
+ * `mfa_challenge`: the session waits for a code from the user's app, or a recovery code.
+ * `mfa_recovery_codes`: enrollment just finished; the new recovery codes show once.
+ * `password_change`: the password is temporary and must be changed before the app opens.
+ */
+export type SessionStatus =
+  | 'loading'
+  | 'setup'
+  | 'signed_out'
+  | 'signed_in'
+  | 'locked'
+  | 'mfa_enroll'
+  | 'mfa_challenge'
+  | 'mfa_recovery_codes'
+  | 'password_change'
+  | 'error';
 
 /** How a role reads in the UI. */
 export const ROLE_LABELS: Record<Role, string> = { admin: 'Admin', contributor: 'Contributor' };
@@ -35,16 +58,53 @@ export interface SessionValue {
   user: SessionUser | null;
   /** A message for the Sign in page, such as `SESSION_ENDED`; `null` otherwise. */
   notice: string | null;
-  /** Re-reads `GET /api/session`. Never throws: a failure becomes `status: 'error'`. */
+  /** The notice every sign-in acknowledges, from the last session answer; `null` when none. */
+  signInNotice: SignInNotice | null;
+  /**
+   * Set only while `status` is `error` because the session load got a 429: the wait in whole
+   * seconds, or 0 when the answer gave none. `null` otherwise.
+   */
+  retryAfterSeconds: number | null;
+  /** The codes enrollment returned, while `status` is `mfa_recovery_codes`; `null` otherwise. */
+  recoveryCodes: readonly string[] | null;
+  /**
+   * Re-reads `GET /api/session`. Never throws. A failure becomes `status: 'error'`, except while
+   * signed in, locked or changing a password, where the current state (and the app's drafts)
+   * stays; a 401 still ends the session through the api client.
+   */
   refresh: () => Promise<void>;
   /** `POST /api/setup`. Throws `ApiError`; on success the user is signed in. */
   setup: (input: SetupInput) => Promise<void>;
-  /** `POST /api/session`. Throws `ApiError`; on success the user is signed in. */
-  signIn: (email: string, password: string) => Promise<void>;
+  /** `POST /api/session`, with `noticeDigest` when given. Throws `ApiError`. */
+  signIn: (email: string, password: string, noticeDigest?: string) => Promise<void>;
   /** `DELETE /api/session`. Throws `ApiError` and stays signed in when it fails. */
   signOut: () => Promise<void>;
   /** Drops the session locally and shows Sign in with `SESSION_ENDED`. */
   endSession: () => void;
+  /**
+   * Shows the lock at once, then posts `POST /api/session/lock`; a failure is ignored. Until
+   * that post succeeds, a session answer saying "not locked" keeps the lock and posts again.
+   * Does nothing unless signed in or changing a password.
+   */
+  lock: () => Promise<void>;
+  /** `POST /api/session/unlock`. Throws `ApiError`; on success applies the returned session. */
+  unlock: (password: string) => Promise<void>;
+  /** `POST /api/session/password`. Throws `ApiError`; on success applies the rotated session. */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  /**
+   * `POST /api/session/mfa/enroll`: a new secret, which replaces any earlier unconfirmed one.
+   * Throws `ApiError`. Leaves the session's state as it is.
+   */
+  startMfaEnrollment: () => Promise<MfaEnrollmentResponse>;
+  /**
+   * `POST /api/session/mfa/enroll/confirm` with the first code. Throws `ApiError`; on success
+   * applies the rotated session's CSRF token and moves to `mfa_recovery_codes`.
+   */
+  confirmMfaEnrollment: (code: string) => Promise<void>;
+  /** Leaves `mfa_recovery_codes` for the session it saved, and drops the codes. */
+  acknowledgeRecoveryCodes: () => void;
+  /** `POST /api/session/mfa/verify`. Throws `ApiError`; on success applies the rotated session. */
+  verifyMfa: (input: MfaVerifyRequest) => Promise<void>;
 }
 
 interface State {
@@ -52,112 +112,348 @@ interface State {
   user: SessionUser | null;
   csrfToken: string | null;
   notice: string | null;
+  signInNotice: SignInNotice | null;
+  retryAfterSeconds: number | null;
+  recoveryCodes: readonly string[] | null;
+  /** While `mfa_recovery_codes`: the status the session itself has, shown once they are saved. */
+  afterCodes: SessionStatus | null;
 }
 
-const LOADING: State = { status: 'loading', user: null, csrfToken: null, notice: null };
+const LOADING: State = {
+  status: 'loading',
+  user: null,
+  csrfToken: null,
+  notice: null,
+  signInNotice: null,
+  retryAfterSeconds: null,
+  recoveryCodes: null,
+  afterCodes: null,
+};
+
+/** The statuses that hold a session: a failed refresh keeps them, and `endSession` ends them. */
+const HOLDS_SESSION: ReadonlySet<SessionStatus> = new Set([
+  'signed_in',
+  'locked',
+  'mfa_enroll',
+  'mfa_challenge',
+  'mfa_recovery_codes',
+  'password_change',
+]);
+
+/** A held session's status: locked > the two-step steps > a required change > signed in. */
+function heldStatus(session: SessionResponse): SessionStatus {
+  if (session.locked) return 'locked';
+  if (session.mfa === 'enroll') return 'mfa_enroll';
+  if (session.mfa === 'challenge') return 'mfa_challenge';
+  return session.mustChangePassword ? 'password_change' : 'signed_in';
+}
 
 /** The gate's state for a session answer. */
 function stateFor(session: SessionResponse): State {
+  const base = {
+    notice: null,
+    signInNotice: session.signInNotice,
+    retryAfterSeconds: null,
+    recoveryCodes: null,
+    afterCodes: null,
+  };
   if (session.user !== null) {
-    return { status: 'signed_in', user: session.user, csrfToken: session.csrfToken, notice: null };
+    return {
+      ...base,
+      status: heldStatus(session),
+      user: session.user,
+      csrfToken: session.csrfToken,
+    };
   }
   return {
+    ...base,
     status: session.setupRequired ? 'setup' : 'signed_out',
     user: null,
     csrfToken: null,
-    notice: null,
   };
+}
+
+/** The error state for a failed session load; a 429 carries its wait. */
+function errorFor(error: unknown): State {
+  const limited = error instanceof ApiError && error.status === 429;
+  return {
+    ...LOADING,
+    status: 'error',
+    retryAfterSeconds: limited ? (retryAfterSecondsOf(error.details) ?? 0) : null,
+  };
+}
+
+/** The state once the session is gone: no user, no token, no codes. */
+function signedOut(now: State): State {
+  return {
+    ...now,
+    status: 'signed_out',
+    user: null,
+    csrfToken: null,
+    recoveryCodes: null,
+    afterCodes: null,
+  };
+}
+
+/**
+ * Whether a re-read keeps the recovery codes on screen: they show once, so only a signed-out
+ * answer, another user, or a session that needs two-step sign-in again (a reset) drops them.
+ */
+function keepsCodes(now: State, next: State): boolean {
+  return (
+    now.status === 'mfa_recovery_codes' &&
+    next.user !== null &&
+    next.user.id === now.user?.id &&
+    next.status !== 'mfa_enroll' &&
+    next.status !== 'mfa_challenge'
+  );
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(LOADING);
-  // The CSRF token is read by the api client between renders, so it lives in a ref too.
-  const csrf = useRef<string | null>(null);
+  // The api client and the methods read the state between renders, so it lives in a ref too.
+  const current = useRef<State>(LOADING);
   // Each change bumps the version; an answer that arrives after a newer change is dropped.
   const version = useRef(0);
+  // False from a local lock() until its POST succeeds or the api reports the lock itself.
+  const lockConfirmed = useRef(true);
 
-  const apply = useCallback((next: State) => {
-    csrf.current = next.csrfToken;
+  const commit = useCallback((next: State) => {
+    current.current = next;
     setState(next);
   }, []);
 
   const endSession = useCallback(() => {
     version.current += 1;
-    csrf.current = null;
-    // Only a signed-in user's session can end; a late 401 after sign-out says nothing.
-    setState((current) =>
-      current.status === 'signed_in'
-        ? { status: 'signed_out', user: null, csrfToken: null, notice: SESSION_ENDED }
-        : current,
-    );
+    const now = current.current;
+    // Only a held session can end; a late 401 after sign-out says nothing.
+    if (!HOLDS_SESSION.has(now.status)) return;
+    commit({ ...signedOut(now), notice: SESSION_ENDED });
+  }, [commit]);
+
+  const postLock = useCallback(async () => {
+    try {
+      await apiSend('POST', '/api/session/lock');
+      lockConfirmed.current = true;
+    } catch {
+      // Ignored: the lock already shows, and the next session answer posts it again.
+    }
   }, []);
+
+  const onLocked = useCallback(() => {
+    const now = current.current;
+    if (now.status !== 'signed_in' && now.status !== 'password_change') return;
+    version.current += 1;
+    lockConfirmed.current = true;
+    commit({ ...now, status: 'locked' });
+  }, [commit]);
+
+  /**
+   * Applies a re-read session, unless it would drop a lock the api hasn't confirmed yet, or the
+   * recovery codes on screen while the same user's session needs no more two-step steps.
+   */
+  const applyAnswer = useCallback(
+    (next: State) => {
+      const now = current.current;
+      if (keepsCodes(now, next)) {
+        commit({
+          ...next,
+          status: 'mfa_recovery_codes',
+          recoveryCodes: now.recoveryCodes,
+          afterCodes: next.status,
+        });
+        return;
+      }
+      if (next.status === 'locked') lockConfirmed.current = true;
+      const unconfirmed =
+        now.status === 'locked' &&
+        !lockConfirmed.current &&
+        next.user !== null &&
+        next.user.id === now.user?.id;
+      if (unconfirmed) {
+        commit({ ...next, status: 'locked' });
+        void postLock();
+        return;
+      }
+      commit(next);
+    },
+    [commit, postLock],
+  );
 
   /** Reads the session; it sets state only once the answer is in. */
   const load = useCallback(async () => {
     version.current += 1;
     const run = version.current;
-    let next: State;
+    let next: State | null;
     try {
       next = stateFor(await apiGet('/api/session', sessionResponseSchema));
-    } catch {
-      next = { status: 'error', user: null, csrfToken: null, notice: null };
+    } catch (error) {
+      // A held session survives a failed re-read, so a blip never unmounts the app.
+      next = HOLDS_SESSION.has(current.current.status) ? null : errorFor(error);
     }
-    if (run === version.current) apply(next);
-  }, [apply]);
+    if (run === version.current && next !== null) applyAnswer(next);
+  }, [applyAnswer]);
 
   const refresh = useCallback(() => {
     // Only a retry after an error shows Loading; a signed-in refresh keeps the page mounted.
-    setState((current) =>
-      current.status === 'error' ? { ...current, status: 'loading' } : current,
-    );
+    const now = current.current;
+    if (now.status === 'error') commit({ ...now, status: 'loading', retryAfterSeconds: null });
     return load();
-  }, [load]);
+  }, [commit, load]);
 
-  const signInWith = useCallback(
-    async (path: '/api/session' | '/api/setup', body: unknown) => {
+  /** Posts a call that answers with a session, then applies it if nothing newer happened. */
+  const sendForSession = useCallback(
+    async (path: string, body: unknown) => {
       version.current += 1;
       const run = version.current;
       const session = await apiSend('POST', path, body, sessionResponseSchema);
-      if (run === version.current) apply(stateFor(session));
+      if (run !== version.current) return;
+      // These calls set the session's state themselves, so their answer always applies.
+      lockConfirmed.current = true;
+      commit(stateFor(session));
     },
-    [apply],
+    [commit],
   );
 
   const signIn = useCallback(
-    (email: string, password: string) => signInWith('/api/session', { email, password }),
-    [signInWith],
+    (email: string, password: string, noticeDigest?: string) =>
+      sendForSession(
+        '/api/session',
+        noticeDigest === undefined ? { email, password } : { email, password, noticeDigest },
+      ),
+    [sendForSession],
   );
-  const setup = useCallback((input: SetupInput) => signInWith('/api/setup', input), [signInWith]);
+  const setup = useCallback(
+    (input: SetupInput) => sendForSession('/api/setup', input),
+    [sendForSession],
+  );
+  const unlock = useCallback(
+    (password: string) => sendForSession('/api/session/unlock', { password }),
+    [sendForSession],
+  );
+  const changePassword = useCallback(
+    (currentPassword: string, newPassword: string) =>
+      sendForSession('/api/session/password', { currentPassword, newPassword }),
+    [sendForSession],
+  );
+
+  const lock = useCallback(async () => {
+    const now = current.current;
+    if (now.status !== 'signed_in' && now.status !== 'password_change') return;
+    version.current += 1;
+    lockConfirmed.current = false;
+    commit({ ...now, status: 'locked' });
+    await postLock();
+  }, [commit, postLock]);
 
   const signOut = useCallback(async () => {
     await apiSend('DELETE', '/api/session');
     version.current += 1;
-    apply({ status: 'signed_out', user: null, csrfToken: null, notice: null });
-  }, [apply]);
+    commit({ ...signedOut(current.current), notice: null });
+  }, [commit]);
+
+  const startMfaEnrollment = useCallback(
+    () => apiSend('POST', '/api/session/mfa/enroll', undefined, mfaEnrollmentResponseSchema),
+    [],
+  );
+
+  const confirmMfaEnrollment = useCallback(
+    async (code: string) => {
+      version.current += 1;
+      const run = version.current;
+      const enrolled = await apiSend(
+        'POST',
+        '/api/session/mfa/enroll/confirm',
+        { code },
+        mfaEnrolledResponseSchema,
+      );
+      if (run !== version.current) return;
+      lockConfirmed.current = true;
+      const next = stateFor(enrolled);
+      if (next.user === null) {
+        commit(next);
+        return;
+      }
+      commit({
+        ...next,
+        status: 'mfa_recovery_codes',
+        recoveryCodes: enrolled.recoveryCodes,
+        afterCodes: next.status,
+      });
+    },
+    [commit],
+  );
+
+  const acknowledgeRecoveryCodes = useCallback(() => {
+    const now = current.current;
+    if (now.status !== 'mfa_recovery_codes') return;
+    version.current += 1;
+    commit({
+      ...now,
+      status: now.afterCodes ?? 'signed_in',
+      recoveryCodes: null,
+      afterCodes: null,
+    });
+  }, [commit]);
+
+  const verifyMfa = useCallback(
+    (input: MfaVerifyRequest) => sendForSession('/api/session/mfa/verify', input),
+    [sendForSession],
+  );
 
   useEffect(() => {
-    setApiSessionHooks({ csrfToken: () => csrf.current, onUnauthenticated: endSession });
+    setApiSessionHooks({
+      csrfToken: () => current.current.csrfToken,
+      onUnauthenticated: endSession,
+      onLocked,
+      // The api says two-step sign-in is still needed: re-read the session to find which step.
+      onMfaRequired: () => void load(),
+    });
     void load();
     return () => {
       version.current += 1;
       setApiSessionHooks(null);
     };
-  }, [endSession, load]);
+  }, [endSession, onLocked, load]);
 
   const value = useMemo<SessionValue>(
     () => ({
       status: state.status,
       user: state.user,
       notice: state.notice,
+      signInNotice: state.signInNotice,
+      retryAfterSeconds: state.retryAfterSeconds,
+      recoveryCodes: state.recoveryCodes,
       refresh,
       setup,
       signIn,
       signOut,
       endSession,
+      lock,
+      unlock,
+      changePassword,
+      startMfaEnrollment,
+      confirmMfaEnrollment,
+      acknowledgeRecoveryCodes,
+      verifyMfa,
     }),
-    [state, refresh, setup, signIn, signOut, endSession],
+    [
+      state,
+      refresh,
+      setup,
+      signIn,
+      signOut,
+      endSession,
+      lock,
+      unlock,
+      changePassword,
+      startMfaEnrollment,
+      confirmMfaEnrollment,
+      acknowledgeRecoveryCodes,
+      verifyMfa,
+    ],
   );
 
   return <SessionContext value={value}>{children}</SessionContext>;

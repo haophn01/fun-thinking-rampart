@@ -17,6 +17,8 @@ import { Alert, Button, Select, TextField } from '../../look';
 import styles from './settings.module.css';
 
 const PASSWORD_RULE = 'Use 12 to 128 characters.';
+const TOO_COMMON = 'This password is too common. Choose another.';
+const TEMP_HINT = 'They choose their own at first sign-in.';
 const EMAIL_TAKEN = 'That email is already in use.';
 const ROLES = roleSchema.options;
 
@@ -88,6 +90,8 @@ function CreateUserForm({ onSubmitting, onCreated }: CreateFormProps) {
     } catch (error) {
       if (error instanceof ApiError && error.code === 'email_taken') {
         setErrors({ email: EMAIL_TAKEN });
+      } else if (error instanceof ApiError && error.code === 'password_too_common') {
+        setErrors({ password: TOO_COMMON });
       } else {
         setFailure(changeFailure(error));
       }
@@ -128,12 +132,13 @@ function CreateUserForm({ onSubmitting, onCreated }: CreateFormProps) {
           <RoleOptions />
         </Select>
         <TextField
-          label="Password"
+          label="Temporary password"
           type="password"
           autoComplete="new-password"
           {...text('password')}
         />
       </div>
+      <p className={styles.muted}>{TEMP_HINT}</p>
       <div>
         <Button type="submit" variant="primary" disabled={pending}>
           {pending ? 'Adding…' : 'Add user'}
@@ -147,10 +152,13 @@ interface UserRowProps {
   user: User;
   isMe: boolean;
   busy: boolean;
-  onChange: (user: User, change: UpdateUserRequest) => Promise<boolean>;
+  /** Resolves true when saved, 'too_common' when the new password was refused, else false. */
+  onChange: (user: User, change: UpdateUserRequest) => Promise<boolean | 'too_common'>;
+  /** Clears the user's two-step sign-in; admins only, no confirm step. */
+  onResetMfa: (user: User) => Promise<void>;
 }
 
-function UserRow({ user, isMe, busy, onChange }: UserRowProps) {
+function UserRow({ user, isMe, busy, onChange, onResetMfa }: UserRowProps) {
   const nameId = useId();
   const [resetting, setResetting] = useState(false);
   const [password, setPassword] = useState('');
@@ -163,7 +171,9 @@ function UserRow({ user, isMe, busy, onChange }: UserRowProps) {
       return;
     }
     setPasswordError(undefined);
-    if (await onChange(user, { password })) {
+    const saved = await onChange(user, { password });
+    if (saved === 'too_common') setPasswordError(TOO_COMMON);
+    else if (saved) {
       setResetting(false);
       setPassword('');
     }
@@ -179,6 +189,9 @@ function UserRow({ user, isMe, busy, onChange }: UserRowProps) {
           {isMe && <span className={styles.tag}>You</span>}
         </span>
         <span className={styles.email}>{user.email}</span>
+        <span className={styles.email}>
+          Two-step sign-in: {user.mfaEnrolled ? 'Set up' : 'Not set up'}
+        </span>
       </div>
       <span className={styles.state}>{user.active ? 'Active' : 'Inactive'}</span>
       <Select
@@ -206,6 +219,11 @@ function UserRow({ user, isMe, busy, onChange }: UserRowProps) {
         >
           Reset password
         </Button>
+        {user.mfaEnrolled && (
+          <Button disabled={busy} onClick={() => void onResetMfa(user)}>
+            Reset two-step sign-in
+          </Button>
+        )}
       </div>
       {resetting && (
         <form className={styles.reset} noValidate onSubmit={(event) => void savePassword(event)}>
@@ -272,7 +290,7 @@ export function UsersPanel() {
   }, [load]);
 
   const change = useCallback(
-    async (target: User, update: UpdateUserRequest): Promise<boolean> => {
+    async (target: User, update: UpdateUserRequest): Promise<boolean | 'too_common'> => {
       setBusyId(target.id);
       setFailure(null);
       setNotice(null);
@@ -285,17 +303,55 @@ export function UsersPanel() {
         );
         setUsers((list) => list?.map((u) => (u.id === user.id ? user : u)) ?? null);
         if (update.password !== undefined) {
-          setNotice(`Password reset for ${user.displayName}. Their sessions have ended.`);
+          setNotice(
+            `Password reset for ${user.displayName}. Their sessions have ended, and they must choose a new password at next sign-in.`,
+          );
         }
-        if (target.id === meId) {
-          // A new password or deactivation ends your own sessions; a role change shows on refresh.
-          if (update.password !== undefined || update.active === false) session.endSession();
-          else if (update.role !== undefined) await session.refresh();
+        // A new password, deactivation or role change ends your own sessions.
+        if (
+          target.id === meId &&
+          (update.password !== undefined || update.active === false || update.role !== undefined)
+        ) {
+          session.endSession();
         }
         return true;
       } catch (error) {
+        if (
+          update.password !== undefined &&
+          error instanceof ApiError &&
+          error.code === 'password_too_common'
+        ) {
+          return 'too_common';
+        }
         setFailure(changeFailure(error));
         return false;
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [meId, session],
+  );
+
+  const resetMfa = useCallback(
+    async (target: User) => {
+      setBusyId(target.id);
+      setFailure(null);
+      setNotice(null);
+      try {
+        const { user } = await apiSend(
+          'POST',
+          `/api/users/${encodeURIComponent(target.id)}/mfa/reset`,
+          undefined,
+          userResponseSchema,
+        );
+        setUsers((list) => list?.map((u) => (u.id === user.id ? user : u)) ?? null);
+        setNotice(
+          `Two-step sign-in reset for ${user.displayName}. They set it up again at their next sign-in.`,
+        );
+        // The reset ends all of the user's sessions, yours included.
+        if (target.id === meId) session.endSession();
+      } catch (error) {
+        setFailure(changeFailure(error));
       } finally {
         setBusyId(null);
       }
@@ -346,6 +402,7 @@ export function UsersPanel() {
             isMe={user.id === meId}
             busy={busyId === user.id}
             onChange={change}
+            onResetMfa={resetMfa}
           />
         ))}
       </ul>

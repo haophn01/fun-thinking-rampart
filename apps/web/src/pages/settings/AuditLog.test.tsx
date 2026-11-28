@@ -247,13 +247,40 @@ describe('AuditLog', () => {
       ssp_revision: 'SSP revision',
       ssp_approval: 'SSP approval',
     };
-    expect(AUDIT_ACTIONS.slice(-Object.keys(added).length)).toEqual(Object.keys(added));
-    expect(AUDIT_ENTITY_TYPES.slice(-Object.keys(addedEntities).length)).toEqual(
+    const ordered = (list: readonly string[], keys: string[]) => {
+      const start = list.indexOf(keys[0] ?? '');
+      return list.slice(start, start + keys.length);
+    };
+    // sec-auth appends its actions and entity after them, each with its own label.
+    const secAuth = {
+      'auth.password_changed': 'Password changed',
+      'auth.session_locked': 'Session locked',
+      'auth.session_unlocked': 'Session unlocked',
+      'auth.notice_acknowledged': 'Sign-in notice acknowledged',
+      'settings.updated': 'Settings changed',
+    };
+    const secAuthEntities = { settings: 'Settings' };
+    // sec-mfa appends three actions after those, each with its own label, and no entity.
+    const secMfa = {
+      'auth.mfa_enrolled': 'Two-step sign-in set up',
+      'auth.mfa_verified': 'Two-step sign-in verified',
+      'user.mfa_reset': 'Two-step sign-in reset',
+    };
+    expect(AUDIT_ACTIONS.slice(-Object.keys(secMfa).length)).toEqual(Object.keys(secMfa));
+    expect(ordered(AUDIT_ACTIONS, Object.keys(secAuth))).toEqual(Object.keys(secAuth));
+    expect(AUDIT_ACTIONS.indexOf('settings.updated') + 1).toBe(
+      AUDIT_ACTIONS.indexOf('auth.mfa_enrolled'),
+    );
+    expect(AUDIT_ENTITY_TYPES.slice(-Object.keys(secAuthEntities).length)).toEqual(
+      Object.keys(secAuthEntities),
+    );
+    expect(ordered(AUDIT_ACTIONS, Object.keys(added))).toEqual(Object.keys(added));
+    expect(ordered(AUDIT_ENTITY_TYPES, Object.keys(addedEntities))).toEqual(
       Object.keys(addedEntities),
     );
-    for (const [action, label] of Object.entries(added))
+    for (const [action, label] of Object.entries({ ...added, ...secAuth, ...secMfa }))
       expect(actions[action], action).toBe(label);
-    for (const [type, label] of Object.entries(addedEntities)) {
+    for (const [type, label] of Object.entries({ ...addedEntities, ...secAuthEntities })) {
       expect(entities[type], type).toBe(label);
     }
     expect(actions['system_profile.updated']).toBe('System profile changed');
@@ -271,7 +298,7 @@ describe('AuditLog', () => {
       'All',
       ...AUDIT_ENTITY_TYPES.map((type) => entities[type]),
     ]);
-    for (const label of Object.values(addedEntities)) {
+    for (const label of Object.values({ ...addedEntities, ...secAuthEntities })) {
       expect(options.map((option) => option.textContent)).toContain(label);
     }
   });
@@ -281,14 +308,16 @@ describe('AuditLog', () => {
     await renderSettings();
     await screen.findByText('No audit events yet.');
     const headings = screen.getAllByRole('heading', { level: 2 });
-    expect(headings).toHaveLength(3);
+    expect(headings).toHaveLength(4);
     expect(headings[0]).toHaveTextContent(/Assessment/);
     expect(headings[1]).toHaveTextContent(/Users/);
-    expect(headings[2]).toHaveTextContent(/Audit log/);
+    expect(headings[2]).toHaveTextContent(/Sign-in notice/);
+    expect(headings[3]).toHaveTextContent(/Audit log/);
     expect(headings.map((h) => h.querySelector('[data-balloon]')?.textContent)).toEqual([
       '1',
       '2',
       '3',
+      '4',
     ]);
   });
 

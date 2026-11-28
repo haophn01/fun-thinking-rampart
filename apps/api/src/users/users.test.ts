@@ -71,6 +71,7 @@ describe('admin-only user management', () => {
       role: 'contributor',
       active: true,
       createdAt: new Date(START.getTime() + 60_000).toISOString(),
+      mfaEnrolled: false,
     });
     await create(admin, { email: 'bob@example.com', displayName: 'Bob' });
     await create(admin, { email: 'abe2@example.com', displayName: 'Bob' });
@@ -118,7 +119,7 @@ describe('admin-only user management', () => {
     expect(list.body).not.toMatch(/password|hash|argon|failedSignIns|lockedUntil/i);
     for (const raw of list.json<{ users: Record<string, unknown>[] }>().users) {
       expect(Object.keys(raw).sort()).toEqual(
-        ['active', 'createdAt', 'displayName', 'email', 'id', 'role'].sort(),
+        ['active', 'createdAt', 'displayName', 'email', 'id', 'mfaEnrolled', 'role'].sort(),
       );
     }
   });
@@ -209,33 +210,6 @@ describe('last admin and revocation', () => {
     expect((await fresh.get('/api/users')).statusCode).toBe(401);
   });
 
-  it('applies a role change on the next request without signing out', async () => {
-    const h = harness();
-    const admin = await h.setupAdmin();
-    const carl = await create(admin, { email: 'carl@example.com', displayName: 'Carl' });
-    const carlClient = await h.signIn('carl@example.com', PASSWORD);
-    const newUser = {
-      email: 'n@example.com',
-      displayName: 'N',
-      role: 'contributor',
-      password: PASSWORD,
-    };
-    expect((await carlClient.post('/api/users', newUser)).statusCode).toBe(403);
-
-    expect((await admin.patch(`/api/users/${carl.id}`, { role: 'admin' })).statusCode).toBe(200);
-    expect((await carlClient.post('/api/users', newUser)).statusCode).toBe(201);
-    const me = (await carlClient.get('/api/session')).json<{ user: { role: string } }>();
-    expect(me.user.role).toBe('admin');
-
-    expect((await admin.patch(`/api/users/${carl.id}`, { role: 'contributor' })).statusCode).toBe(
-      200,
-    );
-    expect(
-      (await carlClient.post('/api/users', { ...newUser, email: 'm@example.com' })).statusCode,
-    ).toBe(403);
-    expect(sessionsOf(h, carl.id)).toHaveLength(1);
-  });
-
   it('clears a lockout when an admin resets the password', async () => {
     const h = harness();
     const admin = await h.setupAdmin();
@@ -259,6 +233,81 @@ describe('last admin and revocation', () => {
     });
     expect(response.statusCode).toBe(404);
     expect(code(response.body)).toBe('not_found');
+  });
+});
+
+describe('role change signs out everywhere', () => {
+  it('ends every session of the target, and applies the new role at the next sign-in', async () => {
+    const h = harness();
+    const admin = await h.setupAdmin();
+    const carl = await create(admin, { email: 'carl@example.com', displayName: 'Carl' });
+    const dee = await create(admin, { email: 'dee@example.com', displayName: 'Dee' });
+    const laptop = await h.signIn('carl@example.com', PASSWORD);
+    const phone = await h.signIn('carl@example.com', PASSWORD);
+    const deeClient = await h.signIn('dee@example.com', PASSWORD);
+
+    const promoted = await admin.patch(`/api/users/${carl.id}`, { role: 'admin' });
+    expect(promoted.statusCode, promoted.body).toBe(200);
+    expect(userResponseSchema.parse(promoted.json()).user.role).toBe('admin');
+    expect(sessionsOf(h, carl.id)).toHaveLength(0);
+    expect((await laptop.get('/api/users')).statusCode).toBe(401);
+    expect((await phone.get('/api/users')).statusCode).toBe(401);
+    // The acting admin and other users keep their sessions; the admin keeps the cookie.
+    expect(promoted.headers['set-cookie']).toBeUndefined();
+    expect((await admin.get('/api/users')).statusCode).toBe(200);
+    expect((await deeClient.get('/api/users')).statusCode).toBe(200);
+    expect(sessionsOf(h, dee.id)).toHaveLength(1);
+
+    const again = await h.signIn('carl@example.com', PASSWORD);
+    expect(again.user?.role).toBe('admin');
+    const demoted = await admin.patch(`/api/users/${carl.id}`, { role: 'contributor' });
+    expect(demoted.statusCode).toBe(200);
+    expect(sessionsOf(h, carl.id)).toHaveLength(0);
+    expect((await again.get('/api/users')).statusCode).toBe(401);
+  });
+
+  it('signs you out and clears your cookie when you change your own role', async () => {
+    const h = harness();
+    const admin = await h.setupAdmin();
+    await create(admin, { email: 'bea@example.com', displayName: 'Bea', role: 'admin' });
+    const adminId = admin.user?.id ?? '';
+    const otherTab = await h.signIn(ADMIN.email, ADMIN.password);
+
+    const demoted = await admin.patch(`/api/users/${adminId}`, { role: 'contributor' });
+    expect(demoted.statusCode, demoted.body).toBe(200);
+    expect(admin.cookie).toBeNull();
+    expect(sessionsOf(h, adminId)).toHaveLength(0);
+    expect((await otherTab.get('/api/users')).statusCode).toBe(401);
+    expect((await h.signIn(ADMIN.email, ADMIN.password)).user?.role).toBe('contributor');
+  });
+
+  it('ends nothing for a display-name change, a reactivation, a same-value role or a refusal', async () => {
+    const h = harness();
+    const admin = await h.setupAdmin();
+    const adminId = admin.user?.id ?? '';
+    const carl = await create(admin, { email: 'carl@example.com', displayName: 'Carl' });
+    const dee = await create(admin, { email: 'dee@example.com', displayName: 'Dee' });
+    expect((await admin.patch(`/api/users/${dee.id}`, { active: false })).statusCode).toBe(200);
+    const carlClient = await h.signIn('carl@example.com', PASSWORD);
+    const sessionsBefore = h.db.select().from(session).orderBy(asc(session.id)).all();
+
+    const changes: [string, Record<string, unknown>, number][] = [
+      [carl.id, { displayName: 'Carl Renamed' }, 200],
+      [dee.id, { active: true }, 200],
+      [carl.id, { role: 'contributor' }, 200],
+      [adminId, { role: 'admin' }, 200],
+      [adminId, { displayName: 'Ada Renamed', role: 'admin' }, 200],
+      // The last admin can't be demoted, so nothing ends either.
+      [adminId, { role: 'contributor' }, 409],
+    ];
+    for (const [id, body, status] of changes) {
+      const response = await admin.patch(`/api/users/${id}`, body);
+      expect(response.statusCode, JSON.stringify(body)).toBe(status);
+      expect(response.headers['set-cookie'], JSON.stringify(body)).toBeUndefined();
+    }
+    expect(h.db.select().from(session).orderBy(asc(session.id)).all()).toEqual(sessionsBefore);
+    expect((await carlClient.get('/api/users')).statusCode).toBe(200);
+    expect((await admin.get('/api/users')).statusCode).toBe(200);
   });
 });
 
@@ -351,5 +400,41 @@ describe('audit of user changes', () => {
     const row = h.db.select().from(user).where(eq(user.id, carl.id)).get();
     expect(row?.active).toBe(true);
     expect(sessionsOf(h, carl.id)).toHaveLength(1);
+  });
+});
+
+describe('users report two-step status', () => {
+  it('the user list and a user answer report mfaEnrolled per user', async () => {
+    const h = harness();
+    // The harness enrolls the admin it sets up, and anyone it signs in by default.
+    const admin = await h.setupAdmin();
+    const carl = await create(admin, { email: 'carl@example.com', displayName: 'Carl' });
+    const dana = await create(admin, { email: 'dana@example.com', displayName: 'Dana' });
+    expect(carl.mfaEnrolled).toBe(false);
+    await h.signIn('dana@example.com', PASSWORD, { mfa: 'as_stored' });
+
+    const enrolled = async () => {
+      const list = usersResponseSchema.parse((await admin.get('/api/users')).json()).users;
+      return Object.fromEntries(list.map((u) => [u.email, u.mfaEnrolled]));
+    };
+    expect(await enrolled()).toEqual({
+      [ADMIN.email]: true,
+      'carl@example.com': false,
+      'dana@example.com': false,
+    });
+
+    await h.signIn('carl@example.com', PASSWORD);
+    expect(await enrolled()).toEqual({
+      [ADMIN.email]: true,
+      'carl@example.com': true,
+      'dana@example.com': false,
+    });
+
+    // A pending secret alone is not enrolled: only mfa_enrolled_at counts.
+    h.db.update(user).set({ mfaSecretEnc: 'v1.a.b.c' }).where(eq(user.id, dana.id)).run();
+    const patched = await admin.patch(`/api/users/${dana.id}`, { displayName: 'Dana D' });
+    expect(userResponseSchema.parse(patched.json()).user.mfaEnrolled).toBe(false);
+    const renamed = await admin.patch(`/api/users/${carl.id}`, { displayName: 'Carl C' });
+    expect(userResponseSchema.parse(renamed.json()).user.mfaEnrolled).toBe(true);
   });
 });

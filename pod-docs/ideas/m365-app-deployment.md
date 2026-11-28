@@ -33,3 +33,29 @@ Ship Rampart inside Microsoft 365, so a contractor's compliance team opens it wh
 - A successful V1 demo, with stakeholders wanting the tool where their team already works.
 - A decision on the host for the API, with at least a demo environment approved.
 - A Microsoft 365 tenant to sideload the app into: a developer tenant for the demo, then the contractor's GCC High tenant for real use.
+
+## Added 2026-11-26: how to deploy it and use it with Microsoft
+
+The human asked: "if to make this website deployment and usable with microsoft system, how to." The steps, in order:
+
+1. **Prepare the code** (one small task):
+   - a Dockerfile for `apps/api` that runs `db:migrate` on start, with `DATABASE_PATH` and `STORAGE_PATH` on a mounted volume
+   - a `Secure` session cookie behind HTTPS
+   - security headers on the web pages (the queue's "before hosting" item)
+   - a `vercel.json` that rewrites `/api/*` to the API, so the browser sees one origin and the `SameSite=Strict` cookie and CSRF header keep working
+2. **Host the API:** one container with a volume (Fly.io, Railway or Render; for real CUI use, a FedRAMP Moderate–equivalent host such as Azure Government). Check `GET /api/health`. Schedule volume backups.
+3. **Host the web app on Vercel:**
+   - root `apps/web`
+   - install `corepack pnpm install --frozen-lockfile`
+   - build `corepack pnpm build`
+   - output `dist`
+
+   On the first visit, the Setup page creates the admin.
+4. **Microsoft 365 tab app:**
+   - Teams Toolkit / Microsoft 365 Agents Toolkit manifest pointing at the hosted URL, as personal and channel tabs; it also runs in Outlook and the Microsoft 365 app.
+   - Allow the Teams and Office hosts in the CSP `frame-ancestors`.
+   - Sideload into a developer tenant for the demo.
+5. **Entra ID single sign-on:** register an Entra app, use Teams SSO / MSAL in the tab, and validate the token on the API (on-behalf-of). Map Entra users to Rampart roles.
+6. **Real use:** the contractor's **Microsoft 365 GCC High** tenant plus a FedRAMP Moderate–equivalent API host, and only after [cui-storage-hosting](cui-storage-hosting.md). Until then, it's demo only with no CUI.
+
+The security-hardening plan ([security-hardening](security-hardening.md)) covers several prerequisites (headers, cookie, CSP), so do it first.

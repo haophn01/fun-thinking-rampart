@@ -7,6 +7,7 @@ import {
   CLOSEOUT_CONFIRMER_LABELS,
   CSRF_HEADER,
   ERROR_CODES,
+  ERROR_MESSAGES,
   ERROR_STATUS,
   FILE_INTEGRITY_MESSAGE,
   FILE_NAME_HEADER,
@@ -92,12 +93,50 @@ describe('contract schemas', () => {
       unsupported_file_type: 415,
       file_integrity_failed: 500,
       provider_in_use: 409,
+      password_too_common: 400,
+      password_reused: 400,
+      password_change_required: 403,
+      session_locked: 423,
+      notice_not_acknowledged: 400,
+      mfa_required: 403,
+      invalid_mfa_code: 401,
+      mfa_wrong_step: 409,
+      file_refused: 415,
     };
     expect(ERROR_CODES).toEqual(Object.keys(table));
-    expect(ERROR_CODES.at(-1)).toBe('provider_in_use');
+    // sec-auth appends five codes, in this order, after the earlier ones.
+    expect(ERROR_CODES.slice(-10, -4)).toEqual([
+      'provider_in_use',
+      'password_too_common',
+      'password_reused',
+      'password_change_required',
+      'session_locked',
+      'notice_not_acknowledged',
+    ]);
+    // sec-mfa appends three codes, in this order, then sec-integrity appends file_refused last.
+    expect(ERROR_CODES.slice(-4, -1)).toEqual([
+      'mfa_required',
+      'invalid_mfa_code',
+      'mfa_wrong_step',
+    ]);
+    expect(ERROR_CODES.at(-1)).toBe('file_refused');
+    expect(ERROR_STATUS.file_refused).toBe(415);
+    expect([ERROR_STATUS.mfa_required, ERROR_STATUS.invalid_mfa_code]).toEqual([403, 401]);
+    expect(ERROR_STATUS.mfa_wrong_step).toBe(409);
     expect([...ERROR_CODES].sort()).toEqual(Object.keys(table).sort());
     expect(ERROR_STATUS).toEqual(table);
     for (const code of ERROR_CODES) expect(ERROR_STATUS[code], code).toBe(table[code]);
+    // The fixed texts the api sends and the web shows for the sec-auth and sec-mfa codes.
+    expect(ERROR_MESSAGES).toEqual({
+      password_too_common: 'This password is too common. Choose another.',
+      password_reused: 'You used this password recently. Choose another.',
+      password_change_required: 'Change your password to continue.',
+      session_locked: 'Your session is locked. Enter your password to unlock it.',
+      notice_not_acknowledged: 'Acknowledge the sign-in notice to continue.',
+      mfa_required: 'Finish two-step sign-in to continue.',
+      invalid_mfa_code: "That code didn't work. Enter the newest code from your app.",
+      mfa_wrong_step: "This two-step sign-in step doesn't apply now. Reload the page.",
+    });
   });
 
   it('objective status is exact', () => {
@@ -172,6 +211,14 @@ describe('contract schemas', () => {
       'ssp_approval.created',
       'ssp_approval.updated',
       'ssp_approval.removed',
+      'auth.password_changed',
+      'auth.session_locked',
+      'auth.session_unlocked',
+      'auth.notice_acknowledged',
+      'settings.updated',
+      'auth.mfa_enrolled',
+      'auth.mfa_verified',
+      'user.mfa_reset',
     ]);
     expect(AUDIT_ENTITY_TYPES).toEqual([
       'user',
@@ -190,6 +237,7 @@ describe('contract schemas', () => {
       'diagram_link',
       'ssp_revision',
       'ssp_approval',
+      'settings',
     ]);
   });
 
@@ -349,26 +397,6 @@ describe('contract schemas', () => {
   it('upload protocol constants', () => {
     expect(FILE_NAME_HEADER).toBe('x-file-name');
     expect(UPLOAD_MAX_BYTES).toBe(26_214_400);
-    expect(UPLOAD_EXTENSIONS).toEqual([
-      '.csv',
-      '.doc',
-      '.docx',
-      '.gif',
-      '.jpeg',
-      '.jpg',
-      '.json',
-      '.log',
-      '.md',
-      '.pdf',
-      '.png',
-      '.ppt',
-      '.pptx',
-      '.txt',
-      '.xls',
-      '.xlsx',
-      '.xml',
-      '.zip',
-    ]);
     expect(FILE_INTEGRITY_MESSAGE).toBe(
       "The stored file is missing or doesn't match its recorded SHA-256.",
     );
@@ -404,6 +432,26 @@ describe('contract schemas', () => {
     }
   });
 
+  it('UPLOAD_EXTENSIONS is the strict list', () => {
+    expect(UPLOAD_EXTENSIONS).toEqual([
+      '.csv',
+      '.docx',
+      '.jpeg',
+      '.jpg',
+      '.pdf',
+      '.png',
+      '.txt',
+      '.xlsx',
+    ]);
+    for (const name of ['notes.md', 'bundle.zip', 'map.svg', 'page.html', 'setup.exe']) {
+      expect(uploadProblem(name, 10), name).toBe('unsupported_file_type');
+    }
+    // The types the old list allowed are refused now too.
+    for (const extension of ['.doc', '.gif', '.json', '.log', '.ppt', '.pptx', '.xls', '.xml']) {
+      expect(uploadProblem(`old${extension}`, 10), extension).toBe('unsupported_file_type');
+    }
+  });
+
   it('uploadProblem edges', () => {
     const max = 26_214_400;
     const cases: [string, number, ReturnType<typeof uploadProblem>][] = [
@@ -419,7 +467,8 @@ describe('contract schemas', () => {
       ['a.pdf.exe', 10, 'unsupported_file_type'],
       ['a.exe.pdf', 10, null],
       ['REPORT.PDF', 10, null],
-      ['Notes.Md', 10, null],
+      ['Notes.Txt', 10, null],
+      ['Notes.Md', 10, 'unsupported_file_type'],
       ['README', 10, 'unsupported_file_type'],
       ['.pdf', 10, 'unsupported_file_type'],
       ['a.pdf.', 10, 'unsupported_file_type'],
