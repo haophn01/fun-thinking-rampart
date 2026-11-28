@@ -121,7 +121,13 @@ describe('SECURITY.md', () => {
     expect(headings).toEqual([...SECTIONS]);
     expect(text).not.toMatch(/\bTODO\b|\bTBD\b/i);
     expect(text).not.toMatch(/<[^<>\n]*>/);
-    expect(text).not.toMatch(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f�]/);
+    const stray: number[] = [];
+    for (let i = 0; i < text.length; i += 1) {
+      const code = text.charCodeAt(i);
+      const control = code < 0x20 && code !== 0x0a && code !== 0x09;
+      if (control || code === 0x7f || code === 0xfffd) stray.push(i);
+    }
+    expect(stray).toEqual([]);
 
     const reporting = section(text, 'Reporting a vulnerability');
     expect(reporting).toMatch(/private vulnerability reporting/i);
