@@ -187,6 +187,10 @@ The first run has no users: open the web app and **Setup** creates the first adm
 password of 12 to 128 characters that isn't on the common-password list) and the
 self-assessment. After that, setup answers 409 and admins add people under Settings.
 
+To report a vulnerability, follow [SECURITY.md](SECURITY.md) (GitHub private vulnerability
+reporting, never a public issue). It also holds the threat model, the NIST SP 800-171 self-mapping
+with its tests, and the known gaps.
+
 - **Every api route needs a signed-in user** except `GET /api/health`, `GET /api/session`,
   `POST /api/setup`, `POST /api/session` (sign in) and `DELETE /api/session` (sign out).
 - **Two-step sign-in (3.5.3), for every account:** the password is only the first step. Setup and
@@ -343,4 +347,5 @@ the **Export SSP (.docx)** link.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems as [SECURITY.md](SECURITY.md)
+says, not in an issue.

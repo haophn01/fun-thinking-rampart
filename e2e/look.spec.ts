@@ -7,7 +7,9 @@
 // Every page also loads under the production CSP with zero `securitypolicyviolation` events.
 // The auth screens get the same checks: the sign-in notice and the form after it, the forced
 // password change (and its refusal), the lock screen (and a wrong password), Change password,
-// Settings with a notice on, the app shell's 429, and two-step sign-in's three screens
+// Settings with a notice on, Settings › Audit log's Verify result (intact from the look api,
+// broken from a fulfilled answer; it fits its box and the hash is in Space Mono), the app
+// shell's 429, and two-step sign-in's three screens
 // (enrollment, its recovery codes and the challenge), with the manual key in Space Mono.
 //
 // Playwright runs spec files in name order against one api and database, so this file runs before
@@ -16,6 +18,7 @@
 // api, and routes the browser's `/api` calls to it. The pages, with their CSP, come from the
 // config's server: the production build served by the api.
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +36,7 @@ import {
   approvalResponseSchema,
   assessmentViewSchema,
   assetResponseSchema,
+  auditVerifyResponseSchema,
   diagramResponseSchema,
   evidenceItemResponseSchema,
   poamItemResponseSchema,
@@ -158,6 +162,57 @@ const COLE = { email: 'cole@example.test', password: 'contributor-pass-1' };
 /** On the bundled blocklist, so the forced change refuses it. */
 const TOO_COMMON = 'QwertyUiop12';
 const SIGNED_OUT: StorageState = { cookies: [], origins: [] };
+
+/**
+ * A broken Verify answer for the look check, as a tampered log gives it: the stored action is any
+ * string, so a long one with no spaces checks that the sentence wraps at 375 px.
+ */
+const BROKEN_VERIFY = auditVerifyResponseSchema.parse({
+  ok: false,
+  checked: 1233,
+  total: 1234,
+  headHash: createHash('sha256').update('look check head').digest('hex'),
+  firstBroken: {
+    id: 1234,
+    at: '2026-11-27T09:30:00.000Z',
+    action: `tampered.${'x'.repeat(80)}`,
+    problem: 'hash_mismatch',
+  },
+  verifiedAt: '2026-11-27T09:31:00.000Z',
+});
+
+/** Opens Settings › Audit log's Verify and waits for the result to show. */
+async function verifyAuditLog(page: Page, title: 'Audit log intact' | 'Audit log broken') {
+  await expect(page.getByText(/^Loading/)).toHaveCount(0);
+  const section = page.getByRole('region', { name: 'Audit log' });
+  const answered = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/audit/verify');
+  await section.getByRole('button', { name: 'Verify audit log' }).click();
+  expect((await answered).status()).toBe(200);
+  const role = title === 'Audit log intact' ? 'status' : 'alert';
+  await expect(section.getByRole(role).filter({ hasText: title })).toBeVisible();
+}
+
+/**
+ * The Verify result's own measures: it fits its box (scrollWidth ≤ clientWidth) and the newest
+ * hash is in Space Mono. Each problem is one line, named by width and screen.
+ */
+async function verifyResultFacts(page: Page, width: number, name: string, hash: string) {
+  const section = page.getByRole('region', { name: 'Audit log' });
+  const found: string[] = [];
+  const result = section.getByRole('status').or(section.getByRole('alert')).first();
+  const box = await result.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
+  if (box.scroll > box.client) {
+    found.push(`overflow: the result is ${String(box.scroll)}px in ${String(box.client)}px`);
+  }
+  const hashText = section.getByText(hash, { exact: true });
+  if ((await hashText.count()) === 1) {
+    const font = await hashText.evaluate((el) => getComputedStyle(el).fontFamily);
+    if (!font.includes('Space Mono')) found.push(`the hash is in ${font}`);
+  } else if (name.includes('intact')) {
+    found.push('the newest hash is not shown');
+  }
+  return found.map((line) => `${String(width)}px ${name} ${line}`);
+}
 /** Lena's TOTP secret (base32), from enrollment at setup. */
 let lenaSecret = '';
 
@@ -857,7 +912,17 @@ test.describe('look', () => {
       locked: await lookContext(browser, baseURL, await locked.storageState()),
       admin: await lookContext(browser, baseURL, storageState),
       tooMany: await lookContext(browser, baseURL, SIGNED_OUT),
+      broken: await lookContext(browser, baseURL, storageState),
     };
+    // A broken chain, answered here: the look api's own log is intact. A later route wins.
+    await contexts.broken.route(
+      (url) => url.pathname === '/api/audit/verify',
+      (route) => route.fulfill({ status: 200, json: BROKEN_VERIFY }),
+    );
+    // The look api's own answer, so the intact screen's hash is known.
+    const intact = await admin.read('/api/audit/verify', auditVerifyResponseSchema);
+    expect(intact.ok, 'the look api log verifies').toBe(true);
+    expect(intact.headHash).not.toBeNull();
     // The shell's 429: the session read is refused with a wait. A later route wins.
     await contexts.tooMany.route(
       (url) => url.pathname === '/api/session',
@@ -882,6 +947,8 @@ test.describe('look', () => {
       context: BrowserContext;
       path: string;
       ready: (page: Page) => Promise<void>;
+      /** Extra measures for this screen, after the shared ones. */
+      facts?: (page: Page, width: number) => Promise<string[]>;
     }[] = [
       {
         name: 'sign-in notice',
@@ -971,6 +1038,22 @@ test.describe('look', () => {
           await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
         },
       },
+      {
+        name: '/settings (audit log intact)',
+        context: contexts.admin,
+        path: '/settings',
+        ready: (page) => verifyAuditLog(page, 'Audit log intact'),
+        facts: (page, width) =>
+          verifyResultFacts(page, width, 'audit log intact', intact.headHash ?? ''),
+      },
+      {
+        name: '/settings (audit log broken)',
+        context: contexts.broken,
+        path: '/settings',
+        ready: (page) => verifyAuditLog(page, 'Audit log broken'),
+        facts: (page, width) =>
+          verifyResultFacts(page, width, 'audit log broken', BROKEN_VERIFY.headHash ?? ''),
+      },
     ];
 
     const found: string[] = [];
@@ -982,6 +1065,7 @@ test.describe('look', () => {
         await page.goto(screen.path);
         await screen.ready(page);
         found.push(...(await measure(page, width, screen.name)));
+        if (screen.facts !== undefined) found.push(...(await screen.facts(page, width)));
         cspChecked += 1;
         await page.close();
       }
