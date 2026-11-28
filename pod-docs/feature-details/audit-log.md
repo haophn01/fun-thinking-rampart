@@ -34,3 +34,4 @@ An append-only record of every status and content change: who, what, before and 
 - 2026-11-26 · plan security-hardening · password, lock, unlock, notice and settings actions; `prev_hash`/`hash` columns and the narrowed update trigger (sec-auth sprint, PRs #33 to #35)
 - 2026-11-27 · plan security-hardening · two-step set up, verified and reset actions (sec-mfa sprint, PRs #38, #39 and wave 3)
 - 2026-11-27 · plan security-hardening · hash chain on write, one-time legacy backfill at start, `GET /api/audit/verify` (sec-integrity A1)
+- 2026-11-27 · plan security-hardening · Settings › Audit log › **Verify audit log** button: "Audit log intact" with the event count, the newest hash and the time checked, or "Audit log broken" naming the first broken event and why; only the newest answer is shown, with Retry and the 429 wait on failure (sec-integrity V1, PR #43)
