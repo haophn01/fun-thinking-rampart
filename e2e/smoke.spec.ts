@@ -3,7 +3,9 @@
 // Scores are planned from the catalog and the regulation data, never from spelled-out points.
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { expect, test, type Page } from '@playwright/test';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { expect, test, type Page, type Response } from '@playwright/test';
 import { loadCatalog, type Requirement } from '@rampart/catalog';
 import { SSP_LINT_RULES, scoreMax } from '@rampart/rules';
 import { REGULATION } from '@rampart/rules/poam';
@@ -16,6 +18,7 @@ import {
   assessmentViewSchema,
   assetResponseSchema,
   auditPageSchema,
+  auditVerifyResponseSchema,
   diagramsResponseSchema,
   documentControlSchema,
   evidenceItemResponseSchema,
@@ -46,6 +49,7 @@ import {
   sampleXlsx,
   zipBombDocx,
 } from '../apps/api/src/uploads/testing/samples.ts';
+import { ACTION_LABELS } from '../apps/web/src/pages/settings/auditLabels.ts';
 import { api, linkDiagram, manualKey, nextTotpCode, uploadEvidence, type Api } from './helpers/api';
 import { docxMedia, docxText } from './helpers/docx';
 import {
@@ -1047,7 +1051,102 @@ test.describe('verification path', () => {
     }
     expect(await versionCount()).toBe(real.length);
   });
+
+  test('audit log verifies', async () => {
+    const verified = await openVerify(page);
+    const shown = auditVerifyResponseSchema.parse(await verified.json());
+    const intact = page.getByRole('status').filter({ hasText: 'Audit log intact' });
+    await expect(intact).toBeVisible();
+
+    // The api's own answer, asked again: nothing was written in between.
+    const fromApi = await client.read('/api/audit/verify', auditVerifyResponseSchema);
+    expect(fromApi).toMatchObject({ ok: true, firstBroken: null });
+    expect(fromApi.checked).toBe(fromApi.total);
+    expect(fromApi.checked).toBeGreaterThan(1);
+    expect(shown.headHash).toBe(fromApi.headHash);
+    await expect(
+      intact.getByText(`All ${fromApi.checked.toLocaleString('en-US')} events check out.`, {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(intact.getByText(fromApi.headHash ?? '', { exact: true })).toBeVisible();
+    const hashFont = await intact
+      .getByText(fromApi.headHash ?? '', { exact: true })
+      .evaluate((el) => getComputedStyle(el).fontFamily);
+    expect(hashFont).toContain('Space Mono');
+  });
+
+  // Last: it tampers with this run's scratch database, so nothing may run after it.
+  test('audit log names an edited event', async () => {
+    const events = (
+      await client.read('/api/audit?entityType=evidence_item&limit=200', auditPageSchema)
+    ).events;
+    const target = events.find((e) => e.action === 'evidence.version_added');
+    expect(target, 'an evidence.version_added event').toBeDefined();
+    if (target === undefined) return;
+    editAuditEventAfter(target.id);
+
+    const verified = await openVerify(page);
+    const shown = auditVerifyResponseSchema.parse(await verified.json());
+    expect(shown).toMatchObject({
+      ok: false,
+      checked: target.id - 1,
+      firstBroken: { id: target.id, problem: 'hash_mismatch', action: 'evidence.version_added' },
+    });
+    const broken = page.getByRole('alert').filter({ hasText: 'Audit log broken' });
+    await expect(broken).toBeVisible();
+    const at = await page.evaluate((iso) => new Date(iso).toLocaleString(), target.at);
+    await expect(
+      broken.getByText(
+        `The chain breaks at event ${String(target.id)}: ${ACTION_LABELS['evidence.version_added']}, ${at}.`,
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      broken.getByText("Its contents don't match its hash: it was changed after it was written.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      broken.getByText(`${(target.id - 1).toLocaleString('en-US')} events before it check out.`, {
+        exact: true,
+      }),
+    ).toBeVisible();
+  });
 });
+
+/** Opens Settings › Audit log, clicks Verify audit log, and returns its answer. */
+async function openVerify(page: Page): Promise<Response> {
+  const loaded = answer(page, 'GET', '/api/audit');
+  await page.goto('/settings');
+  await loaded;
+  const section = page.getByRole('region', { name: 'Audit log' });
+  const verified = answer(page, 'GET', '/api/audit/verify');
+  await section.getByRole('button', { name: 'Verify audit log' }).click();
+  const response = await verified;
+  expect(response.status()).toBe(200);
+  return response;
+}
+
+/**
+ * Rewrites one audit event's `after` in this run's scratch database, as someone with the file
+ * could. The update trigger refuses that edit, so it is dropped first. Only the e2e run's own
+ * database (the config's `E2E_RUN_DIR`) is ever opened.
+ */
+function editAuditEventAfter(id: number) {
+  const runDir = process.env.E2E_RUN_DIR;
+  if (runDir === undefined || runDir === '') throw new Error('E2E_RUN_DIR is not set');
+  const db = new DatabaseSync(join(runDir, 'e2e.sqlite'));
+  try {
+    db.exec('DROP TRIGGER IF EXISTS audit_event_no_update');
+    const changed = db
+      .prepare('UPDATE audit_event SET after = ? WHERE id = ?')
+      .run(JSON.stringify({ edited: 'outside Rampart' }), id);
+    expect(changed.changes).toBe(1);
+  } finally {
+    db.close();
+  }
+}
 
 /** Section 3's lines: from "3. Requirements" up to "4. Record of changes". */
 function requirementsSection(lines: readonly string[]): readonly string[] {
