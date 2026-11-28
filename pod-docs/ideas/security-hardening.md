@@ -1,6 +1,6 @@
 # Idea: Security hardening of Rampart
 
-Status: planned — pod-docs/plans/security-hardening.md
+Status: built — #45 (plan security-hardening)
 
 ## The idea
 On 2026-11-26 the human said: "now focus on security side of the app".

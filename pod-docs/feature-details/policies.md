@@ -23,3 +23,4 @@ A policy library. Each policy keeps versioned files (with SHA-256) and is linked
 ## History
 - 2026-11-25 · plan cmmc-l2-grc · built (poam-evidence sprint, PRs #8 and #9) · [report](../reports/cmmc-l2-grc.html)
 - 2026-11-27 · plan security-hardening · uploads checked by content and `file_refused` shown on the policy (sec-integrity sprint, U2)
+- 2026-11-27 · plan security-hardening · plan complete: byte-based upload checks merged to main · [report](../reports/security-hardening.html) · [PR #45](https://github.com/haophn01/fun-thinking-rampart/pull/45)

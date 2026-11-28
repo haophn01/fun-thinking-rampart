@@ -35,3 +35,4 @@ stateDiagram-v2
 
 ## History
 - 2026-11-27 · plan security-hardening · contract, secret key, TOTP and QR (sec-mfa wave 1, PR #38); api, web screens and the users panel (wave 2, PR #39); required for every account, the gate and e2e (A2, wave 3)
+- 2026-11-27 · plan security-hardening · plan complete: required for every account, behind the human-approved one-way door (A2, PR #41); 10 recovery codes, replay guard, encrypted secret; Windows key-file ACLs open before hosting · [report](../reports/security-hardening.html) · [PR #45](https://github.com/haophn01/fun-thinking-rampart/pull/45)

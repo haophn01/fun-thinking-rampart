@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan report: Security hardening</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fff; --fg: #1b1b1f; --muted: #5d5d66; --line: #d9d9e0; --soft: #f4f4f7;
+  --accent: #E10600; --ok: #1d7a3e; --bad: #b42318; --warn: #a15c07;
+  --display: "Space Grotesk", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #131316; --fg: #ececf1; --muted: #a2a2ad; --line: #34343c; --soft: #1d1d22;
+          --accent: #8da2ff; --ok: #5cc98a; --bad: #ff8a80; --warn: #f0b45c; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 system-ui, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.25; }
+h1 { font-size: 1.9rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.4rem; margin: 2.5rem 0 .75rem; padding-top: .5rem; border-top: 1px solid var(--line); }
+h3 { font-size: 1.1rem; margin: 1.25rem 0 .5rem; }
+a { color: var(--accent); }
+code, pre { font: 15px/1.45 ui-monospace, Consolas, monospace; }
+pre { background: var(--soft); padding: .75rem; overflow-x: auto; border-radius: 6px; }
+.meta { color: var(--muted); margin: 0 0 1rem; }
+nav.toc { background: var(--soft); border-radius: 8px; padding: .75rem 1rem; }
+nav.toc ol { margin: 0; padding-left: 1.25rem; columns: 2 14rem; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
+th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; vertical-align: top; }
+th { background: var(--soft); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin: 1rem 0 .25rem; }
+.stat { background: var(--soft); border-radius: 8px; padding: .5rem .75rem; }
+.stat b { display: block; font-size: 1.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat span { color: var(--muted); font-size: .9rem; }
+.note { color: var(--muted); font-size: .9rem; margin: 0 0 1rem; }
+.pill { display: inline-block; padding: 0 .5rem; border-radius: 99px; font-size: .9rem; border: 1px solid currentColor; white-space: nowrap; }
+.ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .muted { color: var(--muted); }
+details { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .9rem; margin: .5rem 0; }
+details > summary { cursor: pointer; font-weight: 600; }
+details[open] > summary { margin-bottom: .5rem; }
+table.decisions td:first-child, table.risks td:first-child { font-weight: 600; min-width: 11rem; }
+@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { body { font-size: 16px; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Security hardening: Rampart as a Security Protection Asset</h1>
+<p class="meta">Plan <code>security-hardening</code> · final PR <a href="https://github.com/haophn01/fun-thinking-rampart/pull/45">#45, review round 1 verdict fix, round 2 verdict fix, merged after the human said "merge it"</a> · fixes in <a href="https://github.com/haophn01/fun-thinking-rampart/pull/46">#46</a> · on <code>main</code> at <code>dc5524f</code> · written 2026-11-27 by pod:reporter</p>
+
+<nav class="toc" aria-label="Contents"><ol>
+  <li><a href="#glance">At a glance</a></li>
+  <li><a href="#first">Look here first</a></li>
+  <li><a href="#features">Key features</a></li>
+  <li><a href="#proof">Proof</a></li>
+  <li><a href="#risks">Risks and undo</a></li>
+  <li><a href="#fit">How it fits together, as built</a></li>
+  <li><a href="#decisions">Key decisions</a></li>
+  <li><a href="#left">What's left</a></li>
+</ol></nav>
+
+<section id="glance">
+<h2>At a glance</h2>
+<p><b>Goal:</b> make Rampart meet, itself, the NIST SP 800-171 requirements it touches (the human chose "Security Protection Asset"), and close the web-app gaps from the research. No screenshots: this report has none, by the human's preference.</p>
+<p><b>Shipped:</b></p>
+<ul>
+  <li><b>Baseline:</b> an access-control test over every api route (401, 403, CSRF, IDOR); SHA-pinned actions, an audit gate and Semgrep in CI; the production web build served by the api with a strict CSP; <code>HOSTED=true</code> mode; rate limits; log-redaction tests.</li>
+  <li><b>Auth:</b> 30 min idle and 8 h sessions, a 15 min lock screen, an offline password blocklist, no reuse of the last 5, a change-password page, temporary passwords, an admin-set sign-in notice.</li>
+  <li><b>MFA:</b> TOTP required for every account, with 10 single-use recovery codes, a replay guard, encrypted secrets, an admin reset and a <code>pnpm admin:reset-mfa</code> CLI.</li>
+  <li><b>Integrity:</b> uploads checked by their real bytes with a zip-bomb guard, a hash-chained audit log with a <b>Verify audit log</b> button, a <code>FIPS_MODE</code> check with a PBKDF2 option, and <code>SECURITY.md</code> (disclosure, STRIDE, 15 requirements mapped to code and tests).</li>
+</ul>
+<div class="stats">
+  <div class="stat"><b>4 · 13 · 34</b><span>sprints · waves · slices</span></div>
+  <div class="stat"><b>19</b><span>PRs #28 to #46: 15 merged, 4 closed CI probes</span></div>
+  <div class="stat"><b>244 · +76,412 −841</b><span>files · lines vs. main at plan start (91161a6)</span></div>
+  <div class="stat"><b>~33 h</b><span>wall time (estimate)</span></div>
+  <div class="stat"><b>~5.8M</b><span>agent context (sum of the 4 Sprint summaries)</span></div>
+  <div class="stat"><b>#45 fix, fix</b><span>review, 2 rounds, then merged</span></div>
+</div>
+<p class="note">Lines include about 46,000 lines of generated password blocklist and the lockfile; without <code>pod-docs/</code> it is 219 files, +73,951 −820. Wall time runs from the plan commit (2026-11-26 09:58 PST) to the #45 merge (2026-11-27 19:06 PST), and includes the human's waits and two 5-hour usage-limit stops. Tests at the end: 1,373 unit and component tests, 29 e2e (from 976 and 15 at the start of the plan).</p>
+
+<h3>Three human-approved one-way doors</h3>
+<p>Each was approved by the human at a stop, and each had a backup taken first.</p>
+<ol>
+  <li><b>Migration 0006</b> (PR #33): 3 tables, 9 columns, a narrowed audit trigger. Human: "merge the migration wave". Backup: <code>apps/api/data/rampart.pre-0006.sqlite</code>.</li>
+  <li><b>MFA required for every account</b> (PR #41): no schema change; no one reaches the app without the second step. Human: "Yes, merge the MFA wave". Backup: DB and key file in <code>D:/Projects/Rampart-backups/2026-11-27-pre-mfa</code>.</li>
+  <li><b>Audit-chain backfill</b> (PR #42): every existing audit event gets a hash once, and the DB then refuses to change it. Human: "merge the audit-chain wave". Backup: <code>apps/api/data/rampart.pre-chain.sqlite</code> and <code>D:/Projects/Rampart-backups/2026-11-27-pre-chain</code>. The human's app chained all 11 events.</li>
+</ol>
+
+<h3>Merge path of #45</h3>
+<ul>
+  <li><b>Round 1: <span class="warn">fix</span>.</b> The reviewer's code checks all held. Two fixes, both documentation: <code>SECURITY.md</code> overclaimed that Verify finds "outside-added" or "re-hashed" events (the reviewer appended a forged event with a plain <code>INSERT</code> and Verify said <code>ok: true</code>), and the PR body's review guide left changed code in no step. The first was fixed in #46; the guide was rewritten.</li>
+  <li><b>Round 2: <span class="warn">fix</span>.</b> The SECURITY.md fix was confirmed resolved. One finding remained, in the PR body only: the review guide still missed some files. The guide was then extended.</li>
+  <li>The human said "merge it" at the stop, and #45 was merged once CI was green on all 7 jobs.</li>
+</ul>
+</section>
+
+<section id="first">
+<h2>Look here first</h2>
+<table>
+  <tr><th>Where</th><th>Why first</th></tr>
+  <tr><td><code>SECURITY.md</code> (3.3.8 row and <b>Known gaps</b>)</td><td>Riskiest claim. Round 1 caught it overclaiming. The text now says the audit chain is unkeyed and unanchored. One more thing the reviewer didn't flag: the 3.5.7 row still says "about 100,000 common passwords", but the list has 46,146 (the build drops entries under 12 characters; <code>SOURCES.md</code> says so). I checked this by reading the files, not by running anything.</td></tr>
+  <tr><td><code>apps/api/src/uploads/zip.ts</code></td><td>A hand-written parser of untrusted bytes, behind the zip-bomb guard. Read in full by the reviewer, who dismissed one concern (inflating to the declared size) because overflow throws.</td></tr>
+  <tr><td><code>apps/web/src/auth/session.tsx</code> and <code>apps/api/src/auth/sessions.ts</code>, <code>guard.ts</code></td><td>The lock state machine (3.1.10) and the gate order (CSRF, lock, MFA, must-change, role). A wrong turn here lets a session skip the second step.</td></tr>
+  <tr><td><code>apps/api/src/audit/chain.ts</code>, <code>prepare.ts</code></td><td>The one-time backfill and the verify walk. It runs once on every install's first start and can't be redone.</td></tr>
+  <tr><td><code>apps/api/src/routes/index.ts</code></td><td>Where session, MFA and settings routes join the guarded plugin: the edge of deny-by-default. The route matrix test fails if a route has no entry.</td></tr>
+</table>
+</section>
+
+<section id="features">
+<h2>Key features</h2>
+<p>No UI shots here. Each is something a user can do now.</p>
+<ul>
+  <li><b>Sign in with a second step.</b> Password, then a 6-digit authenticator code or a recovery code. An account with no app sees a QR code and key, confirms once, and is shown 10 recovery codes once. Admins reset a user's MFA under Settings › Users. Details: <a href="../feature-details/mfa.md">mfa</a>.</li>
+  <li><b>Safer sessions and passwords.</b> A session ends after 30 min idle or 8 h; the page locks after 15 min without input and only the password unlocks it; common passwords and the last 5 are refused; a temporary password must be changed first; an admin can set a sign-in notice that must be acknowledged. Details: <a href="../feature-details/setup-and-sign-in.md">setup and sign-in</a>.</li>
+  <li><b>Verify the audit log.</b> Settings › Audit log › <b>Verify audit log</b> says "Audit log intact" with the event count and newest hash, or names the first broken event. Details: <a href="../feature-details/audit-log.md">audit log</a>.</li>
+  <li><b>Uploads are judged by their bytes.</b> A program renamed <code>.pdf</code>, an SVG, an HTML file and a zip-bomb <code>.docx</code> are refused with a clear message; real PDF, PNG, JPEG, DOCX, XLSX and text are accepted. Details: <a href="../feature-details/evidence.md">evidence</a>, <a href="../feature-details/policies.md">policies</a>.</li>
+  <li><b>Run it hosted-ready.</b> <code>pnpm build</code> then <code>pnpm start</code> serves one origin with the strict CSP; <code>HOSTED=true</code> adds HSTS, a <code>__Host-</code> Secure cookie and a proxy setting; <code>FIPS_MODE=required</code> refuses to start without FIPS crypto.</li>
+</ul>
+</section>
+
+<section id="proof">
+<h2>Proof</h2>
+<p>Checked by: <b>engineer</b> (own tests, listed per item in the Verification evidence table of <code>SECURITY.md</code>, kept honest by <code>tests/repo/security-md.test.ts</code>) and <b>reviewer</b> (ran things in a fresh worktree; see below). No criterion was checked only by the engineer's tests. The human checked the three doors and the merge decision, not behavior.</p>
+<p><b>The reviewer's runs:</b> <code>pnpm verify</code> passed (172 files, 1,373 tests) at <code>559fd9b</code> and again at <code>04e31b4</code>; e2e 29 passed (4.5 min); CI green on all 7 jobs; all 13 rows of <code>features.md</code> driven on a production-path server; a migrated copy of a pre-plan DB (old session got 403 <code>mfa_required</code>, data kept, 9 legacy events chained, Verify 11/11); hosted mode headers and cookie; <code>FIPS_MODE=required</code> exits with <code>fips-required-not-enabled</code>; 24 mutations that each made a test fail.</p>
+<div class="scroll"><table>
+  <tr><th>Verification item</th><th>Result</th><th>Checked by, and how</th></tr>
+  <tr><td>Route matrix (401, 403, CSRF, IDOR)</td><td class="ok">met</td><td>Engineer: generated test; mutation proved the role gate bites. Reviewer: read it, mutated the role gate. Found no access gap in 59 routes (engineer).</td></tr>
+  <tr><td>CI: audit gate, pinned actions, Semgrep, install on 2 OSes</td><td class="ok">met</td><td>Engineer: repo tests and the fixture. Reviewer: CI green on all 7 jobs (verify on ubuntu and windows).</td></tr>
+  <tr><td>Headers and CSP; hosted HSTS and cookie</td><td class="ok">met</td><td>Engineer: <code>e2e/security.spec.ts</code>, zero CSP violations. Reviewer: hosted run, <code>script-src</code> mutation.</td></tr>
+  <tr><td>Rate limits</td><td class="ok">met</td><td>Engineer: unit tests. Reviewer: 5 failed sign-ins then 429 with <code>Retry-After: 60</code>.</td></tr>
+  <tr><td>Sessions, rotation, sign out everywhere</td><td class="ok">met</td><td>Engineer: boundary tests at 29:59.999 and 30:00. Reviewer: mutated expiry and the password-change sign-out.</td></tr>
+  <tr><td>Passwords: blocklist, reuse, temporary</td><td class="ok">met</td><td>Engineer: tests. Reviewer: mutated blocklist, history and the flag. Blocklist is 46k, not the plan's ~100k (see Key decisions).</td></tr>
+  <tr><td>Sign-in notice</td><td class="ok">met</td><td>Engineer: tests; e2e. Reviewer: mutated the notice digest.</td></tr>
+  <tr><td>Lock after 15 min</td><td class="ok">met</td><td>Engineer: fake-clock tests and e2e. Reviewer: mutated the lock gate, the <code>hidden</code>/<code>inert</code> hiding and the idle timer. Nobody waited 15 real minutes.</td></tr>
+  <tr><td>MFA (enroll, replay, recovery, encrypted, reset, existing account)</td><td class="ok">met</td><td>Engineer: tests and e2e. Reviewer: mutated replay, gate, recovery, aad and plaintext secret; walked setup by manual key; reset CLI. The human's own account enrolls at next sign-in: <span class="warn">not yet done</span>, it is a to-do.</td></tr>
+  <tr><td>Uploads refused and accepted</td><td class="ok">met</td><td>Engineer: tests. Reviewer: through the api, refused zip bomb, SVG, HTML; accepted six types.</td></tr>
+  <tr><td>Log redaction</td><td class="ok">met</td><td>Engineer: log-capture test over sign-in, enroll, change. Reviewer: mutated redaction.</td></tr>
+  <tr><td>Audit chain: Verify on fresh and migrated DB; edit is named</td><td class="warn">met, with a limit</td><td>Engineer and reviewer: an edited row is named <code>hash_mismatch</code>. Limit: an unkeyed, unanchored chain can't see a forged or fully re-hashed tail (reviewer's repro; documented).</td></tr>
+  <tr><td>FIPS: startup refusal, PBKDF2 hash and verify</td><td class="warn">met, not on real FIPS</td><td>Engineer: tests. Reviewer: refusal on a normal Node. Nobody ran a real FIPS Node.</td></tr>
+  <tr><td><code>SECURITY.md</code> maps each touched requirement</td><td class="ok">met</td><td>Engineer: repo test. Reviewer: read the gaps and mapping; round 1 fix confirmed in round 2.</td></tr>
+  <tr><td>Regression, look at 1280 and 375 px</td><td class="ok">met</td><td>Engineer: <code>e2e/look.spec.ts</code> measures the new screens. Reviewer: e2e 29/29, 13 feature rows. No screenshots taken by this report.</td></tr>
+  <tr><td>CI green on the final PR</td><td class="ok">met</td><td>Orchestrator: green on all 7 jobs before the merge. The reviewer saw e2e pending at round 2; I did not re-read CI.</td></tr>
+</table></div>
+<h3>Not checked by this report</h3>
+<ul>
+  <li>I ran no tests and no app. Every result above comes from the Sprint summaries, <code>SECURITY.md</code> and the reviewer's two comments on #45.</li>
+  <li>The plan template file <code>pod-docs/reports/security-hardening.html</code> did not exist, so the page follows the layout of <code>ssp-export-v2.html</code>.</li>
+  <li>Nobody checked FIPS on a FIPS Node, the key-file ACLs on a second Windows account, or a real hosted deployment behind TLS.</li>
+</ul>
+</section>
+
+<section id="risks">
+<h2>Risks and undo</h2>
+<div class="scroll"><table class="risks">
+  <tr><th>Change</th><th>Where</th><th>Undo</th></tr>
+  <tr><td>Migration 0006 (one-way door)</td><td><code>apps/api/db/migrations/0006_sec_auth.sql</code></td><td>Stop the app, restore <code>rampart.pre-0006.sqlite</code>, revert the merge.</td></tr>
+  <tr><td>MFA required for all (one-way door, auth)</td><td><code>apps/api/src/auth/sessions.ts</code>, <code>guard.ts</code>, <code>auth/mfa/</code></td><td>Revert the A2 merge, stop the app, <code>DELETE FROM session</code>, start. Back up <code>rampart-secret.key</code> with the DB: without it every MFA secret is lost.</td></tr>
+  <tr><td>Audit-chain backfill (one-way door, data)</td><td><code>apps/api/src/audit/chain.ts</code>, <code>prepare.ts</code></td><td>Revert the merge (hashes stay, unused); for exact rows restore <code>rampart.pre-chain.sqlite</code>.</td></tr>
+  <tr><td>Whole plan</td><td>PR #45</td><td><code>git revert -m 1</code> the merge, restore the backups with the key file, and end every session. <b>Trap:</b> after a revert, old code writes full sessions and unhashed audit events. A later re-merge would treat an enrolled user's old session as full and Verify would call the first in-between event <code>unchained</code> forever. Re-merging needs <code>DELETE FROM session</code> and a re-chain decision (queued).</td></tr>
+  <tr><td>Locked out of the human's own account</td><td>enrollment at next sign-in</td><td><code>pnpm admin:reset-mfa &lt;email&gt;</code> (audited).</td></tr>
+  <tr><td>Public API surface</td><td><code>GET /api/audit/verify</code>, <code>/api/session/mfa/*</code>, <code>/api/settings/sign-in-notice</code>, 423 and 403 gate answers</td><td>Removed by the revert above.</td></tr>
+</table></div>
+</section>
+
+<section id="fit">
+<h2>How it fits together, as built</h2>
+<p>The built shape matches the plan's: the api serves the web build, and requests pass headers, rate limit, then the guard, which sends them to auth, MFA, uploads or the audit chain, all on one SQLite file.</p>
+<ul>
+  <li><b>http hardening:</b> <code>apps/api/src/app.ts</code> uses <code>security/headers.ts</code>, <code>rate-limit.ts</code> and <code>web-app.ts</code> (production static serving).</li>
+  <li><b>security config:</b> <code>apps/api/src/config.ts</code> and <code>security/startup.ts</code>, <code>secret-key.ts</code>, <code>secrets.ts</code>.</li>
+  <li><b>auth:</b> <code>auth/guard.ts</code> (gate order CSRF → lock → MFA → must-change → role), <code>sessions.ts</code>, <code>routes.ts</code>, <code>session-routes.ts</code>, <code>password.ts</code>, <code>password-policy.ts</code>, <code>lockout.ts</code>. Routes join the guard in <code>routes/index.ts</code>.</li>
+  <li><b>mfa:</b> <code>auth/mfa/</code> (<code>totp.ts</code>, <code>recovery-codes.ts</code>, <code>qr.ts</code>, <code>reset.ts</code>, <code>cli.ts</code>, <code>routes.ts</code>).</li>
+  <li><b>uploads:</b> <code>uploads/upload.ts</code> calls <code>file-check.ts</code>, <code>zip.ts</code> and <code>file-name.ts</code>; evidence and policies routes use it.</li>
+  <li><b>audit chain:</b> <code>audit/record.ts</code> hashes on write; <code>chain.ts</code> verifies and backfills; <code>prepare.ts</code> runs the backfill at start.</li>
+  <li><b>web:</b> <code>apps/web/src/auth/</code> (<code>session.tsx</code>, <code>Gate.tsx</code>, <code>useIdleLock.ts</code>, MFA pages, <code>ChangePasswordPage.tsx</code>); the verify button is in <code>pages/settings</code>.</li>
+  <li><b>CI and tests:</b> <code>.github/workflows/pod-ci.yml</code>, <code>scripts/audit-gate.ts</code>, <code>security/route-matrix.test.ts</code>, <code>e2e/security.spec.ts</code>, <code>e2e/auth.spec.ts</code>.</li>
+</ul>
+<h3>Differences from the plan</h3>
+<table>
+  <tr><th>Plan said</th><th>Built</th><th>Why</th></tr>
+  <tr><td>Uploads in <code>apps/api/src/files/</code></td><td><code>apps/api/src/uploads/</code></td><td>A new folder next to evidence and policies; not recorded as a decision.</td></tr>
+  <tr><td>Auth screens in <code>apps/web/src/pages/auth</code></td><td><code>apps/web/src/auth/</code></td><td>The existing Setup and Sign in pages already lived there.</td></tr>
+  <tr><td>Config in <code>apps/api/src/config</code> (folder)</td><td><code>config.ts</code> plus <code>security/</code></td><td>Kept the existing file.</td></tr>
+  <tr><td>TOTP with otplib</td><td>TOTP on <code>node:crypto</code>, tested against RFC vectors</td><td>No dependency; replay state is ours either way. Agent default in <code>decisions.md</code>.</td></tr>
+  <tr><td>Blocklist of about 100k</td><td>46,146 entries</td><td>Entries under 12 characters dropped, since the policy already refuses them. <code>SECURITY.md</code> still says "about 100,000".</td></tr>
+  <tr><td>Sign-in notice (no default stated)</td><td>Off until an admin sets it</td><td>Agent default.</td></tr>
+  <tr><td>Not in the plan</td><td><code>pnpm admin:reset-mfa</code> CLI, <code>contract/browser.ts</code> (zod jitless in the browser), <code>uqr</code> and <code>jsqr</code> dependencies</td><td>The CLI was a plan risk mitigation; the other two came from the CSP and QR needs.</td></tr>
+</table>
+</section>
+
+<section id="decisions">
+<h2>Key decisions</h2>
+<div class="scroll"><table class="decisions">
+  <tr><th>Decision</th><th>Who, why, alternative, consequence</th></tr>
+  <tr><td>Rampart is a Security Protection Asset</td><td>Human (Q8). Meets the 800-171 it touches instead of deferring MFA. Alternative: "MFA later" (Q7). Consequence: the three one-way doors. Plan only; no <code>decisions.md</code> entry.</td></tr>
+  <tr><td>MFA required for every user</td><td>Human (Q11). Existing users enroll at next sign-in; admin reset is audited. Alternative: optional or admins only. Consequence: lockout risk, mitigated by the CLI and backups.</td></tr>
+  <tr><td>TOTP on <code>node:crypto</code>; HMAC recovery codes; wrong code at enrollment doesn't count toward lockout</td><td>Agent defaults. Alternative: otplib. Consequence: no new TOTP dependency. <code>decisions.md</code>: "2026-11-26 — MFA design choices".</td></tr>
+  <tr><td>Enrollment keeps its pending secret; resetting an unfinished setup is audited</td><td>Agent (from G1's PENDING and R1). Alternative: a new secret on every reload, which breaks a QR already scanned. <code>decisions.md</code>: "2026-11-27 — MFA enrollment keeps its pending secret".</td></tr>
+  <tr><td>zod runs jitless in the browser</td><td>Orchestrator. zod's <code>Function('')</code> probe breaks the strict CSP. Alternative: allow <code>unsafe-eval</code>, which weakens the CSP. <code>decisions.md</code>: "2026-11-26 — zod runs jitless".</td></tr>
+  <tr><td>Hash chain in the DB, no signed export</td><td>Human (Q6). Alternative: a signed external export (parked). Consequence: unkeyed and unanchored, the top known gap.</td></tr>
+  <tr><td>FIPS: document now, enforce at hosting</td><td>Human (Q13). Alternative: prove FIPS now. Consequence: unproven on a real FIPS Node.</td></tr>
+  <tr><td>The api serves the web build (one origin)</td><td>Agent default. Keeps <code>SameSite=Strict</code> and CSRF unchanged, no CORS. Alternative: a separate static server.</td></tr>
+  <tr><td>Merge with the human's pre-approval</td><td>Human (Q9). Merge #45 if the review passes and CI is green; the review did not pass in two rounds, so the human said "merge it" at the stop after the fixes.</td></tr>
+</table></div>
+</section>
+
+<section id="left">
+<h2>What's left</h2>
+<h3>For the human</h3>
+<ul>
+  <li><b>Enrol MFA</b> on the existing account at the next sign-in, and save the recovery codes. Back up <code>apps/api/data/rampart-secret.key</code> with the database.</li>
+  <li><b>Turn on GitHub private vulnerability reporting</b> (repo Settings › Code security). <code>SECURITY.md</code> points reporters there. Also confirm the response targets (acknowledge in 5 business days; fix or plan in 30 days for CVSS 7.0 or more), which are agent defaults.</li>
+</ul>
+<h3>Before hosting</h3>
+<ul>
+  <li><b>Real deployment</b> is the next step: TLS at a reverse proxy, a secret store for <code>RAMPART_SECRET_KEY</code>, and proving <code>FIPS_MODE=required</code> on a FIPS Node.</li>
+  <li><b>Windows key-file ACLs:</b> restrict <code>rampart-secret.key</code> with <code>icacls</code>, or keep the key in the environment.</li>
+  <li><b>Known gaps</b> (from <code>SECURITY.md</code>):
+    <ul>
+      <li>the audit chain is unkeyed and unanchored</li>
+      <li>FIPS isn't proven on a FIPS Node</li>
+      <li>Windows key-file ACLs</li>
+      <li>synchronous upload parsing</li>
+      <li>no antivirus scanning</li>
+      <li>SQLite isn't encrypted at rest (use disk encryption)</li>
+      <li>WebAuthn and passkeys are parked</li>
+    </ul>
+  </li>
+</ul>
+<h3>Someday</h3>
+<ul>
+  <li><code>uploads/file-check.ts:113</code>: a <code>.txt</code> starting <code>&lt;body&gt;&lt;script&gt;</code> is accepted. Low risk (files are served as attachments with <code>nosniff</code>). Refuse any leading <code>&lt;</code> plus a tag name.</li>
+  <li>The undo path after a revert and re-merge (see Risks and undo).</li>
+  <li><code>SessionResponse</code> and <code>User</code> are zod output types, so each new defaulted field breaks typed builders and test pins; type them as input.</li>
+  <li>Fix the <code>SECURITY.md</code> 3.5.7 "about 100,000" wording to match the 46,146-entry list (found by this report, not yet queued).</li>
+  <li>Older items from other plans (duplicated helpers, the catalog JSON import) remain pending and are not part of this plan.</li>
+</ul>
+<h3>Gaps in this report</h3>
+<p><code>pod-docs/features.md</code> has no row for two-step sign-in, so <a href="../feature-details/mfa.md">mfa</a> has no row to link from. Adding a row means writing a Drive and Proof for the reviewer; that is left to the next plan.</p>
+</section>
+
+</main>
+</body>
+</html>
